@@ -58,7 +58,7 @@ class _LyricNotesExpandedViewState extends State<LyricNotesExpandedView> {
 
   @override
   Widget build(BuildContext context) {
-    return Material(  // 🔧 追加: Material で全体を包む
+    return Material(
       color: widget.backgroundColor,
       child: SafeArea(
         child: Column(
@@ -70,7 +70,7 @@ class _LyricNotesExpandedViewState extends State<LyricNotesExpandedView> {
                 children: [
                   // 閉じるボタン（左上）
                   IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white),
+                    icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white, size: 32),
                     onPressed: widget.onClose,
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),

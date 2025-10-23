@@ -1142,11 +1142,14 @@ Widget build(BuildContext context) {
                           
                           const SizedBox(height: 30),
                           
-                          _buildCurrentContent(),
+                          // 🆕 新規追加: Lyric Notesウィジェット
+                          if (_shouldShowLyricNotes())
+                            Center(
+                              child: _buildLyricNotes(coverSize),
+                            ),
                           
-                          const SizedBox(height: 30),
-                          
-                          _buildAboutArtistSection(),
+                          // 🗑️ 削除: _buildCurrentContent() の呼び出しを削除
+                          // 🗑️ 削除: _buildAboutArtistSection() の呼び出しを削除
                           
                           SizedBox(height: MediaQuery.of(context).padding.bottom + 30),
                         ],
@@ -1811,166 +1814,45 @@ Widget _buildDefaultAlbumCover(double size, {required bool isSingle}) {
   );
 }
 
-  Widget _buildCurrentContent() {
-    Color currentColor = const Color(0xFF1DB954);
-    String sectionTitle = '今日の目標';
-    
-    if (widget.isPlayingSingleAlbum) {
-      if (_currentIndex < _tasks.length) {
-        currentColor = _tasks[_currentIndex].color;
-        sectionTitle = 'タスク詳細';
-      }
-    } else {
-      if (_currentIndex == 0) {
-        currentColor = const Color(0xFF1DB954);
-        sectionTitle = '今日の目標';
-      } else if (_currentIndex - 1 < _tasks.length) {
-        currentColor = _tasks[_currentIndex - 1].color;
-        sectionTitle = 'タスク詳細';
-      }
-    }
+  
 
-    String achievementInfo = '';
-    if (_currentIndex > 0 || widget.isPlayingSingleAlbum) {
-      final actualTaskIndex = widget.isPlayingSingleAlbum ? _currentIndex : _currentIndex - 1;
-      if (actualTaskIndex >= 0 && actualTaskIndex < _tasks.length) {
-        final currentTask = _tasks[actualTaskIndex];
-        final completionCount = _todayTaskCompletions[currentTask.id] ?? 0;
-        achievementInfo = completionCount > 0 
-            ? '\n\n今日の達成回数: $completionCount 回' 
-            : '\n\n今日はまだ達成していません';
-      }
-    }
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.2),
-          width: 1,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 4,
-                height: 20,
-                decoration: BoxDecoration(
-                  color: currentColor,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Text(
-                sectionTitle,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w500,
-                  fontFamily: 'Hiragino Sans',
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          Text(
-            '${_getCurrentDescription()}$achievementInfo',
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.9),
-              fontSize: 16,
-              height: 1.6,
-              fontStyle: (_currentIndex == 0 && !widget.isPlayingSingleAlbum) ? FontStyle.italic : FontStyle.normal,
-              fontWeight: FontWeight.w300,
-              fontFamily: 'Hiragino Sans',
-            ),
-          ),
-        ],
-      ),
-    );
+  // 🆕 新規追加メソッド1: Lyric Notesを表示すべきか判定
+bool _shouldShowLyricNotes() {
+  // 最初のページ（理想の自分）では表示しない
+  if (_currentIndex == 0 && !widget.isPlayingSingleAlbum) {
+    return false;
   }
+  
+  // タスクが存在するか確認
+  final task = _getCurrentTask();
+  return task != null;
+}
 
-  Widget _buildAboutArtistSection() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.2),
-          width: 1,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 4,
-                height: 20,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1DB954),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(width: 12),
-              const Text(
-                'About the artist',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w500,
-                  fontFamily: 'SF Pro Text',
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          Text(
-            _aboutArtist,
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.9),
-              fontSize: 16,
-              height: 1.6,
-              fontWeight: FontWeight.w300,
-              fontFamily: 'Hiragino Sans',
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // 🆕 新規メソッド追加: Lyric Notesを表示すべきか判定
-  bool _shouldShowLyricNotes() {
-    // 最初のページ（理想の自分）では表示しない
-    if (_currentIndex == 0 && !widget.isPlayingSingleAlbum) {
-      return false;
+// 🆕 新規追加メソッド2: 現在のタスクを取得
+TaskItem? _getCurrentTask() {
+  if (widget.isPlayingSingleAlbum) {
+    if (_currentIndex >= 0 && _currentIndex < _tasks.length) {
+      return _tasks[_currentIndex];
     }
-    
-    // タスクが存在するか確認
-    final task = _getCurrentTask();
-    return task != null;
-  }
-
-  // 🆕 新規メソッド追加: 現在のタスクを取得
-  TaskItem? _getCurrentTask() {
-    if (widget.isPlayingSingleAlbum) {
-      if (_currentIndex >= 0 && _currentIndex < _tasks.length) {
-        return _tasks[_currentIndex];
-      }
-    } else {
-      if (_currentIndex > 0 && _currentIndex - 1 < _tasks.length) {
-        return _tasks[_currentIndex - 1];
-      }
+  } else {
+    if (_currentIndex > 0 && _currentIndex - 1 < _tasks.length) {
+      return _tasks[_currentIndex - 1];
     }
-    return null;
   }
+  return null;
+}
+
+// 🆕 新規追加メソッド3: Lyric Notesウィジェットを構築
+Widget _buildLyricNotes(double coverSize) {
+  final task = _getCurrentTask();
+  if (task == null) {
+    return const SizedBox.shrink();
+  }
+  
+  return LyricNotesWidget(
+    task: task,
+    albumWidth: coverSize,
+    albumColor: _dominantColor,
+  );
+}
 }

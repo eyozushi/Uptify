@@ -26,7 +26,7 @@ class _LyricNotesWidgetState extends State<LyricNotesWidget>
     with SingleTickerProviderStateMixin {
   /// 展開/折りたたみを切り替え
   void _toggleExpanded() {
-    // 🔧 修正: フルスクリーンダイアログとして表示
+    // フルスクリーンダイアログとして表示（下から上へスライド）
     Navigator.of(context).push(
       PageRouteBuilder(
         fullscreenDialog: true,
