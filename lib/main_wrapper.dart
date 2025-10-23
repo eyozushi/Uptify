@@ -3312,7 +3312,6 @@ Future<void> _recordAllTasksCompletion(bool allCompleted) async {
   try {
     if (allCompleted) {
       int completedCount = 0;
-      // 全タスクの完了カウントを増やす
       for (final task in _playingTasks) {
         await _taskCompletionService.recordTaskCompletion(
           taskId: task.id,
@@ -3336,7 +3335,6 @@ Future<void> _recordAllTasksCompletion(bool allCompleted) async {
       
       await _audioService.playAchievementSound();
       
-      // 追加：完了したタスク数分をChartsScreenに通知
       for (int i = 0; i < completedCount; i++) {
         await _notifyNewTaskCompletion();
       }
@@ -3347,7 +3345,12 @@ Future<void> _recordAllTasksCompletion(bool allCompleted) async {
     }
     
     _resetPlayerAfterCompletion();
+    
+    // 🆕 重要：ホーム画面のデータを更新
     await _loadUserData();
+    
+    // 🆕 追加：ホーム画面に通知を送る
+    await _notifyHomeScreenToRefresh();
     
   } catch (e) {
     print('❌ アルバム完了記録エラー: $e');
@@ -3357,6 +3360,16 @@ Future<void> _recordAllTasksCompletion(bool allCompleted) async {
         backgroundColor: Colors.red,
       ),
     );
+  }
+}
+
+Future<void> _notifyHomeScreenToRefresh() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('home_screen_refresh_trigger', DateTime.now().millisecondsSinceEpoch);
+    print('🔔 ホーム画面更新トリガーを設定');
+  } catch (e) {
+    print('❌ ホーム画面更新通知エラー: $e');
   }
 }
 

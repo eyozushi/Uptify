@@ -26,6 +26,19 @@ class TaskCompletionService {
   static const String _currentAudienceKey = 'current_audience_count';
   static const String _isInitializedKey = 'audience_system_initialized';
 
+
+  // 🆕 Record Gaugeキャッシュクリア用メソッドを追加
+  Future<void> _clearRecordGaugeCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('record_gauge_state');
+      print('✅ Record Gaugeキャッシュをクリア');
+    } catch (e) {
+      print('❌ Record Gaugeキャッシュクリアエラー: $e');
+    }
+  }
+
+
   // 励ましメッセージのリスト
   static const List<String> _motivationalMessages = [
     'すばらしい集中力ですね！この調子で続けましょう！',
@@ -629,6 +642,11 @@ class TaskCompletionService {
       
       await _dataService.saveTaskCompletion(completion);
       await _dataService.addTaskCompletionToUserData(taskId, completion.completedAt);
+      
+      // 🆕 ライフドリームアルバムのタスク完了時はキャッシュをクリア
+      if (wasSuccessful && albumType == 'life_dream') {
+        await _clearRecordGaugeCache();
+      }
       
       print('タスク完了記録を保存しました: $taskTitle (成功: $wasSuccessful)');
     } catch (e) {

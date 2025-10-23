@@ -68,32 +68,33 @@ class TaskItem {
     );
   }
 
-  // copyWithメソッド（必須）
-  TaskItem copyWith({
-    String? title,
-    String? description,
-    Color? color,
-    int? duration,
-    List<DateTime>? completionHistory,
-    int? totalCompletions,
-    DateTime? lastCompletedAt,
-    String? id,
-    String? assistUrl,
-    String? lyricNote,
-  }) {
-    return TaskItem(
-      title: title ?? this.title,
-      description: description ?? this.description,
-      color: color ?? this.color,
-      duration: duration ?? this.duration,
-      completionHistory: completionHistory ?? this.completionHistory,
-      totalCompletions: totalCompletions ?? this.totalCompletions,
-      lastCompletedAt: lastCompletedAt ?? this.lastCompletedAt,
-      id: id ?? this.id,
-      assistUrl: assistUrl ?? this.assistUrl,
-      lyricNote: lyricNote ?? this.lyricNote,
-    );
-  }
+
+/// TaskItemのコピーを作成（指定されたフィールドのみ更新）
+TaskItem copyWith({
+  String? id,
+  String? title,
+  String? description,
+  Color? color,
+  int? duration,
+  List<DateTime>? completionHistory, // 🔧 修正: completionDates → completionHistory
+  int? totalCompletions, // 🆕 追加: totalCompletionsも追加
+  DateTime? lastCompletedAt, // 🆕 追加: lastCompletedAtも追加
+  String? lyricNote,
+  String? assistUrl,
+}) {
+  return TaskItem(
+    id: id ?? this.id,
+    title: title ?? this.title,
+    description: description ?? this.description,
+    color: color ?? this.color,
+    duration: duration ?? this.duration,
+    completionHistory: completionHistory ?? this.completionHistory, // 🔧 修正
+    totalCompletions: totalCompletions ?? this.totalCompletions, // 🆕 追加
+    lastCompletedAt: lastCompletedAt ?? this.lastCompletedAt, // 🆕 追加
+    lyricNote: lyricNote ?? this.lyricNote,
+    assistUrl: assistUrl ?? this.assistUrl,
+  );
+}
 
   // 🔔 新機能: 完了記録を追加するメソッド
   TaskItem addCompletion(DateTime completionTime) {

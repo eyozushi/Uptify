@@ -54,24 +54,130 @@ class _HomeScreenState extends State<HomeScreen> {
   // 🆕 Record Gauge関連
   final RecordGaugeService _recordGaugeService = RecordGaugeService();
   bool _hasShownCompletionMessage = false;
+  
+  // 🆕 キャッシュ用
+  RecordGaugeState? _cachedRecordState;
+  bool _isUpdating = false;
 
   @override
-void initState() {
-  super.initState();
-  _loadData();
-  _setupDefaultNotificationSettings();
-  
-  if (widget.imageBytes != null) {
-    _imageBytes = widget.imageBytes;
+  void initState() {
+    super.initState();
+    _loadData();
+    _setupDefaultNotificationSettings();
+    
+    if (widget.imageBytes != null) {
+      _imageBytes = widget.imageBytes;
+    }
+    if (widget.albumImagePath != null) {
+      _albumImage = widget.albumImagePath!;
+    }
+    
+    _loadRecordStateAndCheckCompletion();
   }
-  if (widget.albumImagePath != null) {
-    _albumImage = widget.albumImagePath!;
-  }
-  
-  // 🆕 Record Gauge: 4タスク全完了メッセージチェック
-  _checkAndShowCompletionMessage();
-}
 
+  @override
+  void didUpdateWidget(covariant HomeScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 🔧 画面が再表示されたらキャッシュをチェック
+    _checkAndRefreshIfNeeded();
+  }
+
+  Future<void> _checkAndRefreshIfNeeded() async {
+    if (_isUpdating) return;
+    
+    _isUpdating = true;
+    try {
+      // 保存されたキャッシュを確認
+      final savedState = await _recordGaugeService.loadSavedState();
+      
+      if (savedState == null) {
+        // キャッシュが削除されている→最新データを取得
+        print('🔄 キャッシュが削除されているため再読み込み');
+        final latestState = await _recordGaugeService.getTodayRecordState();
+        if (mounted) {
+          setState(() {
+            _cachedRecordState = latestState;
+          });
+          print('✅ Record Gauge更新完了: ${latestState.completedCount}/4');
+        }
+      } else if (_cachedRecordState == null || 
+                 savedState.completedCount != _cachedRecordState!.completedCount) {
+        // データが変わっている→更新
+        if (mounted) {
+          setState(() {
+            _cachedRecordState = savedState;
+          });
+          print('✅ Record Gauge更新: ${savedState.completedCount}/4');
+        }
+      }
+    } catch (e) {
+      print('❌ Record Gauge更新エラー: $e');
+    } finally {
+      _isUpdating = false;
+    }
+  }
+
+  Future<void> _silentRefreshRecordState() async {
+    if (_isUpdating) return; // 更新中なら重複実行を防ぐ
+    
+    _isUpdating = true;
+    try {
+      print('🔄 Record Gauge サイレント更新開始');
+      final latestState = await _recordGaugeService.getTodayRecordState();
+      if (mounted) {
+        setState(() {
+          _cachedRecordState = latestState;
+        });
+        print('✅ Record Gauge更新完了: ${latestState.completedCount}/4');
+      }
+    } catch (e) {
+      print('❌ Record Gauge更新エラー: $e');
+    } finally {
+      _isUpdating = false;
+    }
+  }
+
+  // 🆕 強制的に最新データを取得
+  Future<void> _refreshRecordState() async {
+    try {
+      print('🔄 Record Gauge強制更新開始');
+      final latestState = await _recordGaugeService.getTodayRecordState();
+      if (mounted) {
+        setState(() {
+          _cachedRecordState = latestState;
+        });
+        print('✅ Record Gauge更新完了: ${latestState.completedCount}/4');
+      }
+    } catch (e) {
+      print('❌ Record Gauge更新エラー: $e');
+    }
+  }
+
+  Future<void> _loadRecordStateAndCheckCompletion() async {
+    try {
+      // まず保存されたキャッシュを読み込んで即座に表示
+      final savedState = await _recordGaugeService.loadSavedState();
+      if (savedState != null && mounted) {
+        setState(() {
+          _cachedRecordState = savedState;
+        });
+      }
+      
+      // バックグラウンドで最新データを取得
+      final latestState = await _recordGaugeService.getTodayRecordState();
+      if (mounted) {
+        setState(() {
+          _cachedRecordState = latestState;
+        });
+      }
+      
+      // 完了メッセージチェック
+      _checkAndShowCompletionMessage();
+      
+    } catch (e) {
+      print('❌ Record State読み込みエラー: $e');
+    }
+  }
   // 🌅 新機能: 時間帯に応じた挨拶を取得
   String _getGreeting() {
     final now = DateTime.now();
@@ -351,37 +457,48 @@ void initState() {
 
   /// 🆕 Record Gaugeセクションを構築
   Widget _buildRecordGaugeSection() {
+    // 🔧 キャッシュがあれば常に表示（更新中でもローディングを出さない）
+    if (_cachedRecordState != null) {
+      return RecordGaugeWidget(
+        state: _cachedRecordState!,
+        albumCoverImage: widget.imageBytes ?? _imageBytes,
+        size: 200.0,
+      );
+    }
+    
+    // 🔧 キャッシュがない初回のみFutureBuilder
     return FutureBuilder<RecordGaugeState>(
       future: _recordGaugeService.getTodayRecordState(),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          // ローディング表示
-          return const RecordGaugeLoadingWidget();
+        if (snapshot.hasData) {
+          // データを取得したらキャッシュに保存
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              setState(() {
+                _cachedRecordState = snapshot.data;
+              });
+            }
+          });
+          
+          return RecordGaugeWidget(
+            state: snapshot.data!,
+            albumCoverImage: widget.imageBytes ?? _imageBytes,
+            size: 200.0,
+          );
         }
         
         if (snapshot.hasError) {
-          // エラー表示
           return RecordGaugeErrorWidget(
             errorMessage: 'データの読み込みに失敗しました',
           );
         }
         
-        if (!snapshot.hasData) {
-          // データなし
-          return const RecordGaugeErrorWidget(
-            errorMessage: 'データが見つかりません',
-          );
-        }
-        
-        // Record Gauge表示
-        return RecordGaugeWidget(
-          state: snapshot.data!,
-          albumCoverImage: widget.imageBytes ?? _imageBytes,
-          size: 200.0,
-        );
+        // 初回のみローディング表示
+        return const RecordGaugeLoadingWidget();
       },
     );
   }
+
 
   Widget _buildSingleAlbumCover(SingleAlbum album, {double size = 60}) {
     return Container(

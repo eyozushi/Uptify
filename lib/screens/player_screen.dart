@@ -198,11 +198,16 @@ bool _isDragging = false;
   Color _accentColor = const Color(0xFF1A1A2E);
   bool _isExtractingColors = false;
 
+  // 既存のフィールド定義の後に追加
+Map<String, String> _taskLyricNotes = {}; // タスクIDとLyric Noteのマッピング
+
   @override
 void initState() {
   super.initState();
   _initializeData();
   _setupAnimations();
+
+  _loadTaskLyricNotes();
   
   WidgetsBinding.instance.addPostFrameCallback((_) {
     _extractColorsFromImage();
@@ -256,6 +261,53 @@ void initState() {
         _isInitializationComplete = true;
       });
     });
+  }
+}
+
+/// タスクのLyric Notesを読み込み
+Future<void> _loadTaskLyricNotes() async {
+  try {
+    List<TaskItem> tasks = [];
+    
+    // 🔧 修正: シングルアルバムかライフドリームアルバムかで分岐
+    if (widget.isPlayingSingleAlbum && widget.playingSingleAlbumId != null) {
+      // シングルアルバムの場合
+      final album = await _dataService.getSingleAlbum(widget.playingSingleAlbumId!);
+      if (album != null) {
+        tasks = album.tasks;
+      }
+    } else {
+      // ライフドリームアルバムの場合
+      final userData = await _dataService.loadUserData();
+      
+      if (userData['tasks'] != null) {
+        if (userData['tasks'] is List<TaskItem>) {
+          tasks = List<TaskItem>.from(userData['tasks']);
+        } else if (userData['tasks'] is List) {
+          tasks = (userData['tasks'] as List)
+              .map((taskJson) => TaskItem.fromJson(taskJson))
+              .toList();
+        }
+      }
+    }
+    
+    // Lyric Notesをマップに保存
+    final notes = <String, String>{};
+    for (final task in tasks) {
+      if (task.lyricNote != null && task.lyricNote!.isNotEmpty) {
+        notes[task.id] = task.lyricNote!;
+      }
+    }
+    
+    if (mounted) {
+      setState(() {
+        _taskLyricNotes = notes;
+      });
+    }
+    
+    print('✅ Lyric Notes読み込み完了: ${notes.length}件 (シングル: ${widget.isPlayingSingleAlbum})');
+  } catch (e) {
+    print('❌ Lyric Notes読み込みエラー: $e');
   }
 }
 
@@ -1428,7 +1480,7 @@ Widget _buildDefaultAlbumCover(double size, {required bool isSingle}) {
       ),
       
       if (showCompletionButton) ...[
-        const SizedBox(width: 16),
+        const SizedBox(width: 8), // 🔧 修正: 16 → 8（間隔を狭める）
         Column(
           children: [
             const SizedBox(height: 16),
@@ -1438,7 +1490,7 @@ Widget _buildDefaultAlbumCover(double size, {required bool isSingle}) {
                 width: 32,
                 height: 32,
                 decoration: BoxDecoration(
-                  color: Colors.transparent, // 🔧 修正：透明に変更
+                  color: Colors.transparent,
                   shape: BoxShape.circle,
                   border: Border.all(
                     color: Colors.white,
@@ -1452,7 +1504,7 @@ Widget _buildDefaultAlbumCover(double size, {required bool isSingle}) {
                     ),
                   ],
                 ),
-                alignment: Alignment.center, // 🔧 追加：中央揃え
+                alignment: Alignment.center,
                 child: completionCount > 0
                     ? Text(
                         completionCount.toString(),
@@ -1474,6 +1526,7 @@ Widget _buildDefaultAlbumCover(double size, {required bool isSingle}) {
             ),
           ],
         ),
+        const SizedBox(width: 10), // 🆕 追加: 右側に余白を追加してジャケットの右端より内側に
       ],
     ],
   );
@@ -1828,21 +1881,32 @@ bool _shouldShowLyricNotes() {
   return task != null;
 }
 
-// 🆕 新規追加メソッド2: 現在のタスクを取得
+
+// 🆕 修正版: 現在のタスクを取得（Lyric Note付き）
 TaskItem? _getCurrentTask() {
+  TaskItem? task;
+  
   if (widget.isPlayingSingleAlbum) {
     if (_currentIndex >= 0 && _currentIndex < _tasks.length) {
-      return _tasks[_currentIndex];
+      task = _tasks[_currentIndex];
     }
   } else {
     if (_currentIndex > 0 && _currentIndex - 1 < _tasks.length) {
-      return _tasks[_currentIndex - 1];
+      task = _tasks[_currentIndex - 1];
     }
   }
-  return null;
+  
+  // 🆕 追加: 保存されたLyric Noteを反映
+  if (task != null && _taskLyricNotes.containsKey(task.id)) {
+    return task.copyWith(lyricNote: _taskLyricNotes[task.id]);
+  }
+  
+  return task;
 }
 
-// 🆕 新規追加メソッド3: Lyric Notesウィジェットを構築
+
+
+// 🆕 修正版: Lyric Notesウィジェットを構築
 Widget _buildLyricNotes(double coverSize) {
   final task = _getCurrentTask();
   if (task == null) {
@@ -1853,6 +1917,20 @@ Widget _buildLyricNotes(double coverSize) {
     task: task,
     albumWidth: coverSize,
     albumColor: _dominantColor,
+    albumId: widget.playingSingleAlbumId, // 🆕 追加: シングルアルバムID
+    isSingleAlbum: widget.isPlayingSingleAlbum, // 🆕 追加: シングルアルバムかどうか
+    onNoteSaved: (taskId, note) async {
+      setState(() {
+        _taskLyricNotes[taskId] = note;
+      });
+      
+      // 🔧 修正: シングルアルバムの場合も更新
+      if (widget.isPlayingSingleAlbum) {
+        await _loadTaskLyricNotes();
+      } else {
+        await _loadTaskLyricNotes();
+      }
+    },
   );
 }
 }

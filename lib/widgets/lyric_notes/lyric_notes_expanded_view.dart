@@ -57,85 +57,89 @@ class _LyricNotesExpandedViewState extends State<LyricNotesExpandedView> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: widget.backgroundColor,
-      child: SafeArea(
-        child: Column(
-          children: [
-            // ヘッダー部分
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  // 閉じるボタン（左上）
-                  IconButton(
-                    icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white, size: 32),
-                    onPressed: widget.onClose,
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
+Widget build(BuildContext context) {
+  return Material(
+    color: widget.backgroundColor,
+    child: SafeArea(
+      child: Column(
+        children: [
+          // ヘッダー部分（変更なし）
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              children: [
+                IconButton(
+                  icon: const Icon(
+                    Icons.keyboard_arrow_down, 
+                    color: Colors.white, 
+                    size: 32,
                   ),
-                  const Spacer(),
-                  
-                  // タスク名（中央に大きく表示）
-                  Expanded(
-                    flex: 3,
-                    child: Text(
-                      widget.taskTitle,
-                      style: GoogleFonts.montserrat(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      textAlign: TextAlign.center,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  
-                  const Spacer(),
-                  const SizedBox(width: 48), // 閉じるボタンとバランスを取る
-                ],
-              ),
-            ),
-            
-            const Divider(
-              color: Colors.white24,
-              height: 1,
-            ),
-            
-            // 入力エリア（画面全体に広がる）
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: TextField(
-                  controller: _controller,
-                  style: GoogleFonts.notoSansJp(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w500,
-                    height: 1.8,
-                  ),
-                  decoration: InputDecoration(
-                    hintText: 'Write your lyrics here...\n\nCapture your thoughts,\nreflections, and achievements.',
-                    hintStyle: GoogleFonts.notoSansJp(
-                      color: Colors.white.withOpacity(0.4),
-                      fontSize: 18,
-                      height: 1.8,
-                    ),
-                    border: InputBorder.none,
-                  ),
-                  maxLines: null,
-                  expands: true,
-                  textAlign: TextAlign.left,
-                  keyboardType: TextInputType.multiline,
-                  autofocus: false,
+                  onPressed: widget.onClose,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
                 ),
-              ),
+                const Spacer(),
+                
+                Expanded(
+                  flex: 3,
+                  child: Text(
+                    widget.taskTitle,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      fontFamily: 'Hiragino Sans',
+                    ),
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                
+                const Spacer(),
+                const SizedBox(width: 48),
+              ],
             ),
-          ],
-        ),
+          ),
+          
+          
+          
+          // 🔧 入力エリア: PlayerScreenのタスク説明文と完全一致
+          // 🔧 入力エリア: 太い文字に変更
+Expanded(
+  child: SingleChildScrollView(
+    padding: const EdgeInsets.all(20),
+    child: TextField(
+      controller: _controller,
+      // 🔧 重要: 太い文字に変更
+      style: const TextStyle( // 🔧 const を追加
+        color: Colors.white, // 🔧 完全な白に変更
+        fontSize: 24, // 🔧 16 → 24 に変更（大きく）
+        height: 1.6,
+        fontWeight: FontWeight.w700, // 🔧 w300 → w700 に変更（太く）
+        fontFamily: 'Hiragino Sans',
       ),
-    );
-  }
+      decoration: InputDecoration(
+        hintText: 'リリックを書いてください。\n思考、感情、振り返り、\n自由に記録しましょう。',
+        hintStyle: TextStyle(
+          color: Colors.white.withOpacity(0.5), // 🔧 0.4 → 0.5 に変更
+          fontSize: 24, // 🔧 16 → 24 に変更
+          height: 1.6,
+          fontWeight: FontWeight.w700, // 🔧 w300 → w400 に変更
+          fontFamily: 'Hiragino Sans',
+        ),
+        border: InputBorder.none,
+        contentPadding: EdgeInsets.zero,
+      ),
+      maxLines: null,
+      keyboardType: TextInputType.multiline,
+      autofocus: false,
+    ),
+  ),
+),
+        ],
+      ),
+    ),
+  );
+}
 }

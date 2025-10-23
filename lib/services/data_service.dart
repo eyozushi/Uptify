@@ -568,34 +568,85 @@ class DataService {
     }
   }
 
-  // 🆕 修正版: Lyric Noteを更新して自動保存
+
+// 🆕 修正版: Lyric Noteを更新して自動保存
 Future<void> updateTaskLyricNote(String taskId, String note) async {
   try {
-    final prefs = await SharedPreferences.getInstance();
-    final tasksJson = prefs.getString('tasks');
+    // ユーザーデータを読み込み
+    final userData = await loadUserData();
     
-    if (tasksJson != null) {
-      List<dynamic> tasksList = jsonDecode(tasksJson);
-      final taskIndex = tasksList.indexWhere((t) => t['id'] == taskId);
-      
-      if (taskIndex != -1) {
-        // Lyric Noteを更新
-        tasksList[taskIndex]['lyricNote'] = note;
-        
-        // JSONを保存
-        await prefs.setString('tasks', jsonEncode(tasksList));
-        
-        // ✅ loadTasks()は削除（SharedPreferencesに保存するだけでOK）
-        
-        debugPrint('✅ Lyric Note保存完了: $taskId');
-      } else {
-        debugPrint('⚠️ タスクが見つかりません: $taskId');
+    // タスクリストを取得
+    List<TaskItem> tasks = [];
+    if (userData['tasks'] != null) {
+      if (userData['tasks'] is List<TaskItem>) {
+        tasks = List<TaskItem>.from(userData['tasks']);
+      } else if (userData['tasks'] is List) {
+        tasks = (userData['tasks'] as List)
+            .map((taskJson) => TaskItem.fromJson(taskJson))
+            .toList();
       }
     }
+    
+    // 該当タスクのLyric Noteを更新
+    final updatedTasks = tasks.map((task) {
+      if (task.id == taskId) {
+        return task.copyWith(lyricNote: note);
+      }
+      return task;
+    }).toList();
+    
+    // ユーザーデータに保存
+    userData['tasks'] = updatedTasks.map((task) => task.toJson()).toList();
+    await saveUserData(userData);
+    
+    print('✅ Lyric Note保存完了: $taskId');
   } catch (e) {
-    debugPrint('❌ Lyric Note更新エラー: $e');
+    print('❌ Lyric Note更新エラー: $e');
+    rethrow;
   }
 }
-
+/// シングルアルバムのタスクのLyric Noteを更新
+Future<void> updateSingleAlbumTaskLyricNote({
+  required String albumId,
+  required String taskId,
+  required String note,
+}) async {
+  try {
+    // 全シングルアルバムを読み込み
+    final albums = await loadSingleAlbums();
+    
+    // 該当アルバムを探す
+    final albumIndex = albums.indexWhere((album) => album.id == albumId);
+    if (albumIndex == -1) {
+      print('⚠️ アルバムが見つかりません: $albumId');
+      return;
+    }
+    
+    final album = albums[albumIndex];
+    
+    // タスクリストを更新
+    final updatedTasks = album.tasks.map((task) {
+      if (task.id == taskId) {
+        return task.copyWith(lyricNote: note);
+      }
+      return task;
+    }).toList();
+    
+    // アルバムを更新
+    final updatedAlbum = album.copyWith(tasks: updatedTasks);
+    albums[albumIndex] = updatedAlbum;
+    
+    // 保存
+    final prefs = await SharedPreferences.getInstance();
+    final albumsJson = albums.map((album) => album.toJson()).toList();
+    final jsonString = jsonEncode(albumsJson);
+    await prefs.setString(_keySingleAlbums, jsonString);
+    
+    print('✅ シングルアルバムのLyric Note保存完了: $albumId / $taskId');
+  } catch (e) {
+    print('❌ シングルアルバムのLyric Note更新エラー: $e');
+    rethrow;
+  }
+}
 
 }
