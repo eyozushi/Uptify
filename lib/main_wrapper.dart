@@ -1898,6 +1898,7 @@ Future<void> _initializeAudioService() async {
   print('🎵 シングルアルバムプレイヤー開始: ${album.albumName}, タスクインデックス: $taskIndex');
   print('🎵 アルバム画像あり: ${album.albumCoverImage != null}');
   print('🎵 現在の状態: albumDetail=$_isAlbumDetailVisible, player=$_isPlayerScreenVisible');
+  print('🎵 現在のdragOffset: $_playerDragOffset, isAnimating: $_isAnimating');
   
   setState(() {
     _playingTasks = List.from(album.tasks);
@@ -1907,25 +1908,33 @@ Future<void> _initializeAudioService() async {
     _isPlaying = true;
     _startNewTask();
     
-    // 🔧 重要: アルバム詳細は表示したまま、PlayerScreenを最前面に表示
-    // _isAlbumDetailVisible = false; // ❌ 削除: これがHome画面表示の原因
     _isPlayerScreenVisible = true;
-    _playerDragOffset = 0.0;
+    
+    // 🔧 重要: アニメーション状態を強制的にリセット
+    _isAnimating = false;
     _isDraggingPlayer = false;
+  });
+  
+  // 🔧 修正: setStateの後にすぐ実行
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (mounted) {
+      print('🎵 PostFrameCallback: _openPlayerWithAnimation()を実行');
+      print('🎵 実行前のdragOffset: $_playerDragOffset');
+      _openPlayerWithAnimation();
+    }
   });
   
   print('🎵 PlayerScreen表示完了: isVisible=$_isPlayerScreenVisible, albumDetail=$_isAlbumDetailVisible');
 }
-
   void _hideFullPlayer() {
   _closePlayerWithAnimation();
   
   print('🔧 MainWrapper: プレイヤーを閉じました - タイマー継続: $_isPlaying');
   
-  // 🔧 修正: アルバム詳細が残っていれば「表示する」のではなく「そのまま」にする
+  // 🔧 追加：アルバム詳細が残っていればそれを表示
   if (_currentSingleAlbum != null) {
     setState(() {
-      _isAlbumDetailVisible = true; // すでにtrueのはずだが念のため
+      _isAlbumDetailVisible = true;
     });
     print('🔙 アルバム詳細画面に戻ります: ${_currentSingleAlbum!.albumName}');
   }
@@ -2962,12 +2971,12 @@ Widget _buildCurrentScreen() {
   return Stack(
     children: [
       // メインコンテンツ
-      if (!_isSettingsVisible && !_isAlbumDetailVisible) _buildMainContent(),
+      if (!_isSettingsVisible && !_isAlbumDetailVisible) _buildMainContent(),  // 🔧 修正：アルバム詳細表示中は非表示
       
-      // 🔧 修正: アルバム詳細（PlayerScreenの下に配置）
+      // 🔧 修正：アルバム詳細を常に表示（PlayerScreenの下）
       if (_isAlbumDetailVisible) _buildAlbumDetailScreen(),
       
-      // PlayerScreen（最前面）
+      // PlayerScreen
       if (_playingTasks.isNotEmpty && (_isDraggingPlayer || _playerDragOffset < 1.0 || _isPlayerScreenVisible))
         Positioned(
           top: 0,
@@ -3140,26 +3149,33 @@ Widget _buildMainContent() {
         }
       },
       onPlayTaskPressed: (taskIndex) {
-        // 🔧 修正：PlayerScreenを開く（アルバム詳細は非表示）
-        if (_isPlayingSingleAlbum && _playingSingleAlbum != null && _playingSingleAlbum!.id == album.id) {
-          print('🎵 同じアルバム タスク$taskIndex - タスク切り替え');
-          setState(() {
-            _currentTaskIndex = taskIndex;
-            _forcePlayerPageIndex = taskIndex;
-            _startNewTask();
-            _isPlayerScreenVisible = true;
-            // _isAlbumDetailVisible はtrueのまま（背景に残す）
-          });
-          
-          _onPlayerStateChanged(
-            currentTaskIndex: taskIndex,
-            forcePageChange: taskIndex,
-          );
-        } else {
-          print('🎵 違うアルバム タスク$taskIndex - 新しい再生開始');
-          _showSingleAlbumPlayer(album, taskIndex: taskIndex);
-        }
-      },
+  // 🔧 修正: タスク切り替え時にもPlayerScreenを開く
+  if (_isPlayingSingleAlbum && _playingSingleAlbum != null && _playingSingleAlbum!.id == album.id) {
+    print('🎵 同じアルバム タスク$taskIndex - タスク切り替え');
+    setState(() {
+      _currentTaskIndex = taskIndex;
+      _forcePlayerPageIndex = taskIndex;
+      _startNewTask();
+      _isPlayerScreenVisible = true;  // 🔧 追加: PlayerScreenを表示
+    });
+    
+    _onPlayerStateChanged(
+      currentTaskIndex: taskIndex,
+      forcePageChange: taskIndex,
+    );
+    
+    // 🔧 追加: PlayerScreenを開くアニメーションを実行
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        print('🎵 PostFrameCallback: _openPlayerWithAnimation()を実行');
+        _openPlayerWithAnimation();
+      }
+    });
+  } else {
+    print('🎵 違うアルバム タスク$taskIndex - 新しい再生開始');
+    _showSingleAlbumPlayer(album, taskIndex: taskIndex);
+  }
+},
       onClose: _hideAlbumDetail,
       onNavigateToSettings: () {
         final albumToEdit = album;
@@ -4010,7 +4026,13 @@ final clampedOpacity = miniPlayerOpacity.clamp(0.0, 1.0);
 }
 
 void _openPlayerWithAnimation() {
-  if (!mounted || _isAnimating) return;
+  print('🔧 _openPlayerWithAnimation()が呼ばれました');
+  print('🔧 現在の状態: mounted=$mounted, isAnimating=$_isAnimating, dragOffset=$_playerDragOffset');
+  
+  if (!mounted || _isAnimating) {
+    print('🔧 条件により実行中止: mounted=$mounted, isAnimating=$_isAnimating');
+    return;
+  }
   
   print('🔧 開くアニメーション開始: 現在offset=$_playerDragOffset');
   
@@ -4038,6 +4060,7 @@ void _openPlayerWithAnimation() {
       setState(() {
         _playerDragOffset = animation.value;
       });
+      print('🔧 アニメーション中: offset=${_playerDragOffset.toStringAsFixed(2)}');
     }
   });
   
@@ -4052,6 +4075,7 @@ void _openPlayerWithAnimation() {
     }
   });
 }
+
 
 void _closePlayerWithAnimation() {
   if (!mounted || _isAnimating) return;

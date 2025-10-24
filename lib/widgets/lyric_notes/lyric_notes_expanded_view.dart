@@ -87,7 +87,7 @@ Widget build(BuildContext context) {
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 14,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w900,
                       fontFamily: 'Hiragino Sans',
                     ),
                     textAlign: TextAlign.center,
@@ -111,22 +111,24 @@ Expanded(
     padding: const EdgeInsets.all(20),
     child: TextField(
       controller: _controller,
-      // 🔧 重要: 太い文字に変更
-      style: const TextStyle( // 🔧 const を追加
-        color: Colors.white, // 🔧 完全な白に変更
-        fontSize: 24, // 🔧 16 → 24 に変更（大きく）
+      // 🔧 英語用の太いフォント + 日本語フォールバック
+      style: GoogleFonts.inter(
+        color: Colors.white,
+        fontSize: 24,
         height: 1.6,
-        fontWeight: FontWeight.w700, // 🔧 w300 → w700 に変更（太く）
-        fontFamily: 'Hiragino Sans',
+        fontWeight: FontWeight.w800,
+      ).copyWith(
+        fontFamilyFallback: const ['Hiragino Sans'],  // 日本語用フォールバック
       ),
       decoration: InputDecoration(
         hintText: 'リリックを書いてください。\n思考、感情、振り返り、\n自由に記録しましょう。',
-        hintStyle: TextStyle(
-          color: Colors.white.withOpacity(0.5), // 🔧 0.4 → 0.5 に変更
-          fontSize: 24, // 🔧 16 → 24 に変更
+        hintStyle: GoogleFonts.inter(
+          color: Colors.white.withOpacity(0.5),
+          fontSize: 24,
           height: 1.6,
-          fontWeight: FontWeight.w700, // 🔧 w300 → w400 に変更
-          fontFamily: 'Hiragino Sans',
+          fontWeight: FontWeight.w700,
+        ).copyWith(
+          fontFamilyFallback: const ['Hiragino Sans'],  // 日本語用フォールバック
         ),
         border: InputBorder.none,
         contentPadding: EdgeInsets.zero,

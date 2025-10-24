@@ -51,33 +51,31 @@ Widget build(BuildContext context) {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // "Lyrics" ヘッダー（左上に小さく表示）
-          // "Lyrics" ヘッダー（左上に小さく表示）
-Text(
-  'Lyrics',
-  style: const TextStyle( // 🔧 修正: GoogleFonts.montserrat → TextStyle
-    color: Colors.white70, // 🔧 修正: withOpacity(0.7) → Colors.white70
-    fontSize: 12,
-    fontWeight: FontWeight.w800,
-    letterSpacing: 0.4,
-    fontFamily: 'SF Pro Text', // 🔧 追加: PlayerScreenと同じフォント
-  ),
-),
+          Text(
+            'Lyrics',
+            style: GoogleFonts.inter(  // 🔧 英語用の太いフォント
+              color: Colors.white70,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.4,
+            ),
+          ),
           const SizedBox(height: 12), // 🔧 8 → 12 に変更
           
           // プレビューテキスト（大きく、太く、白色）
-          // プレビューテキスト（大きく、太く、白色）
-Text(
-  _getPreviewText(),
-  style: TextStyle( // 🔧 修正: GoogleFonts → TextStyle
-    color: hasContent ? Colors.white : Colors.white.withOpacity(0.5),
-    fontSize: 24, // 🔧 修正: 18 → 24（タスク名と同じサイズ）
-    fontWeight: FontWeight.w700,
-    height: 1.6,
-    fontFamily: 'Hiragino Sans', // 🔧 追加
-  ),
-  maxLines: 4,
-  overflow: TextOverflow.ellipsis,
-),
+          Text(
+            _getPreviewText(),
+            style: GoogleFonts.inter(  // 🔧 英語用の太いフォント
+              color: hasContent ? Colors.white : Colors.white.withOpacity(0.5),
+              fontSize: 24,
+              fontWeight: FontWeight.w700,
+              height: 1.6,
+            ).copyWith(
+              fontFamilyFallback: const ['Hiragino Sans'],  // 🔧 日本語用フォールバック
+            ),
+            maxLines: 4,
+            overflow: TextOverflow.ellipsis,
+          ),
           
           const SizedBox(height: 8), // 🔧 新規追加：下部の余白
         ],
