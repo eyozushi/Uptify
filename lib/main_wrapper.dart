@@ -1907,8 +1907,8 @@ Future<void> _initializeAudioService() async {
     _isPlaying = true;
     _startNewTask();
     
-    // 🔧 重要: アルバム詳細を非表示にしてPlayerScreenを最前面に表示
-    _isAlbumDetailVisible = false; // 🔧 追加：アルバム詳細を非表示
+    // 🔧 重要: アルバム詳細は表示したまま、PlayerScreenを最前面に表示
+    // _isAlbumDetailVisible = false; // ❌ 削除: これがHome画面表示の原因
     _isPlayerScreenVisible = true;
     _playerDragOffset = 0.0;
     _isDraggingPlayer = false;
@@ -1916,25 +1916,18 @@ Future<void> _initializeAudioService() async {
   
   print('🎵 PlayerScreen表示完了: isVisible=$_isPlayerScreenVisible, albumDetail=$_isAlbumDetailVisible');
 }
+
   void _hideFullPlayer() {
   _closePlayerWithAnimation();
   
   print('🔧 MainWrapper: プレイヤーを閉じました - タイマー継続: $_isPlaying');
   
-  // 🔧 修正: アルバム詳細が必要なら再表示
+  // 🔧 修正: アルバム詳細が残っていれば「表示する」のではなく「そのまま」にする
   if (_currentSingleAlbum != null) {
     setState(() {
-      _isAlbumDetailVisible = true; // 🔧 追加：アルバム詳細を再表示
-      _currentSingleAlbum = _playingSingleAlbum; // 🔧 追加：再生中のアルバムを表示
+      _isAlbumDetailVisible = true; // すでにtrueのはずだが念のため
     });
     print('🔙 アルバム詳細画面に戻ります: ${_currentSingleAlbum!.albumName}');
-  } else if (_isPlayingSingleAlbum && _playingSingleAlbum != null) {
-    // 🔧 追加：再生中のシングルアルバムがある場合
-    setState(() {
-      _isAlbumDetailVisible = true;
-      _currentSingleAlbum = _playingSingleAlbum;
-    });
-    print('🔙 アルバム詳細画面に戻ります: ${_playingSingleAlbum!.albumName}');
   }
 }
 
@@ -5402,6 +5395,32 @@ void _handleBackgroundAlbumCompletion() {
     }
   }
 
+
+  @override
+Widget build(BuildContext context) {
+  if (_isCheckingFirstLaunch) {
+    return _buildInitialLoadingScreen();
+  }
+
+  if (_shouldShowOnboarding) {
+    return OnboardingWrapper(
+      onCompleted: _onOnboardingCompleted,
+    );
+  }
+
+  // 🔧 修正：Scaffoldの背景色を明示的に黒に設定
+  return Scaffold(
+    backgroundColor: Colors.black, // 🔧 追加
+    body: Column(
+      children: [
+        Expanded(
+          child: _buildCurrentScreen(),
+        ),
+        _buildBottomSection(),
+      ],
+    ),
+  );
+}
 
   Widget _buildArtistScreen() {
     return FutureBuilder<List<SingleAlbum>>(
