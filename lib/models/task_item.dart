@@ -76,11 +76,13 @@ TaskItem copyWith({
   String? description,
   Color? color,
   int? duration,
-  List<DateTime>? completionHistory, // 🔧 修正: completionDates → completionHistory
-  int? totalCompletions, // 🆕 追加: totalCompletionsも追加
-  DateTime? lastCompletedAt, // 🆕 追加: lastCompletedAtも追加
+  List<DateTime>? completionHistory,
+  int? totalCompletions,
+  DateTime? lastCompletedAt,
   String? lyricNote,
+  bool clearLyricNote = false,  // 🆕 追加: Lyric Noteをクリアするフラグ
   String? assistUrl,
+  bool clearAssistUrl = false,  // 🆕 追加: URLをクリアするフラグ
 }) {
   return TaskItem(
     id: id ?? this.id,
@@ -88,13 +90,14 @@ TaskItem copyWith({
     description: description ?? this.description,
     color: color ?? this.color,
     duration: duration ?? this.duration,
-    completionHistory: completionHistory ?? this.completionHistory, // 🔧 修正
-    totalCompletions: totalCompletions ?? this.totalCompletions, // 🆕 追加
-    lastCompletedAt: lastCompletedAt ?? this.lastCompletedAt, // 🆕 追加
-    lyricNote: lyricNote ?? this.lyricNote,
-    assistUrl: assistUrl ?? this.assistUrl,
+    completionHistory: completionHistory ?? this.completionHistory,
+    totalCompletions: totalCompletions ?? this.totalCompletions,
+    lastCompletedAt: lastCompletedAt ?? this.lastCompletedAt,
+    lyricNote: clearLyricNote ? null : (lyricNote ?? this.lyricNote),  // 🔧 修正
+    assistUrl: clearAssistUrl ? null : (assistUrl ?? this.assistUrl),  // 🔧 修正
   );
 }
+
 
   // 🔔 新機能: 完了記録を追加するメソッド
   TaskItem addCompletion(DateTime completionTime) {

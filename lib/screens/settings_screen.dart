@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:image_picker/image_picker.dart';
 import '../models/task_item.dart';
+import '../models/single_album.dart';
 import '../services/data_service.dart';
 import 'package:flutter/services.dart';
 import 'package:palette_generator/palette_generator.dart';
@@ -88,28 +89,32 @@ void initState() {
   void _initializeTasks() {
   _tasks.clear();
   
-  // 🔧 修正：シングルアルバムの場合は既存タスクをそのまま使用
+  // シングルアルバムの場合は既存タスクをそのまま使用（IDとLyric Noteを保持）
   if (!widget.isEditingLifeDream) {
     for (int i = 0; i < widget.tasks.length; i++) {
       final task = widget.tasks[i];
       _tasks.add(TaskItem(
+        id: task.id, // 🔧 追加：既存のIDを保持
         title: task.title,
         description: task.description,
-        color: const Color(0xFF1DB954),  // 🔧 修正：すべて緑色
+        color: const Color(0xFF1DB954),
         duration: task.duration,
         assistUrl: task.assistUrl,
+        lyricNote: task.lyricNote, // 🔧 追加：既存のLyric Noteを保持
       ));
     }
   } else {
-    // ライフドリームアルバムは4つ固定
+    // ライフドリームアルバムは4つ固定（IDとLyric Noteを保持）
     for (int i = 0; i < widget.tasks.length && i < 4; i++) {
       final task = widget.tasks[i];
       _tasks.add(TaskItem(
+        id: task.id, // 🔧 追加：既存のIDを保持
         title: task.title,
         description: task.description,
-        color: const Color(0xFF1DB954),  // 🔧 修正：すべて緑色
+        color: const Color(0xFF1DB954),
         duration: task.duration,
         assistUrl: task.assistUrl,
+        lyricNote: task.lyricNote, // 🔧 追加：既存のLyric Noteを保持
       ));
     }
     
@@ -117,16 +122,17 @@ void initState() {
     for (int i = _tasks.length; i < 4; i++) {
       final defaultTask = defaultTasks[i];
       _tasks.add(TaskItem(
+        id: defaultTask.id, // 🔧 追加：デフォルトタスクのIDを使用
         title: defaultTask.title,
         description: defaultTask.description,
-        color: const Color(0xFF1DB954),  // 🔧 修正：すべて緑色
+        color: const Color(0xFF1DB954),
         duration: defaultTask.duration,
         assistUrl: defaultTask.assistUrl,
+        lyricNote: defaultTask.lyricNote, // 🔧 追加：デフォルトのLyric Note
       ));
     }
   }
 }
-
   @override
 void dispose() {
   _idealSelfController.dispose();
@@ -269,54 +275,92 @@ void dispose() {
   });
 
   try {
-    // 🔧 修正：タスクデータを更新（descriptionなし）
+    // タスクデータを更新
     for (int i = 0; i < _tasks.length; i++) {
       _tasks[i] = TaskItem(
+        id: _tasks[i].id, // 🔧 追加：既存のIDを保持
         title: _taskTitleControllers[i].text.trim().isEmpty 
             ? 'タスク${i + 1}' 
             : _taskTitleControllers[i].text,
-        description: '',  // 🔧 修正：空文字列に統一
-        color: const Color(0xFF1DB954),  // 🔧 修正：すべて緑色
+        description: '',
+        color: const Color(0xFF1DB954),
         duration: _tasks[i].duration,
         assistUrl: _taskUrlControllers[i].text.trim().isEmpty 
             ? null 
             : _taskUrlControllers[i].text.trim(),
+        lyricNote: _tasks[i].lyricNote, // 🔧 追加：既存のLyric Noteを保持
       );
     }
 
-    final data = {
-      'idealSelf': _idealSelfController.text,
-      'artistName': widget.artistName,  // 🔧 修正：変更せずそのまま渡す
-      'todayLyrics': widget.todayLyrics,  // 🔧 修正：変更せずそのまま渡す
-      'tasks': _tasks.map((task) => task.toJson()).toList(),
-      'imageBytes': _imageBytes,
-    };
-
-    await _dataService.saveUserData(data);
-    
-    if (mounted) {
-      _showMessage('設定を保存しました', isSuccess: true);
+    // 🔧 修正：シングルアルバムとドリームアルバムで保存先を分岐
+    if (!widget.isEditingLifeDream && widget.albumId != null) {
+      // シングルアルバムの場合
+      final updatedAlbum = SingleAlbum(
+        id: widget.albumId!,
+        albumName: _idealSelfController.text,
+        albumCoverImage: _hasImageChanged ? _imageBytes : widget.albumCoverImage,
+        tasks: _tasks,
+        createdAt: DateTime.now(),
+      );
       
-      final result = {
+      await _dataService.saveSingleAlbum(updatedAlbum);
+      
+      if (mounted) {
+        _showMessage('「${updatedAlbum.albumName}」を更新しました', isSuccess: true);
+        
+        final result = {
+          'idealSelf': _idealSelfController.text,
+          'artistName': widget.artistName,
+          'todayLyrics': widget.todayLyrics,
+          'tasks': _tasks,
+          'albumImage': null,
+          'imageBytes': _imageBytes,
+          'hasImageChanged': _hasImageChanged,
+        };
+        
+        if (widget.onSave != null) {
+          widget.onSave!(result);
+        } else {
+          Navigator.pop(context, result);
+        }
+      }
+    } else {
+      // ドリームアルバムの場合（既存の処理）
+      final data = {
         'idealSelf': _idealSelfController.text,
-        'artistName': widget.artistName,  // 🔧 修正
-        'todayLyrics': widget.todayLyrics,  // 🔧 修正
-        'tasks': _tasks,
-        'albumImage': _albumImage,
+        'artistName': widget.artistName,
+        'todayLyrics': widget.todayLyrics,
+        'tasks': _tasks.map((task) => task.toJson()).toList(),
         'imageBytes': _imageBytes,
-        'hasImageChanged': _hasImageChanged,
       };
+
+      await _dataService.saveUserData(data);
       
-      if (widget.onSave != null) {
-        widget.onSave!(result);
-      } else {
-        Navigator.pop(context, result);
+      if (mounted) {
+        _showMessage('設定を保存しました', isSuccess: true);
+        
+        final result = {
+          'idealSelf': _idealSelfController.text,
+          'artistName': widget.artistName,
+          'todayLyrics': widget.todayLyrics,
+          'tasks': _tasks,
+          'albumImage': _albumImage,
+          'imageBytes': _imageBytes,
+          'hasImageChanged': _hasImageChanged,
+        };
+        
+        if (widget.onSave != null) {
+          widget.onSave!(result);
+        } else {
+          Navigator.pop(context, result);
+        }
       }
     }
   } catch (e) {
     if (mounted) {
       _showMessage('保存に失敗しました', isSuccess: false);
     }
+    print('❌ 設定保存エラー: $e');
   } finally {
     if (mounted) {
       setState(() {
@@ -981,18 +1025,20 @@ Widget _buildSimpleTimeSelection(int index) {
 
   Widget _buildDurationButton(int taskIndex, int duration) {
   final isSelected = _tasks[taskIndex].duration == duration;
-  const taskColor = Color(0xFF1DB954);  // 🔧 修正：すべて緑色
+  const taskColor = Color(0xFF1DB954);
   
   return Expanded(
     child: GestureDetector(
       onTap: () {
         setState(() {
           _tasks[taskIndex] = TaskItem(
+            id: _tasks[taskIndex].id, // 🔧 追加：既存のIDを保持
             title: _tasks[taskIndex].title,
             description: _tasks[taskIndex].description,
-            color: taskColor,  // 🔧 修正
+            color: taskColor,
             duration: duration,
             assistUrl: _tasks[taskIndex].assistUrl,
+            lyricNote: _tasks[taskIndex].lyricNote, // 🔧 追加：既存のLyric Noteを保持
           );
         });
       },
@@ -1169,7 +1215,6 @@ void _onReorderTasks(int oldIndex, int newIndex) {
   });
 }
 
-// 🆕 新規追加メソッド：新しいタスクを追加
 void _addNewTask() {
   if (_tasks.length >= 10) {
     _showMessage('タスクは最大10個までです', isSuccess: false);
@@ -1177,12 +1222,17 @@ void _addNewTask() {
   }
   
   setState(() {
+    // 🔧 修正：新しいタスクに一意のIDを生成
+    final newTaskId = 'task_${DateTime.now().millisecondsSinceEpoch}_${_tasks.length}';
+    
     _tasks.add(TaskItem(
+      id: newTaskId, // 🔧 追加：一意のIDを設定
       title: 'タスク${_tasks.length + 1}',
       description: '',
       color: const Color(0xFF1DB954),
       duration: 3,
       assistUrl: null,
+      lyricNote: null, // 🔧 追加：初期値null
     ));
     
     _taskTitleControllers.add(TextEditingController(text: 'タスク${_tasks.length}'));

@@ -273,7 +273,7 @@ Future<void> _extractColorsFromImage() async {
 @override
 Widget build(BuildContext context) {
   return Container(
-    color: Colors.black,  // 🔧 追加：背景を黒に
+    color: Colors.black,
     child: Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -366,9 +366,10 @@ Widget build(BuildContext context) {
                           ),
                           const SizedBox(width: 16),
                           GestureDetector(
+                            // 🔧 修正: 理想像ページから再生する場合
                             onTap: () {
                               if (widget.onPlayTaskPressed != null) {
-                                widget.onPlayTaskPressed!(-1);
+                                widget.onPlayTaskPressed!(-1); // 🔧 理想像ページから開始
                               } else {
                                 widget.onPlayPressed?.call();
                               }
@@ -417,81 +418,94 @@ Widget build(BuildContext context) {
   }
 
   Widget _buildTrackItem(TaskItem task, int index) {
-    return GestureDetector(
-      // 🎵 タップしたタスクのインデックスを指定してプレイヤーを開く
-      onTap: () {
-        if (widget.onPlayTaskPressed != null) {
-          widget.onPlayTaskPressed!(index); // タスクのインデックスを渡す
-        } else {
-          widget.onPlayPressed?.call();
-        }
-      },
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 16),
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        child: Row(
-          children: [
-            // Track Info (左詰め)
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+  return GestureDetector(
+    // 🔧 修正: onCloseを呼ばずに直接PlayerScreenを開く
+    onTap: () {
+      print('🎵 タスクタップ: ${task.title} (index: $index)');
+      
+      if (widget.onPlayTaskPressed != null) {
+        // 🔧 重要: onCloseを呼ばずに直接PlayerScreenを開く
+        widget.onPlayTaskPressed!(index);
+      } else if (widget.onPlayPressed != null) {
+        widget.onPlayPressed!();
+      }
+    },
+    child: Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          // Track Info (左詰め)
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  task.title.isEmpty ? 'タスク${index + 1}' : task.title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    fontFamily: 'Hiragino Sans',
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (task.description.isNotEmpty) ...[
+                  const SizedBox(height: 4),
                   Text(
-                    task.title.isEmpty ? 'タスク${index + 1}' : task.title,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
+                    task.description,
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.7),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w300,
                       fontFamily: 'Hiragino Sans',
                     ),
-                    maxLines: 1,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  if (task.description.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      task.description,
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.7),
-                        fontSize: 14,
-                        fontWeight: FontWeight.w300,
-                        fontFamily: 'Hiragino Sans',
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
                 ],
-              ),
+              ],
             ),
+          ),
 
-            // Duration (タスクの設定時間を表示)
-            Text(
-              _formatDuration(task.duration),
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.6),
-                fontSize: 14,
-                fontWeight: FontWeight.w300,
-                fontFamily: 'SF Pro Text',
-              ),
+          // Duration (タスクの設定時間を表示)
+          Text(
+            _formatDuration(task.duration),
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.6),
+              fontSize: 14,
+              fontWeight: FontWeight.w300,
+              fontFamily: 'SF Pro Text',
             ),
+          ),
 
-            const SizedBox(width: 16),
+          const SizedBox(width: 16),
 
-            // More Options (3点横、右詰め)
-            GestureDetector(
-              onTap: () => _showTrackOptions(task, index),
+          // More Options (3点横、右詰め)
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {
+              _showTrackOptions(task, index);
+            },
+            child: Container(
+              padding: const EdgeInsets.all(8),
               child: Icon(
                 Icons.more_horiz,
                 color: Colors.white.withOpacity(0.6),
                 size: 24,
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   void _showTrackOptions(TaskItem task, int index) {
     showModalBottomSheet(

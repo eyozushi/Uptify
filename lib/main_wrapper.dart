@@ -1897,6 +1897,7 @@ Future<void> _initializeAudioService() async {
   
   print('🎵 シングルアルバムプレイヤー開始: ${album.albumName}, タスクインデックス: $taskIndex');
   print('🎵 アルバム画像あり: ${album.albumCoverImage != null}');
+  print('🎵 現在の状態: albumDetail=$_isAlbumDetailVisible, player=$_isPlayerScreenVisible');
   
   setState(() {
     _playingTasks = List.from(album.tasks);
@@ -1905,23 +1906,35 @@ Future<void> _initializeAudioService() async {
     _currentTaskIndex = taskIndex;
     _isPlaying = true;
     _startNewTask();
+    
+    // 🔧 重要: アルバム詳細を非表示にしてPlayerScreenを最前面に表示
+    _isAlbumDetailVisible = false; // 🔧 追加：アルバム詳細を非表示
     _isPlayerScreenVisible = true;
-    _playerDragOffset = 0.0; // 🔧 追加
-    _isDraggingPlayer = false; // 🔧 追加
+    _playerDragOffset = 0.0;
+    _isDraggingPlayer = false;
   });
+  
+  print('🎵 PlayerScreen表示完了: isVisible=$_isPlayerScreenVisible, albumDetail=$_isAlbumDetailVisible');
 }
-
   void _hideFullPlayer() {
   _closePlayerWithAnimation();
   
   print('🔧 MainWrapper: プレイヤーを閉じました - タイマー継続: $_isPlaying');
   
-  // 🔧 追加：アルバム詳細が残っていればそれを表示
+  // 🔧 修正: アルバム詳細が必要なら再表示
   if (_currentSingleAlbum != null) {
     setState(() {
-      _isAlbumDetailVisible = true;
+      _isAlbumDetailVisible = true; // 🔧 追加：アルバム詳細を再表示
+      _currentSingleAlbum = _playingSingleAlbum; // 🔧 追加：再生中のアルバムを表示
     });
     print('🔙 アルバム詳細画面に戻ります: ${_currentSingleAlbum!.albumName}');
+  } else if (_isPlayingSingleAlbum && _playingSingleAlbum != null) {
+    // 🔧 追加：再生中のシングルアルバムがある場合
+    setState(() {
+      _isAlbumDetailVisible = true;
+      _currentSingleAlbum = _playingSingleAlbum;
+    });
+    print('🔙 アルバム詳細画面に戻ります: ${_playingSingleAlbum!.albumName}');
   }
 }
 
@@ -2956,12 +2969,12 @@ Widget _buildCurrentScreen() {
   return Stack(
     children: [
       // メインコンテンツ
-      if (!_isSettingsVisible && !_isAlbumDetailVisible) _buildMainContent(),  // 🔧 修正：アルバム詳細表示中は非表示
+      if (!_isSettingsVisible && !_isAlbumDetailVisible) _buildMainContent(),
       
-      // 🔧 修正：アルバム詳細を常に表示（PlayerScreenの下）
+      // 🔧 修正: アルバム詳細（PlayerScreenの下に配置）
       if (_isAlbumDetailVisible) _buildAlbumDetailScreen(),
       
-      // PlayerScreen
+      // PlayerScreen（最前面）
       if (_playingTasks.isNotEmpty && (_isDraggingPlayer || _playerDragOffset < 1.0 || _isPlayerScreenVisible))
         Positioned(
           top: 0,
@@ -5389,32 +5402,6 @@ void _handleBackgroundAlbumCompletion() {
     }
   }
 
-
-  @override
-Widget build(BuildContext context) {
-  if (_isCheckingFirstLaunch) {
-    return _buildInitialLoadingScreen();
-  }
-
-  if (_shouldShowOnboarding) {
-    return OnboardingWrapper(
-      onCompleted: _onOnboardingCompleted,
-    );
-  }
-
-  // 🔧 修正：Scaffoldの背景色を明示的に黒に設定
-  return Scaffold(
-    backgroundColor: Colors.black, // 🔧 追加
-    body: Column(
-      children: [
-        Expanded(
-          child: _buildCurrentScreen(),
-        ),
-        _buildBottomSection(),
-      ],
-    ),
-  );
-}
 
   Widget _buildArtistScreen() {
     return FutureBuilder<List<SingleAlbum>>(
