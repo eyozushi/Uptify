@@ -36,9 +36,19 @@ class _LyricNotesExpandedViewState extends State<LyricNotesExpandedView> {
   int _currentLineIndex = 0;
   Timer? _autoSaveTimer;
 
+  final ScrollController _indicatorScrollController = ScrollController();
+final ScrollController _textScrollController = ScrollController();
+
   @override
   void initState() {
     super.initState();
+
+
+      _textScrollController.addListener(() {
+    if (_textScrollController.hasClients && _indicatorScrollController.hasClients) {
+      _indicatorScrollController.jumpTo(_textScrollController.offset);
+    }
+  });
     
     // 初期データの設定
     if (widget.initialNotes != null && widget.initialNotes!.isNotEmpty) {
@@ -67,29 +77,38 @@ class _LyricNotesExpandedViewState extends State<LyricNotesExpandedView> {
   }
 
   /// 🔧 修正版：階層情報を保持しながらテキストを更新
-  void _rebuildNotesFromText(String text) {
-    final lines = text.split('\n');
-    final newNotes = <LyricNoteItem>[];
+  /// 🔧 修正版：テキストから階層情報を保持しながらノートを再構築
+void _rebuildNotesFromText(String text) {
+  final lines = text.split('\n');
+  final newNotes = <LyricNoteItem>[];
+  
+  for (int i = 0; i < lines.length; i++) {
+    final lineText = lines[i];
     
-    for (int i = 0; i < lines.length; i++) {
-      if (i < _notes.length) {
-        // 既存のノートの階層情報を保持
-        newNotes.add(_notes[i].copyWith(
-          text: lines[i],
-          updatedAt: DateTime.now(),
-        ));
-      } else {
-        // 新しい行は親レベルとして追加
-        newNotes.add(LyricNoteItem(
-          text: lines[i],
-          level: 1,
-        ));
-      }
+    if (i < _notes.length) {
+      // 既存のノートの階層情報を保持しつつテキストのみ更新
+      newNotes.add(_notes[i].copyWith(
+        text: lineText,
+        updatedAt: DateTime.now(),
+      ));
+    } else {
+      // 新しい行は親レベル（Level 1）として追加
+      newNotes.add(LyricNoteItem(
+        text: lineText,
+        level: 1,
+      ));
     }
-    
-    _notes = newNotes;
-    print('📝 テキスト再構築: ${_notes.length}行, 現在行=$_currentLineIndex');
   }
+  
+  setState(() {
+    _notes = newNotes;
+  });
+  
+  print('📝 テキスト再構築: ${_notes.length}行, 現在行=$_currentLineIndex');
+  for (int i = 0; i < _notes.length; i++) {
+    print('  [$i] L${_notes[i].level}: "${_notes[i].text.substring(0, _notes[i].text.length.clamp(0, 20))}"');
+  }
+}
 
   /// テキスト変更時の処理
   void _onTextChanged() {
@@ -136,84 +155,143 @@ class _LyricNotesExpandedViewState extends State<LyricNotesExpandedView> {
   }
 
   /// 🔧 修正版：階層を深くする（→ボタン）
-  void _increaseLevel() {
-    if (_currentLineIndex >= _notes.length) return;
-    
-    final currentNote = _notes[_currentLineIndex];
-    
-    // 最大レベル3まで
-    if (currentNote.level >= 3) {
-      print('⚠️ 最大レベル到達');
-      return;
-    }
-    
-    setState(() {
-      _notes[_currentLineIndex] = currentNote.copyWith(
-        level: currentNote.level + 1,
-        updatedAt: DateTime.now(),
-      );
-    });
-    
-    print('➡️ レベル上昇: ${currentNote.level} → ${currentNote.level + 1}');
-    _saveNotes();
+  /// 🔧 修正版：階層を深くする（→ボタン）
+void _increaseLevel() {
+  if (_currentLineIndex >= _notes.length) {
+    print('⚠️ 無効な行インデックス: $_currentLineIndex');
+    return;
   }
+  
+  final currentNote = _notes[_currentLineIndex];
+  
+  // 最大レベル3まで
+  if (currentNote.level >= 3) {
+    print('⚠️ 最大レベル到達: Level ${currentNote.level}');
+    return;
+  }
+  
+  setState(() {
+    _notes[_currentLineIndex] = currentNote.copyWith(
+      level: currentNote.level + 1,
+      updatedAt: DateTime.now(),
+    );
+  });
+  
+  print('➡️ レベル上昇完了: ${currentNote.level} → ${currentNote.level + 1}, text="${currentNote.text}"');
+  _saveNotes();
+}
 
   /// 🔧 修正版：階層を浅くする（←ボタン）
-  void _decreaseLevel() {
-    if (_currentLineIndex >= _notes.length) return;
+  /// 🔧 修正版：階層を浅くする（←ボタン）
+void _decreaseLevel() {
+  if (_currentLineIndex >= _notes.length) {
+    print('⚠️ 無効な行インデックス: $_currentLineIndex');
+    return;
+  }
+  
+  final currentNote = _notes[_currentLineIndex];
+  
+  // 最小レベル1まで
+  if (currentNote.level <= 1) {
+    print('⚠️ 最小レベル到達: Level ${currentNote.level}');
+    return;
+  }
+  
+  setState(() {
+    _notes[_currentLineIndex] = currentNote.copyWith(
+      level: currentNote.level - 1,
+      updatedAt: DateTime.now(),
+    );
+  });
+  
+  print('⬅️ レベル低下完了: ${currentNote.level} → ${currentNote.level - 1}, text="${currentNote.text}"');
+  _saveNotes();
+}
+/// 🔧 修正版：リスト化（中央ボタン）
+void _toggleList() {
+  if (_currentLineIndex >= _notes.length) {
+    print('⚠️ 無効な行インデックス: $_currentLineIndex');
+    return;
+  }
+  
+  final currentNote = _notes[_currentLineIndex];
+  
+  print('🎯 リスト化実行: line=$_currentLineIndex, level=${currentNote.level}, text="${currentNote.text}"');
+  
+  // 現在の行が親レベル（Level 1）の場合
+  if (currentNote.level == 1) {
+    print('📋 親→子に変換開始');
     
-    final currentNote = _notes[_currentLineIndex];
-    
-    // 最小レベル1まで
-    if (currentNote.level <= 1) {
-      print('⚠️ 最小レベル到達');
-      return;
-    }
-    
+    // 1. 現在の行を子レベル（Level 2）に変更
     setState(() {
       _notes[_currentLineIndex] = currentNote.copyWith(
-        level: currentNote.level - 1,
+        level: 2,
         updatedAt: DateTime.now(),
       );
     });
     
-    print('⬅️ レベル低下: ${currentNote.level} → ${currentNote.level - 1}');
-    _saveNotes();
-  }
-
-  /// 🔧 修正版：リスト化（中央ボタン）
-  void _toggleList() {
-    if (_currentLineIndex >= _notes.length) return;
+    print('✅ 親→子変換完了: "${currentNote.text}"');
     
-    final currentNote = _notes[_currentLineIndex];
+    // 2. 次の行に孫レベル（Level 3）の空行を挿入
+    final newNote = LyricNoteItem(
+      text: '',
+      level: 3,
+    );
     
-    print('🎯 リスト化実行: level=${currentNote.level}, checked=${currentNote.isChecked}');
+    setState(() {
+      _notes.insert(_currentLineIndex + 1, newNote);
+    });
     
-    // 既にレベル2以上の場合は、チェック状態をトグル
-    if (currentNote.level >= 2) {
-      setState(() {
-        _notes[_currentLineIndex] = currentNote.copyWith(
-          isChecked: !currentNote.isChecked,
-          updatedAt: DateTime.now(),
-        );
-      });
-      print('✅ チェック切り替え: ${!currentNote.isChecked}');
-    } else {
-      // レベル1の場合は、レベル2に変更
-      setState(() {
-        _notes[_currentLineIndex] = currentNote.copyWith(
-          level: 2,
-          updatedAt: DateTime.now(),
-        );
-      });
-      print('📋 レベル1→2に変更');
+    print('✅ 孫レベル空行挿入: index=${_currentLineIndex + 1}');
+    
+    // 3. テキストコントローラーを更新
+    final lines = _controller.text.split('\n');
+    lines.insert(_currentLineIndex + 1, '');
+    
+    // リスナーを一時的に解除してテキスト更新
+    _controller.removeListener(_onTextChanged);
+    _controller.text = lines.join('\n');
+    _controller.addListener(_onTextChanged);
+    
+    print('✅ テキストコントローラー更新完了');
+    
+    // 4. カーソルを新しい行（孫レベル）に移動
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       
-      // 次の行に移動してレベル3の空行を追加
-      _insertNewLineWithLevel(3);
-    }
+      // 新しい行の開始位置を計算
+      final linesBeforeNew = lines.take(_currentLineIndex + 2).toList();
+      final newCursorPosition = linesBeforeNew.join('\n').length;
+      
+      _controller.selection = TextSelection.collapsed(
+        offset: newCursorPosition.clamp(0, _controller.text.length),
+      );
+      
+      setState(() {
+        _currentLineIndex = _currentLineIndex + 1;
+      });
+      
+      print('✅ カーソル移動完了: $_currentLineIndex行目（孫レベル）');
+    });
     
-    _saveNotes();
+  } 
+  // 現在の行が子レベル（Level 2）以上の場合
+  else {
+    print('✅ チェックボックストグル実行');
+    
+    // チェック状態をトグル
+    setState(() {
+      _notes[_currentLineIndex] = currentNote.copyWith(
+        isChecked: !currentNote.isChecked,
+        updatedAt: DateTime.now(),
+      );
+    });
+    
+    print('✅ チェック切り替え完了: ${_notes[_currentLineIndex].isChecked}');
   }
+  
+  _saveNotes();
+}
 
   /// 指定レベルの新しい行を挿入
   void _insertNewLineWithLevel(int level) {
@@ -274,12 +352,14 @@ class _LyricNotesExpandedViewState extends State<LyricNotesExpandedView> {
   }
 
   @override
-  void dispose() {
-    _autoSaveTimer?.cancel();
-    _controller.dispose();
-    _focusNode.dispose();
-    super.dispose();
-  }
+void dispose() {
+  _autoSaveTimer?.cancel();
+  _controller.dispose();
+  _focusNode.dispose();
+  _indicatorScrollController.dispose();  // 🆕 追加
+  _textScrollController.dispose();  // 🆕 追加
+  super.dispose();
+}
 
   @override
   Widget build(BuildContext context) {
@@ -373,12 +453,13 @@ class _LyricNotesExpandedViewState extends State<LyricNotesExpandedView> {
                   ),
                   
                   // 中央ボタン: リスト化（チェックマーク）
-                  _buildCompactButton(
-                    icon: Icons.check_box_outline_blank,
-                    label: 'リスト',
-                    onTap: _toggleList,
-                    isCenter: true,
-                  ),
+                  // 中央ボタン: リスト化（右向き三角）
+_buildCompactButton(
+  icon: Icons.arrow_right,  // 🔧 変更: check_box_outline_blank → arrow_right
+  label: 'リスト',
+  onTap: _toggleList,
+  isCenter: true,
+),
                   
                   // 右ボタン: 階層を深くする（→）
                   _buildCompactButton(
@@ -390,40 +471,194 @@ class _LyricNotesExpandedViewState extends State<LyricNotesExpandedView> {
               ),
             ),
 
+              // 🆕 追加：現在の階層情報を表示
+Padding(
+  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+  child: Row(
+    children: [
+      Icon(
+        _getCurrentLevel() == 1 
+            ? Icons.label 
+            : _getCurrentLevel() == 2 
+                ? Icons.arrow_right 
+                : Icons.subdirectory_arrow_right,
+        color: Colors.white.withOpacity(0.7),
+        size: 20,
+      ),
+      const SizedBox(width: 8),
+      Text(
+        _getCurrentLevel() == 1 
+            ? '親レベル' 
+            : _getCurrentLevel() == 2 
+                ? '子レベル' 
+                : '孫レベル',
+        style: TextStyle(
+          color: Colors.white.withOpacity(0.7),
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          fontFamily: 'Hiragino Sans',
+        ),
+      ),
+      const Spacer(),
+      // 現在の行のノート情報を表示
+      if (_currentLineIndex < _notes.length)
+        Text(
+          'checked: ${_notes[_currentLineIndex].isChecked}',
+          style: TextStyle(
+            color: Colors.white.withOpacity(0.5),
+            fontSize: 10,
+            fontFamily: 'Hiragino Sans',
+          ),
+        ),
+    ],
+  ),
+),
+
             // 入力エリア
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(20),
-                child: TextField(
-                  controller: _controller,
-                  focusNode: _focusNode,
-                  style: GoogleFonts.inter(
-                    color: Colors.white,
-                    fontSize: 24,
-                    height: 1.6,
-                    fontWeight: FontWeight.w800,
-                  ).copyWith(
-                    fontFamilyFallback: const ['Hiragino Sans'],
-                  ),
-                  decoration: InputDecoration(
-                    hintText: 'リリックを書いてください。\n思考、感情、振り返り、\n自由に記録しましょう。',
-                    hintStyle: GoogleFonts.inter(
-                      color: Colors.white.withOpacity(0.5),
-                      fontSize: 24,
-                      height: 1.6,
-                      fontWeight: FontWeight.w700,
-                    ).copyWith(
-                      fontFamilyFallback: const ['Hiragino Sans'],
-                    ),
-                    border: InputBorder.none,
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                  maxLines: null,
-                  keyboardType: TextInputType.multiline,
-                  autofocus: false,
+            // 入力エリア
+// 入力エリア
+Expanded(
+  child: Stack(
+    children: [
+      // 🆕 階層インジケーター（左端に表示）
+      Positioned(
+        left: 0,
+        top: 0,
+        bottom: 0,
+        child: Container(
+          width: 60,
+          color: Colors.black.withOpacity(0.1),
+          child: ListView.builder(
+            controller: _indicatorScrollController,
+            physics: const NeverScrollableScrollPhysics(),
+            padding: const EdgeInsets.only(top: 20),
+            itemCount: _notes.length,
+            itemBuilder: (context, index) {
+              final note = _notes[index];
+              final isCurrent = index == _currentLineIndex;
+              
+              return Container(
+                height: 38.4, // 24px × 1.6
+                alignment: Alignment.centerLeft,
+                padding: const EdgeInsets.only(left: 4),
+                decoration: isCurrent 
+                    ? BoxDecoration(
+                        color: Colors.white.withOpacity(0.1),
+                        border: Border(
+                          left: BorderSide(
+                            color: const Color(0xFF1DB954),
+                            width: 3,
+                          ),
+                        ),
+                      )
+                    : null,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // レベル1: 何も表示しない
+                    if (note.level == 1)
+                      const SizedBox(width: 40),
+                    
+                    // レベル2: 三角マーク
+                    if (note.level == 2) ...[
+                      const SizedBox(width: 4),
+                      Icon(
+                        Icons.play_arrow,
+                        color: isCurrent 
+                            ? const Color(0xFF1DB954)
+                            : Colors.white.withOpacity(0.5),
+                        size: 18,
+                      ),
+                    ],
+                    
+                    // レベル3: インデント + 三角マーク
+                    if (note.level == 3) ...[
+                      const SizedBox(width: 16),
+                      Icon(
+                        Icons.play_arrow,
+                        color: isCurrent 
+                            ? const Color(0xFF1DB954)
+                            : Colors.white.withOpacity(0.4),
+                        size: 16,
+                      ),
+                    ],
+                    
+                    // チェックボックス（Level 2/3のみ）
+                    if (note.level >= 2) ...[
+                      const SizedBox(width: 2),
+                      GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _notes[index] = note.copyWith(
+                              isChecked: !note.isChecked,
+                              updatedAt: DateTime.now(),
+                            );
+                          });
+                          _saveNotes();
+                        },
+                        child: Icon(
+                          note.isChecked 
+                              ? Icons.check_box 
+                              : Icons.check_box_outline_blank,
+                          color: note.isChecked 
+                              ? const Color(0xFF1DB954) 
+                              : (isCurrent 
+                                  ? Colors.white.withOpacity(0.8)
+                                  : Colors.white.withOpacity(0.3)),
+                          size: 18,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
-              ),
+              );
+            },
+          ),
+        ),
+      ),
+      
+      // テキスト入力フィールド
+      Positioned(
+        left: 60,
+        top: 0,
+        right: 0,
+        bottom: 0,
+        child: SingleChildScrollView(
+          controller: _textScrollController,
+          padding: const EdgeInsets.all(20),
+          child: TextField(
+            controller: _controller,
+            focusNode: _focusNode,
+            style: GoogleFonts.inter(
+              color: Colors.white,
+              fontSize: 24,
+              height: 1.6,
+              fontWeight: FontWeight.w800,
+            ).copyWith(
+              fontFamilyFallback: const ['Hiragino Sans'],
             ),
+            decoration: InputDecoration(
+              hintText: 'リリックを書いてください。\n思考、感情、振り返り、\n自由に記録しましょう。',
+              hintStyle: GoogleFonts.inter(
+                color: Colors.white.withOpacity(0.5),
+                fontSize: 24,
+                height: 1.6,
+                fontWeight: FontWeight.w700,
+              ).copyWith(
+                fontFamilyFallback: const ['Hiragino Sans'],
+              ),
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.zero,
+            ),
+            maxLines: null,
+            keyboardType: TextInputType.multiline,
+            autofocus: false,
+          ),
+        ),
+      ),
+    ],
+  ),
+),
           ],
         ),
       ),
@@ -431,43 +666,50 @@ class _LyricNotesExpandedViewState extends State<LyricNotesExpandedView> {
   }
 
   /// 🆕 コンパクトなボタンウィジェット
-  Widget _buildCompactButton({
-    required IconData icon,
-    required String label,
-    required VoidCallback? onTap,
-    bool isCenter = false,
-  }) {
-    final isEnabled = onTap != null;
-    
-    return GestureDetector(
-      onTap: isEnabled ? onTap : null,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
+  /// 🆕 コンパクトなボタンウィジェット
+Widget _buildCompactButton({
+  required IconData icon,
+  required String label,
+  required VoidCallback? onTap,
+  bool isCenter = false,  // 🔧 修正：デフォルト値をここに配置
+}) {
+  final isEnabled = onTap != null;
+  
+  return GestureDetector(
+    onTap: isEnabled ? onTap : null,
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            color: isEnabled 
+                ? Colors.white 
+                : Colors.white.withOpacity(0.3),
+            size: isCenter ? 22 : 20,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
               color: isEnabled 
                   ? Colors.white 
                   : Colors.white.withOpacity(0.3),
-              size: isCenter ? 22 : 20,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              fontFamily: 'Hiragino Sans',
             ),
-            const SizedBox(width: 4),
-            Text(
-              label,
-              style: TextStyle(
-                color: isEnabled 
-                    ? Colors.white 
-                    : Colors.white.withOpacity(0.3),
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                fontFamily: 'Hiragino Sans',
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
-    );
-  }
+    ),
+  );
+}
+
+
+
+
+
+
 }

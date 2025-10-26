@@ -76,76 +76,79 @@ class LyricNoteLineWidget extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: EdgeInsets.only(left: _getIndentWidth()),
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-      decoration: BoxDecoration(
-        color: _getBackgroundColor(),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // トグルマーク（子・孫のみ表示）
-          if (noteItem.level > 1) ...[
-            GestureDetector(
-              onTap: hasChildren ? onToggleCollapse : null,
-              child: Padding(
-                padding: const EdgeInsets.only(right: 8, top: 4),
-                child: Icon(
-                  noteItem.isCollapsed 
-                      ? Icons.arrow_right 
-                      : Icons.arrow_drop_down,
-                  color: Colors.white.withOpacity(0.7),
-                  size: 20,
-                ),
-              ),
-            ),
-          ],
-
-          // チェックボックス（Level 2/3のみ）
-          if (noteItem.level > 1) ...[
-            GestureDetector(
-              onTap: onToggleCheck,
-              child: Padding(
-                padding: const EdgeInsets.only(right: 8, top: 4),
-                child: Icon(
-                  noteItem.isChecked 
-                      ? Icons.check_box 
-                      : Icons.check_box_outline_blank,
-                  color: noteItem.isChecked 
-                      ? const Color(0xFF1DB954) 
-                      : Colors.white.withOpacity(0.7),
-                  size: 20,
-                ),
-              ),
-            ),
-          ],
-
-          // テキスト内容
-          Expanded(
-            child: Text(
-              noteItem.text,
-              style: GoogleFonts.inter(
-                color: noteItem.isChecked 
-                    ? Colors.white.withOpacity(0.5) 
-                    : Colors.white,
-                fontSize: _getFontSize(),
-                fontWeight: noteItem.level == 1 
-                    ? FontWeight.w800 
-                    : FontWeight.w700,
-                height: 1.6,
-                decoration: noteItem.isChecked 
-                    ? TextDecoration.lineThrough 
-                    : null,
-              ).copyWith(
-                fontFamilyFallback: const ['Hiragino Sans'],
+Widget build(BuildContext context) {
+  return Container(
+    margin: EdgeInsets.only(left: _getIndentWidth()),
+    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+    decoration: BoxDecoration(
+      color: _getBackgroundColor(),
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // 🔧 修正：三角マーク（Level 2/3のみ表示、クリックで展開/折りたたみ）
+        if (noteItem.level >= 2) ...[
+          GestureDetector(
+            onTap: hasChildren ? onToggleCollapse : null,
+            child: Padding(
+              padding: const EdgeInsets.only(right: 8, top: 4),
+              child: Icon(
+                // 🔧 変更：常に右向き三角を表示（折りたたみ時は右、展開時は下）
+                noteItem.isCollapsed 
+                    ? Icons.arrow_right 
+                    : Icons.arrow_drop_down,
+                color: hasChildren 
+                    ? Colors.white 
+                    : Colors.white.withOpacity(0.3),  // 子がいない場合は薄く
+                size: 20,
               ),
             ),
           ),
         ],
-      ),
-    );
-  }
+
+        // チェックボックス（Level 2/3のみ）
+        if (noteItem.level >= 2) ...[
+          GestureDetector(
+            onTap: onToggleCheck,
+            child: Padding(
+              padding: const EdgeInsets.only(right: 8, top: 4),
+              child: Icon(
+                noteItem.isChecked 
+                    ? Icons.check_box 
+                    : Icons.check_box_outline_blank,
+                color: noteItem.isChecked 
+                    ? const Color(0xFF1DB954) 
+                    : Colors.white.withOpacity(0.7),
+                size: 20,
+              ),
+            ),
+          ),
+        ],
+
+        // テキスト内容
+        Expanded(
+          child: Text(
+            noteItem.text,
+            style: GoogleFonts.inter(
+              color: noteItem.isChecked 
+                  ? Colors.white.withOpacity(0.5) 
+                  : Colors.white,
+              fontSize: _getFontSize(),
+              fontWeight: noteItem.level == 1 
+                  ? FontWeight.w800 
+                  : FontWeight.w700,
+              height: 1.6,
+              decoration: noteItem.isChecked 
+                  ? TextDecoration.lineThrough 
+                  : null,
+            ).copyWith(
+              fontFamilyFallback: const ['Hiragino Sans'],
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
 }

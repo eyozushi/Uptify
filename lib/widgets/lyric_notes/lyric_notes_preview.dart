@@ -19,6 +19,7 @@ class LyricNotesPreview extends StatelessWidget {
   });
 
 /// 🔧 修正: 階層構造対応のプレビューテキスト生成
+/// 🔧 修正: 階層構造対応のプレビューテキスト生成（三角マーク付き）
 String _getPreviewText() {
   if (notes == null || notes!.isEmpty) {
     return 'タップして\nリリックを追加...';
@@ -46,15 +47,15 @@ String _getPreviewText() {
     print('  - Level ${note.level}: "${note.text}"');
   }
   
-  // インデントを表示用に変換
+  // 🔧 変更：三角マークを追加してインデントを表示
   final previewLines = visibleNotes.map((note) {
     String prefix = '';
     
-    // レベル2以上にはインデントマーカーを追加
+    // レベル2以上には三角マーカーを追加
     if (note.level == 2) {
-      prefix = '  • ';  // 子要素マーカー
+      prefix = '  ▶︎ ';  // 🔧 変更：子要素マーカー（三角）
     } else if (note.level == 3) {
-      prefix = '    - ';  // 孫要素マーカー
+      prefix = '    ▶︎ ';  // 🔧 変更：孫要素マーカー（三角＋深いインデント）
     }
     
     return prefix + note.text;
