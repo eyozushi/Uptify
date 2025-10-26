@@ -2203,6 +2203,9 @@ Future<void> _deleteSingleAlbum(SingleAlbum album) async {
     
     await _dataService.saveSingleAlbum(album);
     
+    // 🔧 修正：すぐにホーム画面に反映させるため、ユーザーデータを再読み込み
+    await _loadUserData();
+    
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -2212,7 +2215,7 @@ Future<void> _deleteSingleAlbum(SingleAlbum album) async {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  '「${album.albumName}」を保存しました！',
+                  '「${album.albumName}」をリリースしました！',
                   style: const TextStyle(fontFamily: 'Hiragino Sans'),
                 ),
               ),
@@ -2226,23 +2229,23 @@ Future<void> _deleteSingleAlbum(SingleAlbum album) async {
           duration: const Duration(seconds: 3),
         ),
       );
+      
+      // 🔧 修正：ホーム画面に戻る
+      setState(() {
+        _selectedPageIndex = 0;
+      });
     }
   } catch (e) {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('アルバムの保存に失敗しました'),
+        const SnackBar(
+          content: Text('アルバムの保存に失敗しました'),
           backgroundColor: Colors.red,
         ),
       );
     }
     return;
   }
-  
-  // 🆕 PageController削除に伴う修正
-  setState(() {
-    _selectedPageIndex = 0;
-  });
 }
 
   void _onDataUpdated() {

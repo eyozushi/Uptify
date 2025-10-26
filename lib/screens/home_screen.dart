@@ -76,11 +76,12 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   @override
-  void didUpdateWidget(covariant HomeScreen oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // 🔧 画面が再表示されたらキャッシュをチェック
-    _checkAndRefreshIfNeeded();
-  }
+void didUpdateWidget(covariant HomeScreen oldWidget) {
+  super.didUpdateWidget(oldWidget);
+  // 🔧 追加：画面が再表示されたらデータをリロード
+  _checkAndRefreshIfNeeded();
+  _loadData(); // シングルアルバムリストも再読み込み
+}
 
   Future<void> _checkAndRefreshIfNeeded() async {
     if (_isUpdating) return;

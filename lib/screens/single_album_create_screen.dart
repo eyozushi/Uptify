@@ -1,8 +1,9 @@
-// screens/single_album_create_screen.dart - 最終版
+// screens/single_album_create_screen.dart - 設定画面風デザイン版
 import 'package:flutter/material.dart';
 import 'dart:typed_data';
 import 'package:image_picker/image_picker.dart';
 import '../models/task_item.dart';
+import 'package:palette_generator/palette_generator.dart';
 
 class SingleAlbumCreateScreen extends StatefulWidget {
   final VoidCallback? onClose;
@@ -23,6 +24,11 @@ class _SingleAlbumCreateScreenState extends State<SingleAlbumCreateScreen> {
   Uint8List? _albumCoverImage;
   List<TaskItem> _tasks = [];
   List<TextEditingController> _taskControllers = [];
+  
+  // 🆕 背景色用のフィールド
+  Color _dominantColor = const Color(0xFF2D1B69);
+  bool _isExtractingColors = false;
+  bool _isLoading = false;
 
   @override
   void initState() {
@@ -39,14 +45,202 @@ class _SingleAlbumCreateScreenState extends State<SingleAlbumCreateScreen> {
     super.dispose();
   }
 
+  void _resetForm() {
+    setState(() {
+      // アルバム名をクリア
+      _albumNameController.clear();
+      
+      // 画像をクリア
+      _albumCoverImage = null;
+      
+      // 背景色をデフォルトに戻す
+      _dominantColor = const Color(0xFF2D1B69);
+      
+      // タスクをクリア
+      for (var controller in _taskControllers) {
+        controller.dispose();
+      }
+      _tasks.clear();
+      _taskControllers.clear();
+      
+      // 初期タスクを1つ追加
+      _addNewTask();
+    });
+    
+    _showMessage('フォームをリセットしました', isSuccess: true);
+  }
+
   Future<void> _pickImage() async {
     final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+    
+    final source = await _showImageSourceDialog();
+    if (source == null) return;
+    
+    final pickedFile = await picker.pickImage(
+      source: source,
+      maxWidth: 1000,
+      maxHeight: 1000,
+      imageQuality: 85,
+    );
     
     if (pickedFile != null) {
       final bytes = await pickedFile.readAsBytes();
       setState(() {
         _albumCoverImage = bytes;
+      });
+      
+      // 色を抽出
+      _extractColorsFromImage();
+      
+      _showMessage('写真を選択しました', isSuccess: true);
+    }
+  }
+
+  Future<ImageSource?> _showImageSourceDialog() async {
+    return await showDialog<ImageSource>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF1A1A2E),
+          title: const Text(
+            '写真を選択',
+            style: TextStyle(color: Colors.white, fontFamily: 'Hiragino Sans'),
+          ),
+          content: const Text(
+            '写真の取得方法を選択してください',
+            style: TextStyle(color: Colors.white70, fontFamily: 'Hiragino Sans'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text(
+                'キャンセル',
+                style: TextStyle(color: Colors.white54),
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(ImageSource.camera),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.camera_alt, color: Color(0xFF1DB954), size: 20),
+                  SizedBox(width: 8),
+                  Text(
+                    'カメラ',
+                    style: TextStyle(color: Color(0xFF1DB954)),
+                  ),
+                ],
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(ImageSource.gallery),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.photo_library, color: Color(0xFF1DB954), size: 20),
+                  SizedBox(width: 8),
+                  Text(
+                    'ギャラリー',
+                    style: TextStyle(color: Color(0xFF1DB954)),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // 🆕 新規追加メソッド：画像から色を抽出
+  Future<void> _extractColorsFromImage() async {
+    if (_isExtractingColors) return;
+    
+    setState(() {
+      _isExtractingColors = true;
+    });
+    
+    try {
+      if (_albumCoverImage != null) {
+        final imageProvider = MemoryImage(_albumCoverImage!);
+        
+        final PaletteGenerator paletteGenerator = await PaletteGenerator.fromImageProvider(
+          imageProvider,
+          size: const Size(200, 200),
+          maximumColorCount: 16,
+        );
+        
+        if (mounted) {
+          Color selectedColor = const Color(0xFF2D1B69);
+          
+          // 彩度チェック関数
+          double getSaturation(Color color) {
+            final r = color.red / 255.0;
+            final g = color.green / 255.0;
+            final b = color.blue / 255.0;
+            
+            final max = [r, g, b].reduce((a, b) => a > b ? a : b);
+            final min = [r, g, b].reduce((a, b) => a < b ? a : b);
+            
+            if (max == 0) return 0;
+            return (max - min) / max;
+          }
+          
+          // 色をスコアリング
+          double scoreColor(PaletteColor paletteColor) {
+            final color = paletteColor.color;
+            final population = paletteColor.population;
+            final saturation = getSaturation(color);
+            final luminance = color.computeLuminance();
+            
+            double score = 0;
+            
+            if (population < 500) score -= 300;
+            score += saturation * 100;
+            if (saturation > 0.15) score += (population / 1000) * 100;
+            if (luminance > 0.15 && luminance < 0.7) score += 30;
+            if (saturation < 0.15) score -= 200;
+            if (luminance > 0.8) score -= 100;
+            
+            return score;
+          }
+          
+          final List<PaletteColor> allColors = [
+            if (paletteGenerator.vibrantColor != null) paletteGenerator.vibrantColor!,
+            if (paletteGenerator.lightVibrantColor != null) paletteGenerator.lightVibrantColor!,
+            if (paletteGenerator.darkVibrantColor != null) paletteGenerator.darkVibrantColor!,
+            if (paletteGenerator.mutedColor != null) paletteGenerator.mutedColor!,
+            if (paletteGenerator.lightMutedColor != null) paletteGenerator.lightMutedColor!,
+            if (paletteGenerator.darkMutedColor != null) paletteGenerator.darkMutedColor!,
+            if (paletteGenerator.dominantColor != null) paletteGenerator.dominantColor!,
+          ];
+          
+          if (allColors.isNotEmpty) {
+            PaletteColor bestColor = allColors[0];
+            double bestScore = scoreColor(bestColor);
+            
+            for (final paletteColor in allColors) {
+              final score = scoreColor(paletteColor);
+              if (score > bestScore) {
+                bestScore = score;
+                bestColor = paletteColor;
+              }
+            }
+            
+            selectedColor = bestColor.color;
+          }
+          
+          setState(() {
+            _dominantColor = selectedColor;
+            _isExtractingColors = false;
+          });
+        }
+      }
+    } catch (e) {
+      print('❌ 色抽出エラー: $e');
+      setState(() {
+        _dominantColor = const Color(0xFF2D1B69);
+        _isExtractingColors = false;
       });
     }
   }
@@ -80,128 +274,87 @@ class _SingleAlbumCreateScreenState extends State<SingleAlbumCreateScreen> {
     });
   }
 
-  void _saveAlbum() {
+  void _saveAlbum() async {
     if (_albumNameController.text.trim().isEmpty) {
-      _showError('アルバム名を入力してください');
+      _showMessage('アルバム名を入力してください', isSuccess: false);
       return;
     }
 
     bool hasValidTask = false;
-    for (var task in _tasks) {
-      if (task.title.trim().isNotEmpty) {
+    for (int i = 0; i < _tasks.length; i++) {
+      final title = _taskControllers[i].text.trim();
+      if (title.isNotEmpty) {
         hasValidTask = true;
         break;
       }
     }
 
     if (!hasValidTask) {
-      _showError('少なくとも1つのタスクに名前を入力してください');
+      _showMessage('少なくとも1つのタスクに名前を入力してください', isSuccess: false);
       return;
     }
 
-    final validTasks = _tasks.where((task) => task.title.trim().isNotEmpty).toList();
-
-    final albumData = {
-      'albumName': _albumNameController.text.trim(),
-      'albumCoverImage': _albumCoverImage,
-      'tasks': validTasks,
-      'createdAt': DateTime.now().toIso8601String(),
-    };
-
-    widget.onSave?.call(albumData);
-  }
-
-  void _resetForm() {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          backgroundColor: const Color(0xFF1A1A2E),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          title: const Text(
-            'リセットしますか？',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              fontFamily: 'Hiragino Sans',
-            ),
-          ),
-          content: const Text(
-            '入力した内容はすべて削除されます。\nこの操作は取り消せません。',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 14,
-              fontFamily: 'Hiragino Sans',
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-              child: const Text(
-                'キャンセル',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontFamily: 'Hiragino Sans',
-                ),
-              ),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                _performReset();
-              },
-              child: const Text(
-                'リセット',
-                style: TextStyle(
-                  color: Colors.red,
-                  fontWeight: FontWeight.w600,
-                  fontFamily: 'Hiragino Sans',
-                ),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  void _performReset() {
     setState(() {
-      _albumNameController.clear();
-      _albumCoverImage = null;
-      _tasks.clear();
-      for (var controller in _taskControllers) {
-        controller.dispose();
-      }
-      _taskControllers.clear();
-      _addNewTask();
+      _isLoading = true;
     });
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'リセットしました',
-          style: TextStyle(fontFamily: 'Hiragino Sans'),
-        ),
-        backgroundColor: Color(0xFF1DB954),
-        duration: Duration(seconds: 2),
-      ),
-    );
+
+    try {
+      // タスクデータを更新
+      for (int i = 0; i < _tasks.length; i++) {
+        final title = _taskControllers[i].text.trim();
+        if (title.isNotEmpty) {
+          _tasks[i] = TaskItem(
+            id: _tasks[i].id,
+            title: title,
+            description: '',
+            color: const Color(0xFF1DB954),
+            duration: _tasks[i].duration,
+          );
+        }
+      }
+
+      final validTasks = _tasks.where((task) => task.title.trim().isNotEmpty).toList();
+
+      final albumData = {
+        'albumName': _albumNameController.text.trim(),
+        'albumCoverImage': _albumCoverImage,
+        'tasks': validTasks,
+        'createdAt': DateTime.now().toIso8601String(),
+      };
+
+      if (widget.onSave != null) {
+        widget.onSave!(albumData);
+      }
+    } catch (e) {
+      _showMessage('保存に失敗しました', isSuccess: false);
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 
-  void _showError(String message) {
+  void _showMessage(String message, {required bool isSuccess}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(
-          message,
-          style: const TextStyle(fontFamily: 'Hiragino Sans'),
+        content: Row(
+          children: [
+            Icon(
+              isSuccess ? Icons.check_circle : Icons.error_outline,
+              color: Colors.white,
+            ),
+            const SizedBox(width: 12),
+            Text(
+              message,
+              style: const TextStyle(fontFamily: 'Hiragino Sans'),
+            ),
+          ],
         ),
-        backgroundColor: Colors.red,
+        backgroundColor: isSuccess ? const Color(0xFF1DB954) : Colors.red,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
       ),
     );
   }
@@ -220,167 +373,272 @@ class _SingleAlbumCreateScreenState extends State<SingleAlbumCreateScreen> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            // ヘッダー - ホーム・チャート画面と完全に同じ構造
-            // ヘッダー - ホーム・チャート画面と完全に同じ構造
-Container(
-  height: 60,
-  child: Row(
-    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-    children: [
-      const Text(
-        'アルバム作成',
-        style: TextStyle(
-          color: Colors.white,
-          fontSize: 32,
-          fontWeight: FontWeight.bold,
-          fontFamily: 'Hiragino Sans',
+Widget build(BuildContext context) {
+  return Container(
+    // 🔧 修正：背景を黒に統一
+    color: Colors.black,
+    child: Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(20),
+          child: _buildHeader(),
         ),
-      ),
-      Row(
-        children: [
-          GestureDetector(
-            onTap: () {
-              _resetForm();
-            },
-            child: Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: const Color(0xFF1E1E1E),  // 🆕 色を統一
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.refresh,
-                color: Colors.white,
-                size: 24,
+        
+        Expanded(
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 10),
+                  
+                  _buildImageSection(),
+                  
+                  const SizedBox(height: 32),
+                  
+                  _buildAlbumInfoSection(),
+                  
+                  const SizedBox(height: 40),
+                  
+                  _buildTasksSection(),
+                  
+                  const SizedBox(height: 20),
+                ],
               ),
             ),
           ),
-          const SizedBox(width: 12),
-          GestureDetector(
-            onTap: () {
-              _saveAlbum();
-            },
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),  // 🆕 テキスト用にpaddingを変更
-              decoration: BoxDecoration(
-                color: const Color(0xFF1E1E1E),  // 🆕 色を統一
-                borderRadius: BorderRadius.circular(24),  // 🆕 円形から角丸長方形に
-              ),
-              child: const Text(
-                'リリース',  // 🆕 アイコンからテキストに変更
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  fontFamily: 'Hiragino Sans',
+        ),
+      ],
+    ),
+  );
+}
+
+  // 🆕 新規追加メソッド：ヘッダー
+  Widget _buildHeader() {
+    return Container(
+      height: 60,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          const Text(
+            'アルバム作成',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 32,
+              fontWeight: FontWeight.bold,
+              fontFamily: 'Hiragino Sans',
+            ),
+          ),
+          Row(
+            children: [
+              GestureDetector(
+                onTap: () {
+                  _resetForm();
+                },
+                child: Container(
+                  width: 48,
+                  height: 48,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF1E1E1E),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.refresh,
+                    color: Colors.white,
+                    size: 24,
+                  ),
                 ),
               ),
+              const SizedBox(width: 12),
+              GestureDetector(
+                onTap: _isLoading ? null : _saveAlbum,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: _isLoading 
+                        ? Colors.white.withOpacity(0.1)
+                        : const Color(0xFF1DB954),  // 🔧 修正：緑単色に変更
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  child: _isLoading
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : const Text(
+                          'リリース',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            fontFamily: 'Hiragino Sans',
+                          ),
+                        ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 既存メソッドの変更
+Widget _buildImageSection() {
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Row(
+        children: [
+          Container(
+            width: 4,
+            height: 20,
+            decoration: BoxDecoration(
+              // 🔧 修正：カラーバーを緑に固定
+              color: const Color(0xFF1DB954),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 12),
+          const Text(
+            'アルバムカバー',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              fontFamily: 'Hiragino Sans',
             ),
           ),
         ],
       ),
+      
+      const SizedBox(height: 20),
+      
+      Center(
+        child: Container(
+          width: 200,
+          height: 200,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: _buildImagePreview(),
+          ),
+        ),
+      ),
+      
+      const SizedBox(height: 20),
+      
+      Center(
+        child: _buildImageButton(
+          onTap: _pickImage,
+          icon: Icons.photo_library,
+          label: '写真を選択',
+          // 🔧 修正：グレーに変更
+          color: const Color(0xFF282828),
+        ),
+      ),
     ],
-  ),
-),
-            
-            const SizedBox(height: 20),
-            
-            // アルバムカバー
-            _buildAlbumCover(),
-            
-            const SizedBox(height: 30),
-            
-            // アルバム名
-            _buildAlbumNameInput(),
-            
-            const SizedBox(height: 30),
-            
-            // タスクリスト
-            _buildTaskList(),
-            
-            const SizedBox(height: 20),
-            
-            // タスク追加ボタン
-            _buildAddTaskButton(),
-            
-            const SizedBox(height: 40),
+  );
+}
+
+  // 🆕 新規追加メソッド：画像プレビュー
+  Widget _buildImagePreview() {
+    if (_albumCoverImage != null) {
+      return Image.memory(
+        _albumCoverImage!,
+        width: 200,
+        height: 200,
+        fit: BoxFit.cover,
+      );
+    } else {
+      return Container(
+        color: const Color(0xFF1DB954),  // 🔧 修正：緑単色に変更
+        child: const Center(
+          child: Icon(
+            Icons.image_outlined,
+            size: 48,
+            color: Colors.white,
+          ),
+        ),
+      );
+    }
+  }
+
+  // 🆕 新規追加メソッド：画像ボタン
+  Widget _buildImageButton({
+    required VoidCallback onTap,
+    required IconData icon,
+    required String label,
+    required Color color,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: Colors.white, size: 18),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                fontFamily: 'Hiragino Sans',
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildAlbumCover() {
-  return Center(
-    child: Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () {
-          _pickImage();
-        },
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          width: 200,
-          height: 200,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: _albumCoverImage != null
-                ? Image.memory(
-                    _albumCoverImage!,
-                    fit: BoxFit.cover,
-                  )
-                : Container(
-                    color: const Color(0xFF1E1E1E),  // 🆕 色を統一
-                    child: const Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.add_photo_alternate,
-                          color: Colors.white,
-                          size: 48,
-                        ),
-                        SizedBox(height: 12),
-                        Text(
-                          'ジャケット写真を\n選択してください',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
-                            fontFamily: 'Hiragino Sans',
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-          ),
-        ),
-      ),
-    ),
-  );
-}
-
-  Widget _buildAlbumNameInput() {
+  // 🆕 新規追加メソッド：アルバム情報セクション
+  // 既存メソッドの変更
+Widget _buildAlbumInfoSection() {
   return Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      const Text(
-        'アルバム名',
-        style: TextStyle(
-          color: Colors.white,
-          fontSize: 18,
-          fontWeight: FontWeight.w600,
-          fontFamily: 'Hiragino Sans',
-        ),
+      Row(
+        children: [
+          Container(
+            width: 4,
+            height: 20,
+            decoration: BoxDecoration(
+              // 🔧 修正：カラーバーを緑に固定
+              color: const Color(0xFF1DB954),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 12),
+          const Text(
+            'アルバム名',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              fontFamily: 'Hiragino Sans',
+            ),
+          ),
+        ],
       ),
-      const SizedBox(height: 12),
+      
+      const SizedBox(height: 20),
+      
       TextField(
         controller: _albumNameController,
         style: const TextStyle(
@@ -389,16 +647,27 @@ Container(
           fontFamily: 'Hiragino Sans',
         ),
         decoration: InputDecoration(
-          hintText: '例: 朝のルーティーン',
+          hintText: 'アルバム名を入力',
           hintStyle: TextStyle(
-            color: Colors.white.withOpacity(0.5),
+            color: Colors.white.withOpacity(0.4),
             fontFamily: 'Hiragino Sans',
           ),
           filled: true,
-          fillColor: const Color(0xFF1E1E1E),  // 🆕 色を統一
+          fillColor: const Color(0xFF282828),  // 🔧 修正：グレーに変更
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
             borderSide: BorderSide.none,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: BorderSide.none,
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: const BorderSide(
+              color: Color(0xFF1DB954),
+              width: 2,
+            ),
           ),
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 16,
@@ -410,181 +679,277 @@ Container(
   );
 }
 
-  Widget _buildTaskList() {
+  // 🆕 新規追加メソッド：タスクセクション
+  // 既存メソッドの変更
+Widget _buildTasksSection() {
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 4,
+                height: 20,
+                decoration: BoxDecoration(
+                  // 🔧 修正：カラーバーを緑に固定
+                  color: const Color(0xFF1DB954),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                'タスク設定',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  fontFamily: 'Hiragino Sans',
+                ),
+              ),
+            ],
+          ),
+          
+          GestureDetector(
+            onTap: _addNewTask,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                // 🔧 修正：背景色を緑単色に変更
+                color: const Color(0xFF1DB954),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.add,
+                    color: Colors.white,  // 🔧 修正：アイコン色を白に変更
+                    size: 18,
+                  ),
+                  const SizedBox(width: 4),
+                  const Text(
+                    'タスク追加',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      fontFamily: 'Hiragino Sans',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+      
+      const SizedBox(height: 24),
+      
+      ReorderableListView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: _tasks.length,
+        onReorder: _reorderTasks,
+        itemBuilder: (context, index) {
+          return _buildTaskEditor(index);
+        },
+      ),
+    ],
+  );
+}
+
+  // 🆕 新規追加メソッド：タスクエディター
+  Widget _buildTaskEditor(int index) {
+    return Container(
+      key: ValueKey(_tasks[index].id),
+      margin: const EdgeInsets.only(bottom: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.drag_indicator,
+                color: Colors.white.withOpacity(0.5),
+                size: 24,
+              ),
+              const SizedBox(width: 12),
+              
+              Expanded(
+                child: Text(
+                  'タスク ${index + 1}',
+                  style: const TextStyle(
+                    color: Color(0xFF1DB954),
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    fontFamily: 'Hiragino Sans',
+                  ),
+                ),
+              ),
+              
+              if (_tasks.length > 1)
+                GestureDetector(
+                  onTap: () => _removeTask(index),
+                  child: Icon(
+                    Icons.remove_circle_outline,
+                    color: Colors.red.withOpacity(0.7),
+                    size: 24,
+                  ),
+                ),
+            ],
+          ),
+          
+          const SizedBox(height: 16),
+          
+          _buildSimpleTaskField(
+            label: 'タイトル',
+            controller: _taskControllers[index],
+            hint: 'タスクのタイトルを入力',
+            onChanged: (value) {
+              _updateTask(index, _tasks[index].copyWith(title: value));
+            },
+          ),
+          
+          const SizedBox(height: 16),
+          
+          _buildSimpleTimeSelection(index),
+          
+          if (index < _tasks.length - 1)
+            Padding(
+              padding: const EdgeInsets.only(top: 20),
+              child: Divider(
+                color: Colors.white.withOpacity(0.1),
+                thickness: 1,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // 🆕 新規追加メソッド：シンプルなタスクフィールド
+  Widget _buildSimpleTaskField({
+    required String label,
+    required TextEditingController controller,
+    required String hint,
+    required Function(String) onChanged,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'タスク',
-          style: TextStyle(
+        Text(
+          label,
+          style: const TextStyle(
             color: Colors.white,
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
             fontFamily: 'Hiragino Sans',
           ),
         ),
-        const SizedBox(height: 12),
-        ReorderableListView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: _tasks.length,
-          onReorder: _reorderTasks,
-          itemBuilder: (context, index) {
-            return _buildTaskItem(index);
-          },
+        const SizedBox(height: 8),
+        TextField(
+          controller: controller,
+          onChanged: onChanged,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 14,
+            fontFamily: 'Hiragino Sans',
+          ),
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: TextStyle(
+              color: Colors.white.withOpacity(0.3),
+              fontSize: 14,
+              fontFamily: 'Hiragino Sans',
+            ),
+            filled: true,
+            fillColor: const Color(0xFF282828),  // 🔧 修正：グレーに変更
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide.none,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide.none,
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(
+                color: Color(0xFF1DB954),
+                width: 2,
+              ),
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 10,
+            ),
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildTaskItem(int index) {
-  final task = _tasks[index];
-  final titleController = _taskControllers[index];
-  
-  return Container(
-    key: Key('task_$index'),
-    margin: const EdgeInsets.only(bottom: 12),
-    padding: const EdgeInsets.all(16),
-    decoration: BoxDecoration(
-      color: const Color(0xFF1E1E1E),  // 🆕 色を統一
-      borderRadius: BorderRadius.circular(8),
-    ),
-    child: Column(
+  // 🆕 新規追加メソッド：シンプルな時間選択
+  Widget _buildSimpleTimeSelection(int index) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Icon(
-              Icons.drag_handle,
-              color: Colors.white.withOpacity(0.5),
-              size: 20,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: TextField(
-                controller: titleController,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontFamily: 'Hiragino Sans',
-                ),
-                decoration: InputDecoration(
-                  hintText: 'タスク名',
-                  hintStyle: TextStyle(
-                    color: Colors.white.withOpacity(0.5),
-                    fontFamily: 'Hiragino Sans',
-                  ),
-                  border: InputBorder.none,
-                  contentPadding: EdgeInsets.zero,
-                ),
-                onChanged: (value) {
-                  _updateTask(index, task.copyWith(title: value));
-                },
-              ),
-            ),
-            if (_tasks.length > 1)
-              IconButton(
-                onPressed: () {
-                  _removeTask(index);
-                },
-                icon: Icon(
-                  Icons.close,
-                  color: Colors.white.withOpacity(0.7),
-                  size: 20,
-                ),
-                constraints: const BoxConstraints(
-                  minWidth: 32,
-                  minHeight: 32,
-                ),
-              ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            const SizedBox(width: 32),
-            const Text(
-              '時間: ',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 14,
-                fontFamily: 'Hiragino Sans',
-              ),
-            ),
-            IconButton(
-              onPressed: () {
-                if (task.duration > 1) {
-                  _updateTask(index, task.copyWith(duration: task.duration - 1));
-                }
-              },
-              icon: const Icon(Icons.remove, color: Colors.white, size: 16),
-              style: IconButton.styleFrom(
-                backgroundColor: Colors.white.withOpacity(0.1),
-                fixedSize: const Size(30, 30),
-                padding: EdgeInsets.zero,
-              ),
-            ),
-            Container(
-              width: 60,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text(
-                '${task.duration}分',
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  fontFamily: 'Hiragino Sans',
-                ),
-              ),
-            ),
-            IconButton(
-              onPressed: () {
-                if (task.duration < 60) {
-                  _updateTask(index, task.copyWith(duration: task.duration + 1));
-                }
-              },
-              icon: const Icon(Icons.add, color: Colors.white, size: 16),
-              style: IconButton.styleFrom(
-                backgroundColor: Colors.white.withOpacity(0.1),
-                fixedSize: const Size(30, 30),
-                padding: EdgeInsets.zero,
-              ),
-            ),
-          ],
-        ),
-      ],
-    ),
-  );
-}
-
-  Widget _buildAddTaskButton() {
-    return Center(
-      child: ElevatedButton.icon(
-        onPressed: () {
-          _addNewTask();
-        },
-        icon: const Icon(
-          Icons.add,
-          color: Colors.black,
-          size: 16,
-        ),
-        label: const Text(
-          'タスクを追加',
+        const Text(
+          '再生時間',
           style: TextStyle(
-            color: Colors.black,
+            color: Colors.white,
             fontSize: 14,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w500,
             fontFamily: 'Hiragino Sans',
           ),
         ),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.white,
-          foregroundColor: Colors.black,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
+        
+        const SizedBox(height: 8),
+        
+        Row(
+          children: [
+            _buildDurationButton(index, 1),
+            const SizedBox(width: 12),
+            _buildDurationButton(index, 3),
+            const SizedBox(width: 12),
+            _buildDurationButton(index, 5),
+          ],
+        ),
+      ],
+    );
+  }
+
+  // 🆕 新規追加メソッド：時間ボタン
+  Widget _buildDurationButton(int taskIndex, int duration) {
+    final isSelected = _tasks[taskIndex].duration == duration;
+    const taskColor = Color(0xFF1DB954);
+    
+    return Expanded(
+      child: GestureDetector(
+        onTap: () {
+          setState(() {
+            _tasks[taskIndex] = _tasks[taskIndex].copyWith(duration: duration);
+          });
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: isSelected ? taskColor : Colors.black.withOpacity(0.3),
+            borderRadius: BorderRadius.circular(8),
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-          elevation: 2,
+          child: Text(
+            '${duration}分',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: isSelected ? Colors.white : Colors.white.withOpacity(0.7),
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              fontFamily: 'Hiragino Sans',
+            ),
+          ),
         ),
       ),
     );
