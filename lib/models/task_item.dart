@@ -1,5 +1,6 @@
 // models/task_item.dart - 拡張版
 import 'package:flutter/material.dart';
+import 'lyric_note_item.dart'; 
 
 class TaskItem {
   final String title;
@@ -12,7 +13,7 @@ class TaskItem {
   final int totalCompletions;              // 総完了回数
   final DateTime? lastCompletedAt;         // 最後の完了日時
   final String id;                         // タスクの一意識別子
-  final String? lyricNote;  // 🆕 Lyric Notesのメモ内容
+  final List<LyricNoteItem>? lyricNotes;
 
   // 🆕 アシストボタン機能: URL格納用フィールド
   final String? assistUrl;  // ← この行を追加
@@ -27,7 +28,7 @@ class TaskItem {
     this.lastCompletedAt,
     String? id,
     this.assistUrl,
-    this.lyricNote, 
+    this.lyricNotes,
   }) : id = id ?? 'task_${DateTime.now().millisecondsSinceEpoch}_${title.hashCode}';
 
   // JSON変換用のメソッド
@@ -48,25 +49,45 @@ class TaskItem {
 
   // JSONからTaskItemを作成するメソッド
   factory TaskItem.fromJson(Map<String, dynamic> json) {
-    return TaskItem(
-      title: json['title'] ?? '',
-      description: json['description'] ?? '',
-      color: Color(json['color'] ?? 0xFF1DB954),
-      duration: json['duration'] ?? 3,
-      completionHistory: json['completionHistory'] != null
-          ? (json['completionHistory'] as List)
-              .map((dateString) => DateTime.parse(dateString))
-              .toList()
-          : [],
-      totalCompletions: json['totalCompletions'] ?? 0,
-      lastCompletedAt: json['lastCompletedAt'] != null
-          ? DateTime.parse(json['lastCompletedAt'])
-          : null,
-      id: json['id'] ?? 'task_${DateTime.now().millisecondsSinceEpoch}',
-      assistUrl: json['assistUrl'],
-      lyricNote: json['lyricNote'],
-    );
+  return TaskItem(
+    title: json['title'] ?? '',
+    description: json['description'] ?? '',
+    color: Color(json['color'] ?? 0xFF1DB954),
+    duration: json['duration'] ?? 3,
+    completionHistory: json['completionHistory'] != null
+        ? (json['completionHistory'] as List)
+            .map((dateString) => DateTime.parse(dateString))
+            .toList()
+        : [],
+    totalCompletions: json['totalCompletions'] ?? 0,
+    lastCompletedAt: json['lastCompletedAt'] != null
+        ? DateTime.parse(json['lastCompletedAt'])
+        : null,
+    id: json['id'] ?? 'task_${DateTime.now().millisecondsSinceEpoch}',
+    assistUrl: json['assistUrl'],
+    lyricNotes: json['lyricNotes'] != null  // 🔧 変更: 階層構造対応
+        ? (json['lyricNotes'] as List)
+            .map((noteJson) => LyricNoteItem.fromJson(noteJson))
+            .toList()
+        : _migrateLegacyLyricNote(json['lyricNote']),  // 🆕 追加: 既存データ移行
+  );
+}
+
+// 🆕 追加: 既存のString型lyricNoteを新形式に移行するヘルパー
+static List<LyricNoteItem>? _migrateLegacyLyricNote(dynamic legacyNote) {
+  if (legacyNote == null || legacyNote.toString().isEmpty) {
+    return null;
   }
+  
+  // 既存のString型メモを、親レベル（Level 1）の単一アイテムに変換
+  return [
+    LyricNoteItem(
+      text: legacyNote.toString(),
+      level: 1,
+      createdAt: DateTime.now(),
+    ),
+  ];
+}
 
 
 /// TaskItemのコピーを作成（指定されたフィールドのみ更新）
@@ -79,10 +100,10 @@ TaskItem copyWith({
   List<DateTime>? completionHistory,
   int? totalCompletions,
   DateTime? lastCompletedAt,
-  String? lyricNote,
-  bool clearLyricNote = false,  // 🆕 追加: Lyric Noteをクリアするフラグ
+  List<LyricNoteItem>? lyricNotes,  // 🔧 変更
+  bool clearLyricNotes = false,     // 🔧 変更
   String? assistUrl,
-  bool clearAssistUrl = false,  // 🆕 追加: URLをクリアするフラグ
+  bool clearAssistUrl = false,
 }) {
   return TaskItem(
     id: id ?? this.id,
@@ -93,8 +114,8 @@ TaskItem copyWith({
     completionHistory: completionHistory ?? this.completionHistory,
     totalCompletions: totalCompletions ?? this.totalCompletions,
     lastCompletedAt: lastCompletedAt ?? this.lastCompletedAt,
-    lyricNote: clearLyricNote ? null : (lyricNote ?? this.lyricNote),  // 🔧 修正
-    assistUrl: clearAssistUrl ? null : (assistUrl ?? this.assistUrl),  // 🔧 修正
+    lyricNotes: clearLyricNotes ? null : (lyricNotes ?? this.lyricNotes),  // 🔧 変更
+    assistUrl: clearAssistUrl ? null : (assistUrl ?? this.assistUrl),
   );
 }
 

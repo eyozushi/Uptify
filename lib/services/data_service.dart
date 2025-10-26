@@ -8,6 +8,7 @@ import '../models/single_album.dart'; // 🎵 追加
 import '../models/notification_config.dart';
 import '../models/task_completion.dart';
 import '../models/achievement_record.dart';
+import '../models/lyric_note_item.dart';  // 🆕 追加
 import '../services/achievement_service.dart';
 
 class DataService {
@@ -570,7 +571,8 @@ class DataService {
 
 
 // 🆕 修正版: Lyric Noteを更新して自動保存
-Future<void> updateTaskLyricNote(String taskId, String note) async {
+/// 🔧 修正版: Lyric Notes（階層構造）を更新して自動保存
+Future<void> updateTaskLyricNotes(String taskId, List<LyricNoteItem> notes) async {
   try {
     // ユーザーデータを読み込み
     final userData = await loadUserData();
@@ -587,10 +589,10 @@ Future<void> updateTaskLyricNote(String taskId, String note) async {
       }
     }
     
-    // 該当タスクのLyric Noteを更新
+    // 該当タスクのLyric Notesを更新
     final updatedTasks = tasks.map((task) {
       if (task.id == taskId) {
-        return task.copyWith(lyricNote: note);
+        return task.copyWith(lyricNotes: notes);
       }
       return task;
     }).toList();
@@ -599,17 +601,32 @@ Future<void> updateTaskLyricNote(String taskId, String note) async {
     userData['tasks'] = updatedTasks.map((task) => task.toJson()).toList();
     await saveUserData(userData);
     
-    print('✅ Lyric Note保存完了: $taskId');
+    print('✅ Lyric Notes保存完了: $taskId (${notes.length}行)');
   } catch (e) {
-    print('❌ Lyric Note更新エラー: $e');
+    print('❌ Lyric Notes更新エラー: $e');
     rethrow;
   }
 }
+
+/// 🗑️ 削除: 旧バージョンのメソッド（後方互換性のため残すが、内部で新メソッドを呼ぶ）
+@Deprecated('Use updateTaskLyricNotes instead')
+Future<void> updateTaskLyricNote(String taskId, String note) async {
+  // 既存のString型メモを新形式に変換
+  final notes = [
+    LyricNoteItem(
+      text: note,
+      level: 1,
+    ),
+  ];
+  
+  await updateTaskLyricNotes(taskId, notes);
+}
 /// シングルアルバムのタスクのLyric Noteを更新
-Future<void> updateSingleAlbumTaskLyricNote({
+/// 🔧 修正版: シングルアルバムのタスクのLyric Notes（階層構造）を更新
+Future<void> updateSingleAlbumTaskLyricNotes({
   required String albumId,
   required String taskId,
-  required String note,
+  required List<LyricNoteItem> notes,
 }) async {
   try {
     // 全シングルアルバムを読み込み
@@ -627,7 +644,7 @@ Future<void> updateSingleAlbumTaskLyricNote({
     // タスクリストを更新
     final updatedTasks = album.tasks.map((task) {
       if (task.id == taskId) {
-        return task.copyWith(lyricNote: note);
+        return task.copyWith(lyricNotes: notes);
       }
       return task;
     }).toList();
@@ -642,11 +659,33 @@ Future<void> updateSingleAlbumTaskLyricNote({
     final jsonString = jsonEncode(albumsJson);
     await prefs.setString(_keySingleAlbums, jsonString);
     
-    print('✅ シングルアルバムのLyric Note保存完了: $albumId / $taskId');
+    print('✅ シングルアルバムのLyric Notes保存完了: $albumId / $taskId (${notes.length}行)');
   } catch (e) {
-    print('❌ シングルアルバムのLyric Note更新エラー: $e');
+    print('❌ シングルアルバムのLyric Notes更新エラー: $e');
     rethrow;
   }
+}
+
+/// 🗑️ 削除: 旧バージョンのメソッド（後方互換性のため残すが、内部で新メソッドを呼ぶ）
+@Deprecated('Use updateSingleAlbumTaskLyricNotes instead')
+Future<void> updateSingleAlbumTaskLyricNote({
+  required String albumId,
+  required String taskId,
+  required String note,
+}) async {
+  // 既存のString型メモを新形式に変換
+  final notes = [
+    LyricNoteItem(
+      text: note,
+      level: 1,
+    ),
+  ];
+  
+  await updateSingleAlbumTaskLyricNotes(
+    albumId: albumId,
+    taskId: taskId,
+    notes: notes,
+  );
 }
 
 }

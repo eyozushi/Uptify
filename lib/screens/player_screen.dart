@@ -198,8 +198,9 @@ bool _isDragging = false;
   Color _accentColor = const Color(0xFF1A1A2E);
   bool _isExtractingColors = false;
 
-  // 既存のフィールド定義の後に追加
-Map<String, String> _taskLyricNotes = {}; // タスクIDとLyric Noteのマッピング
+
+// 既存のフィールド定義の後に追加
+Map<String, List<LyricNoteItem>> _taskLyricNotes = {};  // 🔧 変更: String → List<LyricNoteItem>
 
   @override
 void initState() {
@@ -265,6 +266,7 @@ void initState() {
 }
 
 /// タスクのLyric Notesを読み込み
+/// 🔧 修正: 階層構造対応
 Future<void> _loadTaskLyricNotes() async {
   try {
     List<TaskItem> tasks = [];
@@ -291,11 +293,11 @@ Future<void> _loadTaskLyricNotes() async {
       }
     }
     
-    // Lyric Notesをマップに保存
-    final notes = <String, String>{};
+    // 🔧 修正: Lyric Notesをマップに保存（階層構造対応）
+    final notes = <String, List<LyricNoteItem>>{};
     for (final task in tasks) {
-      if (task.lyricNote != null && task.lyricNote!.isNotEmpty) {
-        notes[task.id] = task.lyricNote!;
+      if (task.lyricNotes != null && task.lyricNotes!.isNotEmpty) {
+        notes[task.id] = task.lyricNotes!;
       }
     }
     
@@ -1883,6 +1885,7 @@ bool _shouldShowLyricNotes() {
 
 
 // 🆕 修正版: 現在のタスクを取得（Lyric Note付き）
+/// 🔧 修正: 階層構造対応
 TaskItem? _getCurrentTask() {
   TaskItem? task;
   
@@ -1896,17 +1899,17 @@ TaskItem? _getCurrentTask() {
     }
   }
   
-  // 🆕 追加: 保存されたLyric Noteを反映
+  // 🔧 修正: 保存されたLyric Notes（階層構造）を反映
   if (task != null && _taskLyricNotes.containsKey(task.id)) {
-    return task.copyWith(lyricNote: _taskLyricNotes[task.id]);
+    return task.copyWith(lyricNotes: _taskLyricNotes[task.id]);
   }
   
   return task;
 }
 
 
-
 // 🆕 修正版: Lyric Notesウィジェットを構築
+/// 🔧 修正: 階層構造対応
 Widget _buildLyricNotes(double coverSize) {
   final task = _getCurrentTask();
   if (task == null) {
@@ -1917,11 +1920,11 @@ Widget _buildLyricNotes(double coverSize) {
     task: task,
     albumWidth: coverSize,
     albumColor: _dominantColor,
-    albumId: widget.playingSingleAlbumId, // 🆕 追加: シングルアルバムID
-    isSingleAlbum: widget.isPlayingSingleAlbum, // 🆕 追加: シングルアルバムかどうか
-    onNoteSaved: (taskId, note) async {
+    albumId: widget.playingSingleAlbumId,
+    isSingleAlbum: widget.isPlayingSingleAlbum,
+    onNoteSaved: (taskId, notes) async {  // 🔧 変更: String → List<LyricNoteItem>
       setState(() {
-        _taskLyricNotes[taskId] = note;
+        _taskLyricNotes[taskId] = notes;
       });
       
       // 🔧 修正: シングルアルバムの場合も更新

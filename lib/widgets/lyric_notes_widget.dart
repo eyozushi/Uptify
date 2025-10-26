@@ -8,9 +8,9 @@ class LyricNotesWidget extends StatefulWidget {
   final TaskItem task;
   final double albumWidth;
   final Color albumColor;
-  final Function(String taskId, String note)? onNoteSaved;
-  final String? albumId; // 🆕 追加: シングルアルバムID
-  final bool isSingleAlbum; // 🆕 追加: シングルアルバムかどうか
+  final Function(String taskId, List<LyricNoteItem> notes)? onNoteSaved;  // 🔧 変更
+  final String? albumId;
+  final bool isSingleAlbum;
 
   const LyricNotesWidget({
     super.key,
@@ -18,76 +18,71 @@ class LyricNotesWidget extends StatefulWidget {
     required this.albumWidth,
     required this.albumColor,
     this.onNoteSaved,
-    this.albumId, // 🆕 追加
-    this.isSingleAlbum = false, // 🆕 追加（デフォルトはfalse）
+    this.albumId,
+    this.isSingleAlbum = false,
   });
-
-  @override
-  State<LyricNotesWidget> createState() => _LyricNotesWidgetState();
-}
 
 class _LyricNotesWidgetState extends State<LyricNotesWidget>
     with SingleTickerProviderStateMixin {
   /// 展開/折りたたみを切り替え
   void _toggleExpanded() {
-    // フルスクリーンダイアログとして表示（下から上へスライド）
-    Navigator.of(context).push(
-      PageRouteBuilder(
-        fullscreenDialog: true,
-        opaque: false,
-        barrierColor: Colors.transparent,
-        pageBuilder: (context, animation, secondaryAnimation) {
-          return SlideTransition(
-            position: Tween<Offset>(
-              begin: const Offset(0, 1),
-              end: Offset.zero,
-            ).animate(CurvedAnimation(
-              parent: animation,
-              curve: Curves.easeInOut,
-            )),
-            child: LyricNotesExpandedView(
-              taskTitle: widget.task.title,
-              initialNote: widget.task.lyricNote,
-              backgroundColor: _getBrighterColor(widget.albumColor),
-              onSave: _saveNote,
-              onClose: () => Navigator.of(context).pop(),
-            ),
-          );
-        },
-        transitionDuration: const Duration(milliseconds: 300),
-      ),
-    );
-  }
+  Navigator.of(context).push(
+    PageRouteBuilder(
+      fullscreenDialog: true,
+      opaque: false,
+      barrierColor: Colors.transparent,
+      pageBuilder: (context, animation, secondaryAnimation) {
+        return SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0, 1),
+            end: Offset.zero,
+          ).animate(CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeInOut,
+          )),
+          child: LyricNotesExpandedView(
+            taskTitle: widget.task.title,
+            initialNotes: widget.task.lyricNotes,  // 🔧 変更
+            backgroundColor: _getBrighterColor(widget.albumColor),
+            onSave: _saveNotes,  // 🔧 変更: メソッド名変更
+            onClose: () => Navigator.of(context).pop(),
+          ),
+        );
+      },
+      transitionDuration: const Duration(milliseconds: 300),
+    ),
+  );
+}
 
   /// メモを保存
-Future<void> _saveNote(String note) async {
+/// 🔧 修正: ノートリストを保存
+Future<void> _saveNotes(List<LyricNoteItem> notes) async {
   try {
     final dataService = DataService();
     
-    // 🔧 修正: シングルアルバムかライフドリームアルバムかで分岐
+    // シングルアルバムかライフドリームアルバムかで分岐
     if (widget.isSingleAlbum && widget.albumId != null) {
       // シングルアルバムの場合
-      await dataService.updateSingleAlbumTaskLyricNote(
+      await dataService.updateSingleAlbumTaskLyricNotes(
         albumId: widget.albumId!,
         taskId: widget.task.id,
-        note: note,
+        notes: notes,
       );
-      print('✅ シングルアルバムのLyric Note保存完了: ${widget.task.title}');
+      print('✅ シングルアルバムのLyric Notes保存完了: ${widget.task.title} (${notes.length}行)');
     } else {
       // ライフドリームアルバムの場合
-      await dataService.updateTaskLyricNote(widget.task.id, note);
-      print('✅ ライフドリームアルバムのLyric Note保存完了: ${widget.task.title}');
+      await dataService.updateTaskLyricNotes(widget.task.id, notes);
+      print('✅ ライフドリームアルバムのLyric Notes保存完了: ${widget.task.title} (${notes.length}行)');
     }
     
     // 親ウィジェット（PlayerScreen）に通知
     if (widget.onNoteSaved != null) {
-      widget.onNoteSaved!(widget.task.id, note);
+      widget.onNoteSaved!(widget.task.id, notes);
     }
   } catch (e) {
-    print('❌ Lyric Note保存エラー: $e');
+    print('❌ Lyric Notes保存エラー: $e');
   }
 }
-
 /// アルバムカラーより視認性の高い背景色を生成
 Color _getBrighterColor(Color color) {
   final hsl = HSLColor.fromColor(color);
@@ -115,15 +110,15 @@ Color _getBrighterColor(Color color) {
       .toColor();
 }
   @override
-  Widget build(BuildContext context) {
-    final backgroundColor = _getBrighterColor(widget.albumColor);
+Widget build(BuildContext context) {
+  final backgroundColor = _getBrighterColor(widget.albumColor);
 
-    // プレビュー表示のみ
-    return LyricNotesPreview(
-      noteContent: widget.task.lyricNote,
-      width: widget.albumWidth,
-      backgroundColor: backgroundColor,
-      onTap: _toggleExpanded,
-    );
-  }
+  return LyricNotesPreview(
+    notes: widget.task.lyricNotes,  // 🔧 変更
+    width: widget.albumWidth,
+    backgroundColor: backgroundColor,
+    onTap: _toggleExpanded,
+  );
+}
+}
 }
