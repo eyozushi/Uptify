@@ -1,22 +1,24 @@
+// widgets/lyric_notes/lyric_notes_expanded_view.dart - 完全修正版
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../models/lyric_note_item.dart';  // 🆕 追加
-import 'lyric_hierarchy_toolbar.dart';        // 🆕 追加
-import 'lyric_note_line_widget.dart';         // 🆕 追加
+import 'dart:async';  // 🔧 追加：Timerのために必須
+import '../../models/lyric_note_item.dart';
+import 'lyric_hierarchy_toolbar.dart';
+import 'lyric_note_line_widget.dart';
 
 /// Lyric Notesの全画面展開ビュー
 /// 下から上にスライドして表示され、自由にメモを編集できる
 class LyricNotesExpandedView extends StatefulWidget {
   final String taskTitle;
-  final List<LyricNoteItem>? initialNotes;  // 🔧 変更: String → List<LyricNoteItem>
+  final List<LyricNoteItem>? initialNotes;
   final Color backgroundColor;
-  final Function(List<LyricNoteItem>) onSave;  // 🔧 変更: 型をList<LyricNoteItem>に
+  final Function(List<LyricNoteItem>) onSave;
   final VoidCallback onClose;
 
   const LyricNotesExpandedView({
     super.key,
     required this.taskTitle,
-    required this.initialNotes,  // 🔧 変更
+    required this.initialNotes,
     required this.backgroundColor,
     required this.onSave,
     required this.onClose,
@@ -31,7 +33,7 @@ class _LyricNotesExpandedViewState extends State<LyricNotesExpandedView> {
   late FocusNode _focusNode;
   late List<LyricNoteItem> _notes;
   bool _isModified = false;
-  int _currentLineIndex = 0;  // 現在のカーソル行
+  int _currentLineIndex = 0;
   Timer? _autoSaveTimer;
 
   @override
@@ -42,7 +44,6 @@ class _LyricNotesExpandedViewState extends State<LyricNotesExpandedView> {
     if (widget.initialNotes != null && widget.initialNotes!.isNotEmpty) {
       _notes = List.from(widget.initialNotes!);
     } else {
-      // 空の場合は親レベルの空行を1つ作成
       _notes = [
         LyricNoteItem(
           text: '',
@@ -51,29 +52,28 @@ class _LyricNotesExpandedViewState extends State<LyricNotesExpandedView> {
       ];
     }
     
-    // テキストコントローラーの初期化
     _controller = TextEditingController(text: _buildPlainText());
     _focusNode = FocusNode();
     
     _controller.addListener(_onTextChanged);
     _focusNode.addListener(_onFocusChanged);
+    
+    print('🎵 LyricNotesExpandedView初期化: ${_notes.length}行');
   }
 
-  /// 🆕 新規追加: ノートリストからプレーンテキストを生成
+  /// ノートリストからプレーンテキストを生成
   String _buildPlainText() {
     return _notes.map((note) => note.text).join('\n');
   }
 
-  /// 🆕 新規追加: プレーンテキストからノートリストを再構築
+  /// 🔧 修正版：階層情報を保持しながらテキストを更新
   void _rebuildNotesFromText(String text) {
     final lines = text.split('\n');
-    
-    // 既存のノートの階層情報を保持しながらテキストを更新
     final newNotes = <LyricNoteItem>[];
     
     for (int i = 0; i < lines.length; i++) {
       if (i < _notes.length) {
-        // 既存のノートを更新
+        // 既存のノートの階層情報を保持
         newNotes.add(_notes[i].copyWith(
           text: lines[i],
           updatedAt: DateTime.now(),
@@ -88,9 +88,10 @@ class _LyricNotesExpandedViewState extends State<LyricNotesExpandedView> {
     }
     
     _notes = newNotes;
+    print('📝 テキスト再構築: ${_notes.length}行, 現在行=$_currentLineIndex');
   }
 
-  /// 🔧 修正: テキスト変更時の処理
+  /// テキスト変更時の処理
   void _onTextChanged() {
     if (!_isModified) {
       setState(() {
@@ -98,10 +99,7 @@ class _LyricNotesExpandedViewState extends State<LyricNotesExpandedView> {
       });
     }
     
-    // カーソル位置から現在の行インデックスを計算
     _updateCurrentLineIndex();
-    
-    // プレーンテキストからノートリストを再構築
     _rebuildNotesFromText(_controller.text);
     
     // 自動保存タイマーのリセット
@@ -113,7 +111,7 @@ class _LyricNotesExpandedViewState extends State<LyricNotesExpandedView> {
     });
   }
 
-  /// 🆕 新規追加: カーソル位置から現在の行インデックスを更新
+  /// カーソル位置から現在の行インデックスを更新
   void _updateCurrentLineIndex() {
     final text = _controller.text;
     final cursorPosition = _controller.selection.baseOffset;
@@ -123,11 +121,13 @@ class _LyricNotesExpandedViewState extends State<LyricNotesExpandedView> {
       return;
     }
     
-    final beforeCursor = text.substring(0, cursorPosition);
+    final beforeCursor = text.substring(0, cursorPosition.clamp(0, text.length));
     _currentLineIndex = '\n'.allMatches(beforeCursor).length;
+    
+    print('📍 カーソル位置: $_currentLineIndex行目');
   }
 
-  /// 🆕 新規追加: フォーカス状態の変化を監視
+  /// フォーカス状態の変化を監視
   void _onFocusChanged() {
     if (_focusNode.hasFocus) {
       _updateCurrentLineIndex();
@@ -135,14 +135,17 @@ class _LyricNotesExpandedViewState extends State<LyricNotesExpandedView> {
     }
   }
 
-  /// 🆕 新規追加: 階層を深くする（→ボタン）
+  /// 🔧 修正版：階層を深くする（→ボタン）
   void _increaseLevel() {
     if (_currentLineIndex >= _notes.length) return;
     
     final currentNote = _notes[_currentLineIndex];
     
     // 最大レベル3まで
-    if (currentNote.level >= 3) return;
+    if (currentNote.level >= 3) {
+      print('⚠️ 最大レベル到達');
+      return;
+    }
     
     setState(() {
       _notes[_currentLineIndex] = currentNote.copyWith(
@@ -151,17 +154,21 @@ class _LyricNotesExpandedViewState extends State<LyricNotesExpandedView> {
       );
     });
     
+    print('➡️ レベル上昇: ${currentNote.level} → ${currentNote.level + 1}');
     _saveNotes();
   }
 
-  /// 🆕 新規追加: 階層を浅くする（←ボタン）
+  /// 🔧 修正版：階層を浅くする（←ボタン）
   void _decreaseLevel() {
     if (_currentLineIndex >= _notes.length) return;
     
     final currentNote = _notes[_currentLineIndex];
     
     // 最小レベル1まで
-    if (currentNote.level <= 1) return;
+    if (currentNote.level <= 1) {
+      print('⚠️ 最小レベル到達');
+      return;
+    }
     
     setState(() {
       _notes[_currentLineIndex] = currentNote.copyWith(
@@ -170,14 +177,17 @@ class _LyricNotesExpandedViewState extends State<LyricNotesExpandedView> {
       );
     });
     
+    print('⬅️ レベル低下: ${currentNote.level} → ${currentNote.level - 1}');
     _saveNotes();
   }
 
-  /// 🆕 新規追加: リスト化（中央ボタン）
+  /// 🔧 修正版：リスト化（中央ボタン）
   void _toggleList() {
     if (_currentLineIndex >= _notes.length) return;
     
     final currentNote = _notes[_currentLineIndex];
+    
+    print('🎯 リスト化実行: level=${currentNote.level}, checked=${currentNote.isChecked}');
     
     // 既にレベル2以上の場合は、チェック状態をトグル
     if (currentNote.level >= 2) {
@@ -187,6 +197,7 @@ class _LyricNotesExpandedViewState extends State<LyricNotesExpandedView> {
           updatedAt: DateTime.now(),
         );
       });
+      print('✅ チェック切り替え: ${!currentNote.isChecked}');
     } else {
       // レベル1の場合は、レベル2に変更
       setState(() {
@@ -195,6 +206,7 @@ class _LyricNotesExpandedViewState extends State<LyricNotesExpandedView> {
           updatedAt: DateTime.now(),
         );
       });
+      print('📋 レベル1→2に変更');
       
       // 次の行に移動してレベル3の空行を追加
       _insertNewLineWithLevel(3);
@@ -203,7 +215,7 @@ class _LyricNotesExpandedViewState extends State<LyricNotesExpandedView> {
     _saveNotes();
   }
 
-  /// 🆕 新規追加: 指定レベルの新しい行を挿入
+  /// 指定レベルの新しい行を挿入
   void _insertNewLineWithLevel(int level) {
     final newNote = LyricNoteItem(
       text: '',
@@ -215,32 +227,44 @@ class _LyricNotesExpandedViewState extends State<LyricNotesExpandedView> {
       _currentLineIndex++;
     });
     
+    print('➕ 新規行挿入: level=$level at ${_currentLineIndex}');
+    
     // テキストコントローラーを更新
     _controller.text = _buildPlainText();
     
     // カーソルを新しい行の先頭に移動
-    final newCursorPosition = _controller.text.split('\n')
-        .take(_currentLineIndex + 1)
-        .join('\n')
-        .length;
-    
-    _controller.selection = TextSelection.collapsed(
-      offset: newCursorPosition,
-    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      
+      final lines = _controller.text.split('\n');
+      final newCursorPosition = lines.take(_currentLineIndex + 1).join('\n').length;
+      
+      _controller.selection = TextSelection.collapsed(
+        offset: newCursorPosition.clamp(0, _controller.text.length),
+      );
+    });
   }
 
-  /// 🔧 修正: ノートを保存
+  /// ノートを保存
   void _saveNotes() {
-    widget.onSave(_notes);
+    // 空行を除外してから保存
+    final nonEmptyNotes = _notes.where((note) => note.text.trim().isNotEmpty).toList();
+    
+    print('💾 保存実行: ${nonEmptyNotes.length}行');
+    for (var note in nonEmptyNotes) {
+      print('  - L${note.level}: ${note.text.substring(0, note.text.length.clamp(0, 20))}... (checked=${note.isChecked})');
+    }
+    
+    widget.onSave(nonEmptyNotes);
   }
 
-  /// 🆕 新規追加: 現在の行のレベルを取得
+  /// 現在の行のレベルを取得
   int _getCurrentLevel() {
     if (_currentLineIndex >= _notes.length) return 1;
     return _notes[_currentLineIndex].level;
   }
 
-  /// 🆕 新規追加: 階層変更ボタンの有効/無効状態を判定
+  /// 階層変更ボタンの有効/無効状態を判定
   bool _canIncreaseLevel() {
     return _getCurrentLevel() < 3;
   }
@@ -259,7 +283,6 @@ class _LyricNotesExpandedViewState extends State<LyricNotesExpandedView> {
 
   @override
   Widget build(BuildContext context) {
-    // キーボードの高さを取得
     final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
     final isKeyboardVisible = keyboardHeight > 0;
 
@@ -279,7 +302,10 @@ class _LyricNotesExpandedViewState extends State<LyricNotesExpandedView> {
                       color: Colors.white,
                       size: 32,
                     ),
-                    onPressed: widget.onClose,
+                    onPressed: () {
+                      _saveNotes();
+                      widget.onClose();
+                    },
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
                   ),
@@ -300,7 +326,66 @@ class _LyricNotesExpandedViewState extends State<LyricNotesExpandedView> {
                     ),
                   ),
                   const Spacer(),
-                  const SizedBox(width: 48),
+                  // デバッグ情報表示
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      'L${_getCurrentLevel()}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // 🔧 修正：ツールバーを常時上部に表示
+            Container(
+              height: 44,
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.2),
+                border: Border(
+                  top: BorderSide(
+                    color: Colors.white.withOpacity(0.1),
+                    width: 1,
+                  ),
+                  bottom: BorderSide(
+                    color: Colors.white.withOpacity(0.1),
+                    width: 1,
+                  ),
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  // 左ボタン: 階層を浅くする（←）
+                  _buildCompactButton(
+                    icon: Icons.arrow_back,
+                    label: '浅く',
+                    onTap: _canDecreaseLevel() ? _decreaseLevel : null,
+                  ),
+                  
+                  // 中央ボタン: リスト化（チェックマーク）
+                  _buildCompactButton(
+                    icon: Icons.check_box_outline_blank,
+                    label: 'リスト',
+                    onTap: _toggleList,
+                    isCenter: true,
+                  ),
+                  
+                  // 右ボタン: 階層を深くする（→）
+                  _buildCompactButton(
+                    icon: Icons.arrow_forward,
+                    label: '深く',
+                    onTap: _canIncreaseLevel() ? _increaseLevel : null,
+                  ),
                 ],
               ),
             ),
@@ -339,17 +424,47 @@ class _LyricNotesExpandedViewState extends State<LyricNotesExpandedView> {
                 ),
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
 
-            // 🆕 追加: 階層操作ツールバー（キーボード表示時のみ）
-            if (isKeyboardVisible)
-              LyricHierarchyToolbar(
-                onIncreaseLevel: _increaseLevel,
-                onDecreaseLevel: _decreaseLevel,
-                onToggleList: _toggleList,
-                backgroundColor: widget.backgroundColor,
-                canIncreaseLevel: _canIncreaseLevel(),
-                canDecreaseLevel: _canDecreaseLevel(),
+  /// 🆕 コンパクトなボタンウィジェット
+  Widget _buildCompactButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback? onTap,
+    bool isCenter = false,
+  }) {
+    final isEnabled = onTap != null;
+    
+    return GestureDetector(
+      onTap: isEnabled ? onTap : null,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              color: isEnabled 
+                  ? Colors.white 
+                  : Colors.white.withOpacity(0.3),
+              size: isCenter ? 22 : 20,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: isEnabled 
+                    ? Colors.white 
+                    : Colors.white.withOpacity(0.3),
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                fontFamily: 'Hiragino Sans',
               ),
+            ),
           ],
         ),
       ),

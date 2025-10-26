@@ -40,6 +40,12 @@ String _getPreviewText() {
     return 'タップして\nリリックを追加...';
   }
   
+  // 🔧 デバッグ用：階層情報を出力
+  print('📝 プレビュー表示: ${visibleNotes.length}行');
+  for (final note in visibleNotes) {
+    print('  - Level ${note.level}: "${note.text}"');
+  }
+  
   // インデントを表示用に変換
   final previewLines = visibleNotes.map((note) {
     String prefix = '';

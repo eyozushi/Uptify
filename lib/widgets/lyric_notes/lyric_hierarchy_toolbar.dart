@@ -88,7 +88,7 @@ class LyricHierarchyToolbar extends StatelessWidget {
                   : Colors.white.withOpacity(0.3),
               size: isCenter ? 28 : 24,
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 2),
             Text(
               label,
               style: TextStyle(

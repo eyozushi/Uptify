@@ -100,7 +100,7 @@ void initState() {
         color: const Color(0xFF1DB954),
         duration: task.duration,
         assistUrl: task.assistUrl,
-        lyricNote: task.lyricNote, // 🔧 追加：既存のLyric Noteを保持
+        lyricNotes: task.lyricNotes, // 🔧 追加：既存のLyric Noteを保持
       ));
     }
   } else {
@@ -114,7 +114,7 @@ void initState() {
         color: const Color(0xFF1DB954),
         duration: task.duration,
         assistUrl: task.assistUrl,
-        lyricNote: task.lyricNote, // 🔧 追加：既存のLyric Noteを保持
+        lyricNotes: task.lyricNotes, // 🔧 追加：既存のLyric Noteを保持
       ));
     }
     
@@ -128,7 +128,7 @@ void initState() {
         color: const Color(0xFF1DB954),
         duration: defaultTask.duration,
         assistUrl: defaultTask.assistUrl,
-        lyricNote: defaultTask.lyricNote, // 🔧 追加：デフォルトのLyric Note
+        lyricNotes: defaultTask.lyricNotes, // 🔧 追加：デフォルトのLyric Note
       ));
     }
   }
@@ -288,7 +288,7 @@ void dispose() {
         assistUrl: _taskUrlControllers[i].text.trim().isEmpty 
             ? null 
             : _taskUrlControllers[i].text.trim(),
-        lyricNote: _tasks[i].lyricNote, // 🔧 追加：既存のLyric Noteを保持
+        lyricNotes: _tasks[i].lyricNotes, // 🔧 追加：既存のLyric Noteを保持
       );
     }
 
@@ -1038,7 +1038,7 @@ Widget _buildSimpleTimeSelection(int index) {
             color: taskColor,
             duration: duration,
             assistUrl: _tasks[taskIndex].assistUrl,
-            lyricNote: _tasks[taskIndex].lyricNote, // 🔧 追加：既存のLyric Noteを保持
+            lyricNotes: _tasks[taskIndex].lyricNotes, // 🔧 追加：既存のLyric Noteを保持
           );
         });
       },
@@ -1232,7 +1232,7 @@ void _addNewTask() {
       color: const Color(0xFF1DB954),
       duration: 3,
       assistUrl: null,
-      lyricNote: null, // 🔧 追加：初期値null
+      lyricNotes: null, // 🔧 追加：初期値null
     ));
     
     _taskTitleControllers.add(TextEditingController(text: 'タスク${_tasks.length}'));

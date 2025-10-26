@@ -3,19 +3,19 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io';
 import 'dart:typed_data';
-import 'dart:ui' as ui;  // 🆕 追加
+import 'dart:ui' as ui;
 import 'package:flutter/gestures.dart';
-import 'package:url_launcher/url_launcher.dart'; 
-// import 'dart:async'; // Timer関連を削除
+import 'package:url_launcher/url_launcher.dart';
 import '../models/task_item.dart';
+import '../models/lyric_note_item.dart';  // 🔧 追加：この行を追加
 import '../services/data_service.dart';
 import '../services/task_completion_service.dart';
 import '../services/audio_service.dart';
 import '../widgets/completion_dialog.dart';
 import 'settings_screen.dart';
 import 'album_detail_screen.dart';
-import 'package:palette_generator/palette_generator.dart'; 
-import '../widgets/lyric_notes_widget.dart'; 
+import 'package:palette_generator/palette_generator.dart';
+import '../widgets/lyric_notes_widget.dart';
 
 // カスタムの太いプラスアイコンを描画するクラス
 class ThickPlusPainter extends CustomPainter {
@@ -269,6 +269,8 @@ void initState() {
 /// 🔧 修正: 階層構造対応
 Future<void> _loadTaskLyricNotes() async {
   try {
+    print('📖 Lyric Notes読み込み開始'); // 🔧 追加
+    
     List<TaskItem> tasks = [];
     
     // 🔧 修正: シングルアルバムかライフドリームアルバムかで分岐
@@ -298,6 +300,10 @@ Future<void> _loadTaskLyricNotes() async {
     for (final task in tasks) {
       if (task.lyricNotes != null && task.lyricNotes!.isNotEmpty) {
         notes[task.id] = task.lyricNotes!;
+        print('  ✓ タスク "${task.title}": ${task.lyricNotes!.length}行読み込み'); // 🔧 追加
+        for (final note in task.lyricNotes!) {
+          print('    - Level ${note.level}: "${note.text}"'); // 🔧 追加
+        }
       }
     }
     
@@ -312,7 +318,6 @@ Future<void> _loadTaskLyricNotes() async {
     print('❌ Lyric Notes読み込みエラー: $e');
   }
 }
-
   @override
 void didUpdateWidget(PlayerScreen oldWidget) {
   super.didUpdateWidget(oldWidget);
