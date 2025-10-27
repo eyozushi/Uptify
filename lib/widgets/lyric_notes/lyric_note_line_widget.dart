@@ -1,10 +1,10 @@
-// widgets/lyric_notes/lyric_note_line_widget.dart
+// widgets/lyric_notes/lyric_note_line_widget.dart - Notionスタイル版（4階層対応）
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../models/lyric_note_item.dart';
 
-/// Lyric Noteの1行を表示するウィジェット
-/// 階層レベルに応じて背景色とインデントを変更
+/// Lyric Noteの1行を表示するウィジェット - Notionスタイル
+/// 階層レベルに応じて背景色とインデントを変更（最大4階層）
 class LyricNoteLineWidget extends StatelessWidget {
   final LyricNoteItem noteItem;
   final Color baseColor;              // ベースとなるアルバムカラー
@@ -30,10 +30,13 @@ class LyricNoteLineWidget extends StatelessWidget {
       case 1: // 親: 明るめ
         lightness = 0.35;
         break;
-      case 2: // 子: 中間
-        lightness = 0.25;
+      case 2: // 子: やや暗め
+        lightness = 0.28;
         break;
-      case 3: // 孫: 最も暗い
+      case 3: // 孫: さらに暗め
+        lightness = 0.21;
+        break;
+      case 4: // ひ孫: 最も暗い
         lightness = 0.15;
         break;
       default:
@@ -56,6 +59,8 @@ class LyricNoteLineWidget extends StatelessWidget {
         return 20.0;
       case 3:
         return 40.0;
+      case 4:
+        return 60.0;
       default:
         return 0.0;
     }
@@ -66,89 +71,88 @@ class LyricNoteLineWidget extends StatelessWidget {
     switch (noteItem.level) {
       case 1: // 親: 大きく
         return 24.0;
-      case 2: // 子: 中くらい
-        return 18.0;
-      case 3: // 孫: 小さめ
-        return 16.0;
+      case 2: // 子: やや小さく
+        return 21.0;
+      case 3: // 孫: さらに小さく
+        return 19.0;
+      case 4: // ひ孫: 最も小さく
+        return 17.0;
       default:
         return 24.0;
     }
   }
 
   @override
-Widget build(BuildContext context) {
-  return Container(
-    margin: EdgeInsets.only(left: _getIndentWidth()),
-    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-    decoration: BoxDecoration(
-      color: _getBackgroundColor(),
-      borderRadius: BorderRadius.circular(8),
-    ),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // 🔧 修正：三角マーク（Level 2/3のみ表示、クリックで展開/折りたたみ）
-        if (noteItem.level >= 2) ...[
+  Widget build(BuildContext context) {
+    return Container(
+      margin: EdgeInsets.only(left: _getIndentWidth()),
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+      decoration: BoxDecoration(
+        color: _getBackgroundColor(),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 三角マーク（子要素がいる場合のみ表示）
           GestureDetector(
             onTap: hasChildren ? onToggleCollapse : null,
             child: Padding(
               padding: const EdgeInsets.only(right: 8, top: 4),
               child: Icon(
-                // 🔧 変更：常に右向き三角を表示（折りたたみ時は右、展開時は下）
                 noteItem.isCollapsed 
                     ? Icons.arrow_right 
                     : Icons.arrow_drop_down,
                 color: hasChildren 
                     ? Colors.white 
-                    : Colors.white.withOpacity(0.3),  // 子がいない場合は薄く
+                    : Colors.transparent,
                 size: 20,
               ),
             ),
           ),
-        ],
 
-        // チェックボックス（Level 2/3のみ）
-        if (noteItem.level >= 2) ...[
-          GestureDetector(
-            onTap: onToggleCheck,
-            child: Padding(
-              padding: const EdgeInsets.only(right: 8, top: 4),
-              child: Icon(
-                noteItem.isChecked 
-                    ? Icons.check_box 
-                    : Icons.check_box_outline_blank,
+          // チェックボックス（Level 2以上のみ）
+          if (noteItem.level >= 2) ...[
+            GestureDetector(
+              onTap: onToggleCheck,
+              child: Padding(
+                padding: const EdgeInsets.only(right: 8, top: 4),
+                child: Icon(
+                  noteItem.isChecked 
+                      ? Icons.check_box 
+                      : Icons.check_box_outline_blank,
+                  color: noteItem.isChecked 
+                      ? const Color(0xFF1DB954) 
+                      : Colors.white.withOpacity(0.7),
+                  size: 18,
+                ),
+              ),
+            ),
+          ],
+
+          // テキスト内容
+          Expanded(
+            child: Text(
+              noteItem.text,
+              style: GoogleFonts.inter(
                 color: noteItem.isChecked 
-                    ? const Color(0xFF1DB954) 
-                    : Colors.white.withOpacity(0.7),
-                size: 20,
+                    ? Colors.white.withOpacity(0.5) 
+                    : Colors.white,
+                fontSize: _getFontSize(),
+                fontWeight: noteItem.level == 1 
+                    ? FontWeight.w800 
+                    : FontWeight.w700,
+                height: 1.6,
+                decoration: noteItem.isChecked 
+                    ? TextDecoration.lineThrough 
+                    : null,
+              ).copyWith(
+                fontFamilyFallback: const ['Hiragino Sans'],
               ),
             ),
           ),
         ],
-
-        // テキスト内容
-        Expanded(
-          child: Text(
-            noteItem.text,
-            style: GoogleFonts.inter(
-              color: noteItem.isChecked 
-                  ? Colors.white.withOpacity(0.5) 
-                  : Colors.white,
-              fontSize: _getFontSize(),
-              fontWeight: noteItem.level == 1 
-                  ? FontWeight.w800 
-                  : FontWeight.w700,
-              height: 1.6,
-              decoration: noteItem.isChecked 
-                  ? TextDecoration.lineThrough 
-                  : null,
-            ).copyWith(
-              fontFamilyFallback: const ['Hiragino Sans'],
-            ),
-          ),
-        ),
-      ],
-    ),
-  );
-}
+      ),
+    );
+  }
 }
