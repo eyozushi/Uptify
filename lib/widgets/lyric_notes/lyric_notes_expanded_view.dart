@@ -1,9 +1,8 @@
-// widgets/lyric_notes/lyric_notes_expanded_view.dart - Notionスタイル版
+// widgets/lyric_notes/lyric_notes_expanded_view.dart - Notionスタイル版（シンプル化）
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dart:async';
 import '../../models/lyric_note_item.dart';
-import 'lyric_note_line_widget.dart';
 
 /// Lyric Notesの全画面展開ビュー - Notionスタイル
 /// 「リスト化」ボタン1つで階層を作成
@@ -35,52 +34,70 @@ class _LyricNotesExpandedViewState extends State<LyricNotesExpandedView> {
   int _currentLineIndex = 0;
   Timer? _autoSaveTimer;
 
-  final ScrollController _indicatorScrollController = ScrollController();
+  // 🗑️ 削除: _indicatorScrollController は不要
   final ScrollController _textScrollController = ScrollController();
+  
+  // 🆕 追加: 三角ボタンの状態管理
+  final Map<int, bool> _expandedStates = {}; // index → 展開状態
+
+  final Map<int, String> _placeholders = {}; 
 
   @override
   void initState() {
-    super.initState();
-
-    _textScrollController.addListener(() {
-      if (_textScrollController.hasClients && _indicatorScrollController.hasClients) {
-        _indicatorScrollController.jumpTo(_textScrollController.offset);
-      }
-    });
-    
-    // 初期データの設定
-    if (widget.initialNotes != null && widget.initialNotes!.isNotEmpty) {
-      _notes = List.from(widget.initialNotes!);
-    } else {
-      _notes = [
-        LyricNoteItem(
-          text: '',
-          level: 1,
-        ),
-      ];
-    }
-    
-    _controller = TextEditingController(text: _buildPlainText());
-    _focusNode = FocusNode();
-    
-    _controller.addListener(_onTextChanged);
-    _focusNode.addListener(_onFocusChanged);
-    
-    print('🎵 LyricNotesExpandedView初期化: ${_notes.length}行');
-  }
-
-  /// ノートリストからプレーンテキストを生成（折りたたみ考慮）
-  String _buildPlainText() {
-    final visibleLines = <String>[];
-    
+  super.initState();
+  
+  // 🗑️ 削除: スクロール同期処理は不要
+  
+  // 初期データの設定
+  if (widget.initialNotes != null && widget.initialNotes!.isNotEmpty) {
+    _notes = List.from(widget.initialNotes!);
+    // 🆕 追加: 展開状態の初期化
     for (int i = 0; i < _notes.length; i++) {
-      if (_shouldShowLine(i)) {
-        visibleLines.add(_notes[i].text);
-      }
+      _expandedStates[i] = !_notes[i].isCollapsed;
     }
-    
-    return visibleLines.join('\n');
+  } else {
+    _notes = [
+      LyricNoteItem(
+        text: '',
+        level: 0, // 🔧 変更: Level 1 → Level 0（通常のノート）
+      ),
+    ];
   }
+  
+  _controller = TextEditingController(text: _buildPlainText());
+  _focusNode = FocusNode();
+  
+  _controller.addListener(_onTextChanged);
+  _focusNode.addListener(_onFocusChanged);
+  
+  print('🎵 LyricNotesExpandedView初期化: ${_notes.length}行');
+}
+
+  /// ノートリストからプレーンテキストを生成（三角マーク付き）
+/// ノートリストからプレーンテキストを生成
+String _buildPlainText() {
+  final visibleLines = <String>[];
+  
+  for (int i = 0; i < _notes.length; i++) {
+    if (_shouldShowLine(i)) {
+      final note = _notes[i];
+      String lineText = '';
+      
+      if (note.level == 1) {
+        final isExpanded = _expandedStates[i] ?? false;
+        final triangle = isExpanded ? '▼' : '►';
+        final placeholder = note.text.isEmpty ? 'リスト化' : note.text;
+        lineText = '$triangle $placeholder';
+      } else {
+        lineText = note.text;
+      }
+      
+      visibleLines.add(lineText);
+    }
+  }
+  
+  return visibleLines.join('\n');
+}
 
   /// 🆕 表示用のプレーンテキスト生成（折りたたみ状態を反映）
   String _buildVisibleText() {
@@ -96,52 +113,124 @@ class _LyricNotesExpandedViewState extends State<LyricNotesExpandedView> {
   }
 
   /// テキストから階層情報を保持しながらノートを再構築
-  void _rebuildNotesFromText(String text) {
-    final lines = text.split('\n');
-    final newNotes = <LyricNoteItem>[];
+  /// テキストから階層情報を保持しながらノートを再構築
+void _rebuildNotesFromText(String text) {
+  final lines = text.split('\n');
+  final newNotes = <LyricNoteItem>[];
+  
+  for (int i = 0; i < lines.length; i++) {
+    String lineText = lines[i];
+    int level = 0; // デフォルトは通常のノート
     
-    for (int i = 0; i < lines.length; i++) {
-      final lineText = lines[i];
-      
-      if (i < _notes.length) {
-        // 既存のノートの階層情報を保持しつつテキストのみ更新
-        newNotes.add(_notes[i].copyWith(
-          text: lineText,
-          updatedAt: DateTime.now(),
-        ));
-      } else {
-        // 新しい行は親レベル（Level 1）として追加
-        newNotes.add(LyricNoteItem(
-          text: lineText,
-          level: 1,
-        ));
-      }
+    // 三角マークの検出と除去
+    if (lineText.startsWith('▼ ')) {
+      level = 1;
+      lineText = lineText.substring(2); // '▼ ' を除去
+    } else if (lineText.startsWith('► ')) {
+      level = 1;
+      lineText = lineText.substring(2); // '► ' を除去
     }
     
-    setState(() {
-      _notes = newNotes;
-    });
+    if (i < _notes.length) {
+      // 既存のノートの階層情報を保持しつつテキストのみ更新
+      newNotes.add(_notes[i].copyWith(
+        text: lineText,
+        level: level, // テキストから判定したレベルを使用
+        updatedAt: DateTime.now(),
+      ));
+    } else {
+      // 新しい行は通常のノート（Level 0）として追加
+      newNotes.add(LyricNoteItem(
+        text: lineText,
+        level: level,
+      ));
+    }
   }
+  
+  setState(() {
+    _notes = newNotes;
+  });
+}
 
-  /// テキスト変更時の処理
-  void _onTextChanged() {
-    if (!_isModified) {
-      setState(() {
-        _isModified = true;
-      });
-    }
-    
-    _updateCurrentLineIndex();
-    _rebuildNotesFromText(_controller.text);
-    
-    // 自動保存タイマーのリセット
-    _autoSaveTimer?.cancel();
-    _autoSaveTimer = Timer(const Duration(milliseconds: 500), () {
-      if (mounted) {
-        _saveNotes();
-      }
+/// テキスト変更時の処理
+void _onTextChanged() {
+  if (!_isModified) {
+    setState(() {
+      _isModified = true;
     });
   }
+  
+  // 入力されたらプレースホルダーを削除
+  final currentLines = _controller.text.split('\n');
+  for (int i = 0; i < currentLines.length; i++) {
+    if (_placeholders.containsKey(i)) {
+      // "► " より長い文字があればプレースホルダーを削除
+      if (currentLines[i].length > 2) {
+        setState(() {
+          _placeholders.remove(i);
+        });
+      }
+    }
+  }
+  
+  final oldLineCount = _notes.length;
+  final newLineCount = currentLines.length;
+  
+  // 改行が追加された場合
+  if (newLineCount > oldLineCount) {
+    final addedLineIndex = newLineCount - 1;
+    
+    if (addedLineIndex > 0 && addedLineIndex - 1 < _notes.length) {
+      final prevNote = _notes[addedLineIndex - 1];
+      
+      // 前の行がLevel 1なら、新しい行もLevel 1にする
+      if (prevNote.level == 1) {
+        _controller.removeListener(_onTextChanged);
+        currentLines[addedLineIndex] = '► ';
+        _controller.text = currentLines.join('\n');
+        
+        // カーソル位置を三角の後ろに設定
+        final cursorPos = currentLines.take(addedLineIndex + 1).join('\n').length;
+        _controller.selection = TextSelection.collapsed(offset: cursorPos);
+        
+        _controller.addListener(_onTextChanged);
+        
+        // ノートを追加
+        _notes.insert(addedLineIndex, LyricNoteItem(text: '', level: 1));
+        _expandedStates[addedLineIndex] = false;
+        _placeholders[addedLineIndex] = 'listify'; // プレースホルダー設定
+        
+        setState(() {
+          _currentLineIndex = addedLineIndex;
+        });
+        
+        return;
+      }
+    }
+  }
+  
+  // 通常のテキスト更新処理
+  _updateCurrentLineIndex();
+  _rebuildNotesFromText(_controller.text);
+  
+  // 自動保存タイマーのリセット
+  _autoSaveTimer?.cancel();
+  _autoSaveTimer = Timer(const Duration(milliseconds: 500), () {
+    if (mounted) {
+      _saveNotes();
+    }
+  });
+}
+
+/// 追加された行のインデックスを見つける
+int _findAddedLineIndex(List<String> lines) {
+  for (int i = 0; i < lines.length; i++) {
+    if (i >= _notes.length || lines[i].isEmpty) {
+      return i;
+    }
+  }
+  return lines.length - 1;
+}
 
   /// カーソル位置から現在の行インデックスを更新
   void _updateCurrentLineIndex() {
@@ -165,122 +254,115 @@ class _LyricNotesExpandedViewState extends State<LyricNotesExpandedView> {
     }
   }
 
-  /// 🆕 Notionスタイル：「リスト化」ボタンの処理
-  void _makeList() {
-    if (_currentLineIndex >= _notes.length) {
-      print('⚠️ 無効な行インデックス: $_currentLineIndex');
-      return;
-    }
-    
-    final currentNote = _notes[_currentLineIndex];
-    
-    print('📋 リスト化実行: line=$_currentLineIndex, level=${currentNote.level}, text="${currentNote.text}"');
-    
-    // 最大レベル4まで
-    if (currentNote.level >= 4) {
-      print('⚠️ 最大レベル到達: Level ${currentNote.level}');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('これ以上深い階層は作成できません（最大4階層）'),
-          duration: Duration(seconds: 2),
-          backgroundColor: Colors.orange,
-        ),
-      );
-      return;
-    }
-    
-    // 1. 次の階層の空行を挿入
-    final newNote = LyricNoteItem(
-      text: '',
-      level: currentNote.level + 1,
-    );
-    
+  /// 🆕 シンプル版：「リスト化」ボタンの処理
+/// リスト化ボタンの処理
+/// リスト化ボタンの処理
+void _makeList() {
+  if (_currentLineIndex >= _notes.length) return;
+  
+  final currentNote = _notes[_currentLineIndex];
+  
+  // Level 0 → Level 1 に変換
+  if (currentNote.level == 0 && currentNote.text.isEmpty) {
     setState(() {
-      _notes.insert(_currentLineIndex + 1, newNote);
+      _notes[_currentLineIndex] = currentNote.copyWith(level: 1);
+      _expandedStates[_currentLineIndex] = false;
+      _placeholders[_currentLineIndex] = 'listify'; // プレースホルダー設定
     });
     
-    print('✅ 新しい階層挿入: level=${currentNote.level + 1} at ${_currentLineIndex + 1}');
-    
-    // 2. テキストコントローラーを更新
+    // テキストに三角マークのみ追加
     final lines = _controller.text.split('\n');
-    lines.insert(_currentLineIndex + 1, '');
+    lines[_currentLineIndex] = '► ';
     
-    // リスナーを一時的に解除してテキスト更新
     _controller.removeListener(_onTextChanged);
     _controller.text = lines.join('\n');
     _controller.addListener(_onTextChanged);
     
-    print('✅ テキストコントローラー更新完了');
-    
-    // 3. カーソルを新しい行に移動
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      
-      // 新しい行の開始位置を計算
-      final linesBeforeNew = lines.take(_currentLineIndex + 2).toList();
-      final newCursorPosition = linesBeforeNew.join('\n').length;
-      
-      _controller.selection = TextSelection.collapsed(
-        offset: newCursorPosition.clamp(0, _controller.text.length),
-      );
-      
-      setState(() {
-        _currentLineIndex = _currentLineIndex + 1;
-      });
-      
-      print('✅ カーソル移動完了: $_currentLineIndex行目（Level ${currentNote.level + 1}）');
-    });
+    // カーソル位置を三角の後ろに設定
+    final cursorPos = lines.take(_currentLineIndex + 1).join('\n').length;
+    _controller.selection = TextSelection.collapsed(offset: cursorPos);
     
     _saveNotes();
   }
-
-  /// 三角マークをクリックして子要素の展開/折りたたみ
-  void _toggleCollapseAtIndex(int index) {
-    if (index >= _notes.length) {
-      print('⚠️ 無効なインデックス: $index');
-      return;
-    }
+}
+/// 🆕 新規メソッド: カーソルを指定行に移動
+void _moveCursorToLine(int lineIndex) {
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (!mounted) return;
     
-    final note = _notes[index];
+    final lines = _controller.text.split('\n');
+    if (lineIndex >= lines.length) return;
     
-    // 子要素が存在するかチェック
-    final hasChildren = _hasChildrenAtIndex(index);
-    if (!hasChildren) {
-      print('⚠️ 子要素なし: index=$index, text="${note.text}"');
-      return;
-    }
+    // 新しい行の開始位置を計算
+    final linesBeforeNew = lines.take(lineIndex + 1).toList();
+    final newCursorPosition = linesBeforeNew.join('\n').length;
     
-    print('🔽 折りたたみトグル実行:');
-    print('  - index: $index');
-    print('  - text: "${note.text}"');
-    print('  - level: ${note.level}');
-    print('  - collapsed: ${note.isCollapsed} → ${!note.isCollapsed}');
-    print('  - hasChildren: $hasChildren');
+    _controller.selection = TextSelection.collapsed(
+      offset: newCursorPosition.clamp(0, _controller.text.length),
+    );
     
     setState(() {
-      // 折りたたみ状態をトグル
-      _notes[index] = note.copyWith(
-        isCollapsed: !note.isCollapsed,
-        updatedAt: DateTime.now(),
-      );
+      _currentLineIndex = lineIndex;
     });
     
-    print('✅ 折りたたみ状態更新完了: ${_notes[index].isCollapsed}');
+    print('✅ カーソル移動完了: $lineIndex行目');
+  });
+}
+
+  /// 三角マークをクリックして子要素の展開/折りたたみ
+  /// 三角マークをクリックして子要素の展開/折りたたみ
+/// 三角マークをタップして展開/折りたたみ
+void _toggleCollapseAtIndex(int index) {
+  if (index >= _notes.length) return;
+  
+  final note = _notes[index];
+  
+  if (note.level != 1) return;
+  
+  final isCurrentlyExpanded = _expandedStates[index] ?? false;
+  
+  setState(() {
+    _expandedStates[index] = !isCurrentlyExpanded;
+    _notes[index] = note.copyWith(
+      isCollapsed: isCurrentlyExpanded,
+      updatedAt: DateTime.now(),
+    );
+  });
+  
+  // 展開した場合は子要素を追加
+  if (!isCurrentlyExpanded) {
+    final newNote = LyricNoteItem(
+      text: '',
+      level: 2,
+    );
     
-    // 🔧 追加：テキストフィールドを折りたたみ状態に応じて更新
+    setState(() {
+      _notes.insert(index + 1, newNote);
+    });
+    
+    // テキストを更新
+    final lines = _controller.text.split('\n');
+    lines[index] = '▼ ${note.text}';
+    lines.insert(index + 1, '');
+    
     _controller.removeListener(_onTextChanged);
-    _controller.text = _buildVisibleText();
+    _controller.text = lines.join('\n');
     _controller.addListener(_onTextChanged);
     
-    // UIを強制的に更新
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        setState(() {});
-      }
-    });
+    // カーソルを子要素に移動
+    _moveCursorToLine(index + 1);
+  } else {
+    // 折りたたんだ場合はテキストを更新
+    final lines = _controller.text.split('\n');
+    lines[index] = '► ${note.text}';
     
-    _saveNotes();
+    _controller.removeListener(_onTextChanged);
+    _controller.text = lines.join('\n');
+    _controller.addListener(_onTextChanged);
   }
+  
+  _saveNotes();
+}
 
   /// 指定インデックスの行に子要素が存在するかチェック
   bool _hasChildrenAtIndex(int index) {
@@ -297,54 +379,43 @@ class _LyricNotesExpandedViewState extends State<LyricNotesExpandedView> {
   }
 
   /// 指定インデックスの行を表示すべきか判定
-  bool _shouldShowLine(int index) {
-    if (index == 0) return true;  // 最初の行は常に表示
+  /// 指定インデックスの行を表示すべきか判定
+bool _shouldShowLine(int index) {
+  if (index == 0) return true;  // 最初の行は常に表示
+  
+  final currentLevel = _notes[index].level;
+  
+  // Level 0, 1 は常に表示
+  if (currentLevel <= 1) return true;
+  
+  // Level 2, 3 は親が展開されているかチェック
+  for (int i = index - 1; i >= 0; i--) {
+    final note = _notes[i];
     
-    final currentLevel = _notes[index].level;
-    
-    // 親レベル（Level 1）は常に表示
-    if (currentLevel == 1) return true;
-    
-    // 親をさかのぼって、折りたたまれている親がいないかチェック
-    for (int i = index - 1; i >= 0; i--) {
-      final note = _notes[i];
-      
-      // より浅いレベル（親）を見つけた
-      if (note.level < currentLevel) {
-        // その親が折りたたまれていたら、この行は非表示
-        if (note.isCollapsed) {
+    // より浅いレベル（親）を見つけた
+    if (note.level < currentLevel) {
+      // Level 1の親が折りたたまれていたら非表示
+      if (note.level == 1) {
+        final isExpanded = _expandedStates[i] ?? true;
+        if (!isExpanded) {
           return false;
         }
-        
-        // さらに上の親を探す必要があれば継続
-        if (note.level > 1) {
-          continue;
-        }
-        
-        break;
       }
+      
+      // さらに上の親を探す必要があれば継続
+      if (note.level > 1) {
+        continue;
+      }
+      
+      break;
     }
-    
-    return true;
   }
+  
+  return true;
+}
 
-  /// チェックボックスのトグル
-  void _toggleCheckAtIndex(int index) {
-    if (index >= _notes.length) return;
-    
-    final note = _notes[index];
-    
-    setState(() {
-      _notes[index] = note.copyWith(
-        isChecked: !note.isChecked,
-        updatedAt: DateTime.now(),
-      );
-    });
-    
-    print('✓ チェック切り替え: line=$index, checked=${_notes[index].isChecked}');
-    _saveNotes();
-  }
 
+  
   /// ノートを保存
   void _saveNotes() {
     // 空行を除外してから保存
@@ -360,316 +431,296 @@ class _LyricNotesExpandedViewState extends State<LyricNotesExpandedView> {
 
   /// 現在の行のレベルを取得
   int _getCurrentLevel() {
-    if (_currentLineIndex >= _notes.length) return 1;
+    if (_currentLineIndex >= _notes.length) return 0;
     return _notes[_currentLineIndex].level;
   }
 
   @override
-  void dispose() {
-    _autoSaveTimer?.cancel();
-    _controller.dispose();
-    _focusNode.dispose();
-    _indicatorScrollController.dispose();
-    _textScrollController.dispose();
-    super.dispose();
+void dispose() {
+  _autoSaveTimer?.cancel();
+  _controller.dispose();
+  _focusNode.dispose();
+  // 🗑️ 削除: _indicatorScrollController.dispose();
+  _textScrollController.dispose();
+  super.dispose();
+}
+
+
+/// プレースホルダー付きのテキストを生成（スペース確保用）
+String _buildTextWithPlaceholders() {
+  final lines = _controller.text.split('\n');
+  final result = <String>[];
+  
+  for (int i = 0; i < lines.length; i++) {
+    if (_placeholders.containsKey(i) && lines[i] == '► ') {
+      result.add('► ${_placeholders[i]}');
+    } else {
+      result.add(lines[i]);
+    }
   }
+  
+  return result.join('\n');
+}
+
+/// くの字アイコン付きプレースホルダーを構築
+Widget _buildPlaceholderWithChevron() {
+  final lines = _controller.text.split('\n');
+  final widgets = <Widget>[];
+  
+  for (int i = 0; i < lines.length; i++) {
+    if (_placeholders.containsKey(i) && (lines[i] == '► ' || lines[i].isEmpty)) {
+      final isExpanded = _expandedStates[i] ?? false;
+      
+      widgets.add(
+        SizedBox(
+          height: 24.0 * 1.6,
+          child: Row(
+            children: [
+              _ChevronIcon(
+                isExpanded: isExpanded,
+                size: 18,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                _placeholders[i]!,
+                style: GoogleFonts.inter(
+                  color: Colors.white.withOpacity(0.3),
+                  fontSize: 24,
+                  height: 1.6,
+                  fontWeight: FontWeight.w800,
+                ).copyWith(
+                  fontFamilyFallback: const ['Hiragino Sans'],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    } else {
+      // 空の行を追加（位置合わせ用）
+      widgets.add(
+        SizedBox(
+          height: 24.0 * 1.6,
+        ),
+      );
+    }
+  }
+  
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: widgets,
+  );
+}
 
   @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: widget.backgroundColor,
-      child: SafeArea(
-        child: Column(
-          children: [
-            // ヘッダー部分
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(
-                      Icons.keyboard_arrow_down,
-                      color: Colors.white,
-                      size: 32,
-                    ),
-                    onPressed: () {
-                      _saveNotes();
-                      widget.onClose();
-                    },
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                  ),
-                  const Spacer(),
-                  Expanded(
-                    flex: 3,
-                    child: Text(
-                      widget.taskTitle,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w900,
-                        fontFamily: 'Hiragino Sans',
-                      ),
-                      textAlign: TextAlign.center,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  const Spacer(),
-                  // 現在のレベル表示
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      'L${_getCurrentLevel()}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // 🆕 シンプルなツールバー：「リスト化」ボタン1つだけ
-            Container(
-              height: 50,
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.2),
-                border: Border(
-                  top: BorderSide(
-                    color: Colors.white.withOpacity(0.1),
-                    width: 1,
-                  ),
-                  bottom: BorderSide(
-                    color: Colors.white.withOpacity(0.1),
-                    width: 1,
-                  ),
-                ),
-              ),
-              child: Center(
-                child: GestureDetector(
-                  onTap: _makeList,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1DB954),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: const [
-                        Icon(
-                          Icons.format_list_bulleted,
-                          color: Colors.white,
-                          size: 20,
-                        ),
-                        SizedBox(width: 8),
-                        Text(
-                          'リスト化',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            fontFamily: 'Hiragino Sans',
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-
-            // 現在の階層情報を表示
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-              child: Row(
-                children: [
-                  Icon(
-                    _getCurrentLevel() == 1 
-                        ? Icons.notes 
-                        : _getCurrentLevel() == 2 
-                            ? Icons.subdirectory_arrow_right 
-                            : _getCurrentLevel() == 3
-                                ? Icons.more_horiz
-                                : Icons.circle,
-                    color: Colors.white.withOpacity(0.7),
-                    size: 20,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    _getCurrentLevel() == 1 
-                        ? '通常のメモ' 
-                        : _getCurrentLevel() == 2 
-                            ? '子要素（1階層目）' 
-                            : _getCurrentLevel() == 3
-                                ? '孫要素（2階層目）'
-                                : 'ひ孫要素（3階層目）',
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.7),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      fontFamily: 'Hiragino Sans',
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // 入力エリア
-            Expanded(
+Widget build(BuildContext context) {
+  return Material(
+    color: widget.backgroundColor,
+    child: SafeArea(
+      child: Column(
+        children: [
+          // ヘッダー部分
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: SizedBox(
+              height: 32,
               child: Stack(
                 children: [
-                  // 階層インジケーター（左端に表示）
-                  Positioned(
-                    left: 0,
-                    top: 0,
-                    bottom: 0,
-                    child: Container(
-                      width: 60,
-                      color: Colors.black.withOpacity(0.1),
-                      child: ListView.builder(
-                        controller: _indicatorScrollController,
-                        physics: const NeverScrollableScrollPhysics(),
-                        padding: const EdgeInsets.only(top: 20),
-                        itemCount: _notes.length,
-                        itemBuilder: (context, index) {
-                          final note = _notes[index];
-                          final isCurrent = index == _currentLineIndex;
-                          final hasChildren = _hasChildrenAtIndex(index);
-                          
-                          // 🔧 追加：折りたたまれた行は表示しない
-                          if (!_shouldShowLine(index)) {
-                            return const SizedBox.shrink();
-                          }
-                          
-                          return Container(
-                            height: 38.4,
-                            alignment: Alignment.centerLeft,
-                            padding: const EdgeInsets.only(left: 4),
-                            decoration: isCurrent 
-                                ? BoxDecoration(
-                                    color: Colors.white.withOpacity(0.1),
-                                    border: Border(
-                                      left: BorderSide(
-                                        color: const Color(0xFF1DB954),
-                                        width: 3,
-                                      ),
-                                    ),
-                                  )
-                                : null,
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                // 🔧 修正：三角マークのタップ領域を拡大して確実にタップできるように
-                                GestureDetector(
-                                  onTap: hasChildren ? () {
-                                    print('🔽 三角マークタップ: index=$index, collapsed=${note.isCollapsed}');
-                                    _toggleCollapseAtIndex(index);
-                                  } : null,
-                                  child: Container(
-                                    padding: const EdgeInsets.all(4),  // タップ領域拡大
-                                    color: Colors.transparent,  // タップ可能領域を視覚化しやすく
-                                    child: Icon(
-                                      note.isCollapsed 
-                                          ? Icons.arrow_right 
-                                          : Icons.arrow_drop_down,
-                                      color: hasChildren 
-                                          ? (isCurrent 
-                                              ? const Color(0xFF1DB954)
-                                              : Colors.white.withOpacity(0.7))
-                                          : Colors.transparent,
-                                      size: 20,
-                                    ),
-                                  ),
-                                ),
-                                
-                                // インデント表示
-                                SizedBox(width: (note.level - 1) * 8.0),
-                                
-                                // チェックボックス（Level 2以上のみ）
-                                if (note.level >= 2) ...[
-                                  GestureDetector(
-                                    onTap: () {
-                                      print('✓ チェックボックスタップ: index=$index, checked=${note.isChecked}');
-                                      _toggleCheckAtIndex(index);
-                                    },
-                                    child: Container(
-                                      padding: const EdgeInsets.all(4),  // タップ領域拡大
-                                      color: Colors.transparent,
-                                      child: Icon(
-                                        note.isChecked 
-                                            ? Icons.check_box 
-                                            : Icons.check_box_outline_blank,
-                                        color: note.isChecked 
-                                            ? const Color(0xFF1DB954) 
-                                            : (isCurrent 
-                                                ? Colors.white.withOpacity(0.8)
-                                                : Colors.white.withOpacity(0.3)),
-                                        size: 18,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          );
-                        },
+                  // 左: 戻るボタン
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: IconButton(
+                      icon: const Icon(
+                        Icons.keyboard_arrow_down,
+                        color: Colors.white,
+                        size: 32,
+                      ),
+                      onPressed: () {
+                        _saveNotes();
+                        widget.onClose();
+                      },
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                  ),
+                  
+                  // 中央: タスク名
+                  Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 48),
+                      child: Text(
+                        widget.taskTitle,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                          fontFamily: 'Hiragino Sans',
+                        ),
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ),
                   
-                  // テキスト入力フィールド
-                  Positioned(
-                    left: 60,
-                    top: 0,
-                    right: 0,
-                    bottom: 0,
-                    child: SingleChildScrollView(
-                      controller: _textScrollController,
-                      padding: const EdgeInsets.all(20),
-                      child: TextField(
-                        controller: _controller,
-                        focusNode: _focusNode,
-                        style: GoogleFonts.inter(
-                          color: Colors.white,
-                          fontSize: 24,
-                          height: 1.6,
-                          fontWeight: FontWeight.w800,
-                        ).copyWith(
-                          fontFamilyFallback: const ['Hiragino Sans'],
+                  // 右: リスト化ボタン
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: GestureDetector(
+                      onTap: _makeList,
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        child: CustomPaint(
+                          size: const Size(20, 20),
+                          painter: _RoundedTrianglePainter(),
                         ),
-                        decoration: InputDecoration(
-                          hintText: 'リリックを書いてください。\n\n「リスト化」ボタンで階層リストを作成できます。\n\n例：\n知らなかった英単語\n  日常英語\n    apple - りんご',
-                          hintStyle: GoogleFonts.inter(
-                            color: Colors.white.withOpacity(0.5),
-                            fontSize: 20,
-                            height: 1.6,
-                            fontWeight: FontWeight.w700,
-                          ).copyWith(
-                            fontFamilyFallback: const ['Hiragino Sans'],
-                          ),
-                          border: InputBorder.none,
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                        maxLines: null,
-                        keyboardType: TextInputType.multiline,
-                        autofocus: false,
                       ),
                     ),
                   ),
                 ],
               ),
             ),
-          ],
+          ),
+
+          // 入力エリア
+          // 入力エリア
+// 入力エリア
+// 入力エリア
+Expanded(
+  child: SingleChildScrollView(
+    controller: _textScrollController,
+    padding: const EdgeInsets.all(20),
+    child: Stack(
+      children: [
+        // 実際のテキスト入力フィールド
+        GestureDetector(
+          onTapDown: (details) {
+            _handleTriangleTap(details.localPosition);
+          },
+          child: TextField(
+            controller: _controller,
+            focusNode: _focusNode,
+            style: GoogleFonts.inter(
+              color: Colors.white,
+              fontSize: 24,
+              height: 1.6,
+              fontWeight: FontWeight.w800,
+            ).copyWith(
+              fontFamilyFallback: const ['Hiragino Sans'],
+            ),
+            decoration: const InputDecoration(
+              hintText: 'リリックを書いてください。\n\n右上の三角ボタンでリスト化できます。',
+              hintStyle: TextStyle(
+                color: Color(0x80FFFFFF),
+                fontSize: 20,
+                height: 1.6,
+                fontWeight: FontWeight.w700,
+              ),
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.zero,
+              isDense: true,
+            ),
+            maxLines: null,
+            keyboardType: TextInputType.multiline,
+            autofocus: false,
+          ),
         ),
+        
+        // プレースホルダーのテキスト表示（TextFieldと完全に同じ位置）
+        // くの字アイコンとプレースホルダー表示
+if (_placeholders.isNotEmpty)
+  Positioned(
+    top: 0,
+    left: 0,
+    right: 0,
+    child: IgnorePointer(
+      child: _buildPlaceholderWithChevron(),
+    ),
+  ),
+      ],
+    ),
+  ),
+),
+        ],
+      ),
+    ),
+  );
+}
+
+/// 三角マークのタップを検出
+void _handleTriangleTap(Offset localPosition) {
+  // タップされた位置から行インデックスを計算
+  final lineHeight = 24.0 * 1.6; // fontSize * height
+  final tappedLine = (localPosition.dy / lineHeight).floor();
+  
+  if (tappedLine < 0 || tappedLine >= _notes.length) return;
+  
+  final note = _notes[tappedLine];
+  
+  print('👆 タップ検出: line=$tappedLine, level=${note.level}, x=${localPosition.dx}, y=${localPosition.dy}');
+  
+  // Level 1の三角マークがタップされたか判定
+  // 三角マーク（▸）は約20px幅、タップ領域を40pxに拡大
+  if (note.level == 1 && localPosition.dx < 40) {
+    print('🔽 三角マークタップ: line=$tappedLine');
+    _toggleCollapseAtIndex(tappedLine);
+  }
+}
+
+}
+
+/// 右向き正三角形を描画するCustomPainter
+class _RoundedTrianglePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.fill;
+
+    final path = Path();
+    
+    // 右向き正三角形
+    final height = size.height;
+    final width = height * 0.866; // √3/2 ≈ 0.866
+    
+    // 左の頂点
+    path.moveTo(0, 0);
+    // 右の頂点
+    path.lineTo(width, height / 2);
+    // 左下の頂点
+    path.lineTo(0, height);
+    path.close();
+    
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+
+/// Notion風のくの字アイコン
+class _ChevronIcon extends StatelessWidget {
+  final bool isExpanded;
+  final double size;
+
+  const _ChevronIcon({
+    required this.isExpanded,
+    this.size = 18.0,
+  });
+
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedRotation(
+      turns: isExpanded ? 0.25 : 0, // 90度回転で下向き
+      duration: const Duration(milliseconds: 200),
+      child: Icon(
+        Icons.chevron_right,
+        size: size,
+        color: Colors.white.withOpacity(0.7),
       ),
     );
   }
 }
+

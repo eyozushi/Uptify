@@ -13,15 +13,15 @@ class LyricNoteItem {
   final DateTime? updatedAt;    // 更新日時
 
   LyricNoteItem({
-    String? id,
-    required this.text,
-    this.level = 1,               // デフォルトは親レベル
-    this.isChecked = false,
-    this.isCollapsed = false,
-    DateTime? createdAt,
-    this.updatedAt,
-  })  : id = id ?? 'note_${DateTime.now().millisecondsSinceEpoch}_${text.hashCode}',
-        createdAt = createdAt ?? DateTime.now();
+  String? id,
+  required this.text,
+  this.level = 0,               // 🔧 変更: デフォルトは通常のノート（Level 0）
+  this.isChecked = false,
+  this.isCollapsed = false,
+  DateTime? createdAt,
+  this.updatedAt,
+})  : id = id ?? 'note_${DateTime.now().millisecondsSinceEpoch}_${text.hashCode}',
+      createdAt = createdAt ?? DateTime.now();
 
   /// JSONからLyricNoteItemを作成
   factory LyricNoteItem.fromJson(Map<String, dynamic> json) {
@@ -74,14 +74,17 @@ class LyricNoteItem {
     );
   }
 
-  /// レベル1（親）かどうか
-  bool get isParent => level == 1;
+  /// レベル0（通常のノート）かどうか
+bool get isNormal => level == 0;
 
-  /// レベル2（子）かどうか
-  bool get isChild => level == 2;
+/// レベル1（親）かどうか
+bool get isParent => level == 1;
 
-  /// レベル3（孫）かどうか
-  bool get isGrandchild => level == 3;
+/// レベル2（子）かどうか
+bool get isChild => level == 2;
+
+/// レベル3（孫）かどうか
+bool get isGrandchild => level == 3;
 
   @override
   String toString() {

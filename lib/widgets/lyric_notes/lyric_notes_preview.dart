@@ -19,59 +19,59 @@ class LyricNotesPreview extends StatelessWidget {
   });
 
   /// 🔧 修正：階層構造と展開/折りたたみに対応したプレビューテキスト生成
-  String _getPreviewText() {
-    if (notes == null || notes!.isEmpty) {
-      return 'タップして\nリリックを追加...';
-    }
-    
-    // 表示すべき行を抽出（最大4行、折りたたみ考慮）
-    final visibleNotes = <LyricNoteItem>[];
-    
-    for (int i = 0; i < notes!.length; i++) {
-      if (visibleNotes.length >= 4) break;
-      
-      final note = notes![i];
-      
-      // 空行はスキップ
-      if (note.text.trim().isEmpty) continue;
-      
-      // この行を表示すべきか判定（折りたたみ考慮）
-      if (_shouldShowLine(i)) {
-        visibleNotes.add(note);
-      }
-    }
-    
-    if (visibleNotes.isEmpty) {
-      return 'タップして\nリリックを追加...';
-    }
-    
-    // フォントサイズに応じたプレビュー行を生成
-    final previewLines = visibleNotes.map((note) {
-      String prefix = '';
-      
-      // レベル2以上には三角マーカーとインデントを追加
-      if (note.level == 2) {
-        prefix = '  ▸ ';  // 子要素マーカー
-      } else if (note.level == 3) {
-        prefix = '    ▸ ';  // 孫要素マーカー（深いインデント）
-      }
-      
-      // チェック済みの場合は打ち消し線風に表示
-      final displayText = note.isChecked 
-          ? '${prefix}✓ ${note.text}' 
-          : prefix + note.text;
-      
-      return displayText;
-    }).join('\n');
-    
-    // 100文字以上なら省略
-    if (previewLines.length > 100) {
-      return '${previewLines.substring(0, 100)}...';
-    }
-    
-    return previewLines;
+  /// 🔧 修正：Level 0対応版プレビューテキスト生成
+String _getPreviewText() {
+  if (notes == null || notes!.isEmpty) {
+    return 'タップして\nリリックを追加...';
   }
-
+  
+  // 表示すべき行を抽出（最大4行、折りたたみ考慮）
+  final visibleNotes = <LyricNoteItem>[];
+  
+  for (int i = 0; i < notes!.length; i++) {
+    if (visibleNotes.length >= 4) break;
+    
+    final note = notes![i];
+    
+    // 空行はスキップ
+    if (note.text.trim().isEmpty) continue;
+    
+    // この行を表示すべきか判定（折りたたみ考慮）
+    if (_shouldShowLine(i)) {
+      visibleNotes.add(note);
+    }
+  }
+  
+  if (visibleNotes.isEmpty) {
+    return 'タップして\nリリックを追加...';
+  }
+  
+  // フォントサイズに応じたプレビュー行を生成
+  final previewLines = visibleNotes.map((note) {
+    String prefix = '';
+    
+    // Level 1には三角マークを追加
+    if (note.level == 1) {
+      final isExpanded = !note.isCollapsed;
+      prefix = isExpanded ? '▼ ' : '► ';
+    }
+    // Level 2以上にはインデントを追加
+    else if (note.level == 2) {
+      prefix = '  ';
+    } else if (note.level == 3) {
+      prefix = '    ';
+    }
+    
+    return prefix + note.text;
+  }).join('\n');
+  
+  // 100文字以上なら省略
+  if (previewLines.length > 100) {
+    return '${previewLines.substring(0, 100)}...';
+  }
+  
+  return previewLines;
+}
   /// 🆕 補助メソッド：指定インデックスの行を表示すべきか判定（折りたたみ考慮）
   bool _shouldShowLine(int index) {
     if (index == 0) return true;  // 最初の行は常に表示
