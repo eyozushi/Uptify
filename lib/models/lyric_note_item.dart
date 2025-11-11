@@ -1,93 +1,118 @@
 // models/lyric_note_item.dart
-import 'package:flutter/material.dart';
+import 'package:uuid/uuid.dart';
 
-/// Lyric Noteの1行分のデータモデル
-/// 階層構造（親・子・孫）とチェック状態を保持する
+// 🔧 修正: クラスの外に定義
+const _undefined = Object();
+
 class LyricNoteItem {
-  final String id;              // 一意識別子
-  final String text;            // 行のテキスト内容
-  final int level;              // 階層レベル（1=親, 2=子, 3=孫）
-  final bool isChecked;         // チェックボックスの状態（完了/未完了）
-  final bool isCollapsed;       // 折りたたみ状態（true=折りたたみ中）
-  final DateTime createdAt;     // 作成日時
-  final DateTime? updatedAt;    // 更新日時
+  final String id;
+  final String? parentId; // 親のID
+  final String text;
+  final int level; // 0: 通常ノート, 1: 親, 2: 子, 3: 孫
+  final bool isCollapsed; // 折りたたみ状態（親のみ使用）
+  final bool isCompleted; // 完了状態（デフォルト: false = 黒文字、true = 白文字）
+  final DateTime createdAt;
+  final DateTime updatedAt;
 
   LyricNoteItem({
-  String? id,
-  required this.text,
-  this.level = 0,               // 🔧 変更: デフォルトは通常のノート（Level 0）
-  this.isChecked = false,
-  this.isCollapsed = false,
-  DateTime? createdAt,
-  this.updatedAt,
-})  : id = id ?? 'note_${DateTime.now().millisecondsSinceEpoch}_${text.hashCode}',
-      createdAt = createdAt ?? DateTime.now();
+    String? id,
+    this.parentId,
+    required this.text,
+    this.level = 0,
+    this.isCollapsed = false,
+    this.isCompleted = false,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  })  : id = id ?? const Uuid().v4(),
+        createdAt = createdAt ?? DateTime.now(),
+        updatedAt = updatedAt ?? DateTime.now();
 
-  /// JSONからLyricNoteItemを作成
+  /// JSONから変換
   factory LyricNoteItem.fromJson(Map<String, dynamic> json) {
     return LyricNoteItem(
-      id: json['id'] ?? '',
-      text: json['text'] ?? '',
-      level: json['level'] ?? 1,
-      isChecked: json['isChecked'] ?? false,
-      isCollapsed: json['isCollapsed'] ?? false,
+      id: json['id'] as String? ?? const Uuid().v4(),
+      parentId: json['parentId'] as String?,
+      text: json['text'] as String? ?? '',
+      level: json['level'] as int? ?? 0,
+      isCollapsed: json['isCollapsed'] as bool? ?? false,
+      isCompleted: json['isCompleted'] as bool? ?? false,
       createdAt: json['createdAt'] != null
-          ? DateTime.parse(json['createdAt'])
+          ? DateTime.parse(json['createdAt'] as String)
           : DateTime.now(),
       updatedAt: json['updatedAt'] != null
-          ? DateTime.parse(json['updatedAt'])
-          : null,
+          ? DateTime.parse(json['updatedAt'] as String)
+          : DateTime.now(),
     );
   }
 
-  /// LyricNoteItemをJSONに変換
+  /// JSONに変換
   Map<String, dynamic> toJson() {
     return {
       'id': id,
+      'parentId': parentId,
       'text': text,
       'level': level,
-      'isChecked': isChecked,
       'isCollapsed': isCollapsed,
+      'isCompleted': isCompleted,
       'createdAt': createdAt.toIso8601String(),
-      'updatedAt': updatedAt?.toIso8601String(),
+      'updatedAt': updatedAt.toIso8601String(),
     };
   }
 
-  /// コピーを作成（指定されたフィールドのみ更新）
+  /// コピーを作成（一部のフィールドを変更）
+  /// null を明示的に設定するには copyWith(isCollapsed: null) のように呼ぶ
   LyricNoteItem copyWith({
     String? id,
+    Object? parentId = _undefined,
     String? text,
     int? level,
-    bool? isChecked,
-    bool? isCollapsed,
+    Object? isCollapsed = _undefined,
+    Object? isCompleted = _undefined,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
     return LyricNoteItem(
       id: id ?? this.id,
+      parentId: parentId == _undefined ? this.parentId : parentId as String?,
       text: text ?? this.text,
       level: level ?? this.level,
-      isChecked: isChecked ?? this.isChecked,
-      isCollapsed: isCollapsed ?? this.isCollapsed,
+      isCollapsed: isCollapsed == _undefined 
+          ? this.isCollapsed 
+          : (isCollapsed as bool?) ?? false,
+      isCompleted: isCompleted == _undefined 
+          ? this.isCompleted 
+          : (isCompleted as bool?) ?? false,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 
-  /// レベル0（通常のノート）かどうか
-bool get isNormal => level == 0;
-
-/// レベル1（親）かどうか
-bool get isParent => level == 1;
-
-/// レベル2（子）かどうか
-bool get isChild => level == 2;
-
-/// レベル3（孫）かどうか
-bool get isGrandchild => level == 3;
-
   @override
   String toString() {
-    return 'LyricNoteItem(id: $id, text: "$text", level: $level, checked: $isChecked)';
+    return 'LyricNoteItem(id: $id, parentId: $parentId, text: "$text", level: $level, isCollapsed: $isCollapsed, isCompleted: $isCompleted)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is LyricNoteItem &&
+        other.id == id &&
+        other.parentId == parentId &&
+        other.text == text &&
+        other.level == level &&
+        other.isCollapsed == isCollapsed &&
+        other.isCompleted == isCompleted;
+  }
+
+  @override
+  int get hashCode {
+    return Object.hash(
+      id,
+      parentId,
+      text,
+      level,
+      isCollapsed,
+      isCompleted,
+    );
   }
 }
