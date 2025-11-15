@@ -1774,39 +1774,57 @@ Future<void> _initializeAudioService() async {
 }) {
   print('🔧 MainWrapper: PlayerScreenから状態変更受信');
   
-  setState(() {
-    if (currentTaskIndex != null) {
-      if (_currentTaskIndex != currentTaskIndex) {
-        _currentTaskIndex = currentTaskIndex;
-        // _startNewTask() を呼び出さない（経過時間リセットを防ぐ）
-        print('🔧 タスクインデックス更新のみ: ${_currentTaskIndex}');
+  // 🔧 修正: 状態が変更された場合は常に setState を呼ぶ
+  bool shouldUpdate = false;
+  
+  if (currentTaskIndex != null && _currentTaskIndex != currentTaskIndex) {
+    _currentTaskIndex = currentTaskIndex;
+    shouldUpdate = true;
+    print('🔧 タスクインデックス更新: $_currentTaskIndex');
+  }
+  
+  if (isPlaying != null && _isPlaying != isPlaying) {
+    if (!_isPlaying && isPlaying) {
+      _isPlaying = true;
+      // バックグラウンド復帰時は _startNewTask() をスキップ
+      if (_taskStartTime == null) {
+        _startNewTask();
       }
+      _startProgressTimer();
+    } else if (_isPlaying && !isPlaying) {
+      _isPlaying = false;
+      _pauseCurrentTask();
+      _stopProgressTimer();
     }
+    shouldUpdate = true;
+  }
+  
+  if (progress != null && _currentProgress != progress) {
+    _currentProgress = progress;
+    shouldUpdate = true;
+  }
+  
+  if (elapsedSeconds != null && _elapsedSeconds != elapsedSeconds) {
+    _elapsedSeconds = elapsedSeconds;
+    shouldUpdate = true;
+  }
+  
+  if (isAutoPlayEnabled != null && _isAutoPlayEnabled != isAutoPlayEnabled) {
+    _isAutoPlayEnabled = isAutoPlayEnabled;
+    print('🔄 MainWrapper: 自動再生状態変更 → $_isAutoPlayEnabled');
     
-    if (isPlaying != null) {
-      if (!_isPlaying && isPlaying) {
-        _isPlaying = true;
-        // バックグラウンド復帰時は _startNewTask() をスキップ
-        if (_taskStartTime == null) {
-          _startNewTask();
-        }
-        _startProgressTimer();
-      } else if (_isPlaying && !isPlaying) {
-        _isPlaying = false;
-        _pauseCurrentTask();
-        _stopProgressTimer();
-      }
+    if (!_isAutoPlayEnabled) {
+      _isAutoPlayInProgress = false;
     }
-    
-    if (isAutoPlayEnabled != null) {
-      _isAutoPlayEnabled = isAutoPlayEnabled;
-      print('🔄 MainWrapper: 自動再生状態変更 → $_isAutoPlayEnabled');
-      
-      if (!_isAutoPlayEnabled) {
-        _isAutoPlayInProgress = false;
-      }
-    }
-  });
+    shouldUpdate = true;
+  }
+  
+  // 🔧 修正: いずれかの状態が変更された場合に setState を呼ぶ
+  if (shouldUpdate) {
+    setState(() {
+      // 状態はすでに更新済み
+    });
+  }
 }
 
   void _startNewTask() {

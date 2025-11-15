@@ -570,7 +570,6 @@ class DataService {
   }
 
 
-// 🆕 修正版: Lyric Noteを更新して自動保存
 /// 🔧 修正版: Lyric Notes（階層構造）を更新して自動保存
 Future<void> updateTaskLyricNotes(String taskId, List<LyricNoteItem> notes) async {
   try {
@@ -592,6 +591,7 @@ Future<void> updateTaskLyricNotes(String taskId, List<LyricNoteItem> notes) asyn
     // 該当タスクのLyric Notesを更新
     final updatedTasks = tasks.map((task) {
       if (task.id == taskId) {
+        // 🔧 追加: 空リストの場合も正しく保存
         return task.copyWith(lyricNotes: notes);
       }
       return task;
@@ -601,7 +601,12 @@ Future<void> updateTaskLyricNotes(String taskId, List<LyricNoteItem> notes) asyn
     userData['tasks'] = updatedTasks.map((task) => task.toJson()).toList();
     await saveUserData(userData);
     
-    print('✅ Lyric Notes保存完了: $taskId (${notes.length}行)');
+    // 🔧 修正: ログを改善
+    if (notes.isEmpty) {
+      print('✅ Lyric Notes保存完了: $taskId (空リスト - 全削除)');
+    } else {
+      print('✅ Lyric Notes保存完了: $taskId (${notes.length}行)');
+    }
   } catch (e) {
     print('❌ Lyric Notes更新エラー: $e');
     rethrow;

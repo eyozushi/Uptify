@@ -40,15 +40,32 @@ class _LyricNotesWidgetState extends State<LyricNotesWidget> {
   }
   
   @override
-  void didUpdateWidget(LyricNotesWidget oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // 🔧 修正: taskが更新されたら、ノートも更新
-    if (oldWidget.task.id == widget.task.id && 
-        widget.task.lyricNotes != null) {
-      _currentNotes = widget.task.lyricNotes!;
-    }
-  }
+void didUpdateWidget(LyricNotesWidget oldWidget) {
+  super.didUpdateWidget(oldWidget);
   
+  // 🔧 修正: タスクIDが変わった場合も更新
+  if (oldWidget.task.id != widget.task.id) {
+    print('🔄 LyricNotesWidget: タスク変更検知');
+    print('  旧タスク: ${oldWidget.task.title} (ID: ${oldWidget.task.id})');
+    print('  新タスク: ${widget.task.title} (ID: ${widget.task.id})');
+    print('  新メモ数: ${widget.task.lyricNotes?.length ?? 0}');
+    
+    setState(() {
+      _currentNotes = widget.task.lyricNotes ?? [];
+    });
+  }
+  // 🔧 修正: 同じタスクでもメモが更新された場合
+  else if (widget.task.lyricNotes != null && 
+           widget.task.lyricNotes != oldWidget.task.lyricNotes) {
+    print('🔄 LyricNotesWidget: 同じタスクのメモ更新検知');
+    print('  タスク: ${widget.task.title} (ID: ${widget.task.id})');
+    print('  新メモ数: ${widget.task.lyricNotes!.length}');
+    
+    setState(() {
+      _currentNotes = widget.task.lyricNotes!;
+    });
+  }
+}
   /// 拡大表示を開く
   void _toggleExpanded() {
     Navigator.of(context).push(
@@ -80,33 +97,33 @@ class _LyricNotesWidgetState extends State<LyricNotesWidget> {
   }
 
   /// 編集画面を直接開く
-  void _openEditor() {
-    Navigator.of(context).push(
-      PageRouteBuilder(
-        fullscreenDialog: true,
-        opaque: true,
-        pageBuilder: (context, animation, secondaryAnimation) {
-          return SlideTransition(
-            position: Tween<Offset>(
-              begin: const Offset(0, 1),
-              end: Offset.zero,
-            ).animate(CurvedAnimation(
-              parent: animation,
-              curve: Curves.easeInOut,
-            )),
-            child: LyricNotesEditorScreen(
-              taskTitle: widget.task.title,
-              initialNotes: _currentNotes,
-              onSave: _saveNotes,
-              onClose: () => Navigator.of(context).pop(),
-            ),
-          );
-        },
-        transitionDuration: const Duration(milliseconds: 300),
-      ),
-    );
-  }
-
+void _openEditor() {
+  Navigator.of(context).push(
+    PageRouteBuilder(
+      fullscreenDialog: true,
+      opaque: true,
+      pageBuilder: (context, animation, secondaryAnimation) {
+        return SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0, 1),
+            end: Offset.zero,
+          ).animate(CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeInOut,
+          )),
+          child: LyricNotesEditorScreen(
+            taskTitle: widget.task.title,
+            initialNotes: _currentNotes,
+            backgroundColor: Colors.black, // 🔧 追加: 黒色を明示的に指定
+            onSave: _saveNotes,
+            onClose: () => Navigator.of(context).pop(),
+          ),
+        );
+      },
+      transitionDuration: const Duration(milliseconds: 300),
+    ),
+  );
+}
   /// メモを保存
   Future<void> _saveNotes(List<LyricNoteItem> notes) async {
     try {

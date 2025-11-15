@@ -279,6 +279,7 @@ Future<void> _loadTaskLyricNotes() async {
       final album = await _dataService.getSingleAlbum(widget.playingSingleAlbumId!);
       if (album != null) {
         tasks = album.tasks;
+        print('🎵 シングルアルバムのタスク読み込み: ${tasks.length}個');
       }
     } else {
       // ライフドリームアルバムの場合
@@ -293,6 +294,7 @@ Future<void> _loadTaskLyricNotes() async {
               .toList();
         }
       }
+      print('📖 ライフドリームアルバムのタスク読み込み: ${tasks.length}個');
     }
     
     // 🔧 修正: Lyric Notesをマップに保存（階層構造対応）
@@ -300,10 +302,9 @@ Future<void> _loadTaskLyricNotes() async {
     for (final task in tasks) {
       if (task.lyricNotes != null && task.lyricNotes!.isNotEmpty) {
         notes[task.id] = task.lyricNotes!;
-        print('  ✓ タスク "${task.title}": ${task.lyricNotes!.length}行読み込み'); // 🔧 追加
-        for (final note in task.lyricNotes!) {
-          print('    - Level ${note.level}: "${note.text}"'); // 🔧 追加
-        }
+        print('  ✓ タスク "${task.title}" (ID: ${task.id}): ${task.lyricNotes!.length}行読み込み'); // 🔧 追加
+      } else {
+        print('  - タスク "${task.title}" (ID: ${task.id}): メモなし'); // 🔧 追加
       }
     }
     
@@ -480,46 +481,51 @@ void _animateToPage(int newIndex) {
     curve: Curves.easeOut,
   ));
   
-  _swipeController.forward(from: 0.0).then((_) {
-    setState(() {
-      _currentIndex = newIndex;
-      _dragDistance = 0.0;
-    });
+  // 🔧 追加：アニメーション開始前に即座に状態を更新
+  setState(() {
+    _currentIndex = newIndex;
+    _dragDistance = 0.0;
+  });
+  
+  // 🔧 追加：即座に MainWrapper に通知
+  if (_isInitializationComplete && !_isForcePageChange) {
+    if (_isAutoPlayEnabled) {
+      setState(() {
+        _isAutoPlayEnabled = false;
+      });
+      _autoPlayController.reverse();
+      
+      if (widget.onStateChanged != null) {
+        widget.onStateChanged!(
+          isAutoPlayEnabled: false,
+        );
+      }
+    }
     
+    if (widget.onStateChanged != null) {
+      final taskIndex = widget.isPlayingSingleAlbum ? newIndex : (newIndex > 0 ? newIndex - 1 : -1);
+      
+      // 🔧 重要：アニメーション開始前に通知
+      widget.onStateChanged!(
+        currentTaskIndex: taskIndex,
+        progress: 0.0,
+        elapsedSeconds: 0,
+      );
+      
+      print('🔧 PlayerScreen: ページ切り替え通知（即座） → taskIndex=$taskIndex');
+    }
+  }
+  
+  // 🔧 修正：アニメーション完了後はアニメーションのリセットのみ
+  _swipeController.forward(from: 0.0).then((_) {
     // 🔧 追加：アニメーションをリセット
     _swipeController.reset();
     _swipeAnimation = Tween<double>(
       begin: 0.0,
       end: 0.0,
     ).animate(_swipeController);
-    
-    if (_isInitializationComplete && !_isForcePageChange) {
-      if (_isAutoPlayEnabled) {
-        setState(() {
-          _isAutoPlayEnabled = false;
-        });
-        _autoPlayController.reverse();
-        
-        if (widget.onStateChanged != null) {
-          widget.onStateChanged!(
-            isAutoPlayEnabled: false,
-          );
-        }
-      }
-      
-      if (widget.onStateChanged != null) {
-        final taskIndex = widget.isPlayingSingleAlbum ? newIndex : (newIndex > 0 ? newIndex - 1 : -1);
-        
-        widget.onStateChanged!(
-          currentTaskIndex: taskIndex,
-          progress: 0.0,
-          elapsedSeconds: 0,
-        );
-      }
-    }
   });
 }
-
 void _resetPosition() {
   _swipeAnimation = Tween<double>(
     begin: _dragDistance,
@@ -698,36 +704,49 @@ double scoreColor(PaletteColor paletteColor) {
   
   double score = 0;
   
-  // 🔧 変更：出現頻度が低い色は大幅減点
-  if (population < 500) {
-    score -= 300; // 出現頻度が500未満なら大幅ペナルティ
-    print('🎨 色スコア: $color - population少ない($population) → 大幅減点');
+  // 🔧 修正1: 出現頻度のベーススコア（より柔軟に）
+  if (population < 100) {
+    score -= 500; // 極端に少ない色は除外
+  } else if (population < 500) {
+    score -= 100; // やや少ない色は減点
+  } else if (population > 2000) {
+    score += 150; // 多い色は加点（ただし後で彩度チェック）
+  } else {
+    score += 50; // 適度な出現頻度
   }
   
-  // 1. 彩度が高い = 特徴的な色（+100点）
-  score += saturation * 100;
-  
-  // 2. 出現頻度が高い = 重要な色（+100点、ただし白黒は除外）
-  if (saturation > 0.15) { // 彩度が15%以上なら有彩色
-    score += (population / 1000) * 100; // 🔧 変更：50 → 100（出現頻度をより重視）
+  // 🔧 修正2: 彩度を最重視（Spotifyスタイル）
+  if (saturation > 0.4) {
+    score += 300; // 高彩度の色を大幅優遇
+  } else if (saturation > 0.25) {
+    score += 150; // 中程度の彩度も評価
+  } else if (saturation < 0.15) {
+    score -= 400; // 無彩色（白・グレー・黒）を大幅減点
   }
   
-  // 3. 明度が中程度 = 使いやすい色（+30点）
-  if (luminance > 0.15 && luminance < 0.7) {
-    score += 30;
+  // 🔧 修正3: 明度の評価（暗すぎず明るすぎず）
+  if (luminance < 0.1) {
+    score -= 200; // 真っ黒に近い色は減点
+  } else if (luminance > 0.85) {
+    score -= 300; // 真っ白に近い色は大幅減点
+  } else if (luminance >= 0.2 && luminance <= 0.6) {
+    score += 100; // 適度な明度は加点
   }
   
-  // 4. 白や黒に近い色はペナルティ
-  if (saturation < 0.15) { // 無彩色（白・グレー・黒）
-    score -= 200;
+  // 🔧 修正4: 彩度と出現頻度の組み合わせボーナス
+  if (saturation > 0.3 && population > 1000) {
+    score += 200; // 特徴的で目立つ色にボーナス
   }
   
-  // 5. 明るすぎる色（白に近い）はペナルティ
-  if (luminance > 0.8) {
-    score -= 100;
+  // 🔧 修正5: 極端な色相の調整（オレンジ・赤・青・紫を優遇）
+  final hue = HSLColor.fromColor(color).hue;
+  if ((hue >= 0 && hue <= 30) ||     // 赤
+      (hue >= 180 && hue <= 240) ||  // 青
+      (hue >= 270 && hue <= 330)) {  // 紫・マゼンタ
+    score += 50; // 視覚的に印象的な色相にボーナス
   }
   
-  print('🎨 色スコア: $color - saturation:${saturation.toStringAsFixed(2)}, luminance:${luminance.toStringAsFixed(2)}, population:$population, score:${score.toStringAsFixed(1)}');
+  print('🎨 色スコア: $color - sat:${saturation.toStringAsFixed(2)}, lum:${luminance.toStringAsFixed(2)}, pop:$population, hue:${hue.toStringAsFixed(0)}, score:${score.toStringAsFixed(1)}');
   
   return score;
 }
@@ -1889,8 +1908,7 @@ bool _shouldShowLyricNotes() {
 }
 
 
-// 🆕 修正版: 現在のタスクを取得（Lyric Note付き）
-/// 🔧 修正: 階層構造対応
+/// 🔧 修正: 現在のタスクを取得（Lyric Note付き）
 TaskItem? _getCurrentTask() {
   TaskItem? task;
   
@@ -1904,22 +1922,27 @@ TaskItem? _getCurrentTask() {
     }
   }
   
+  if (task == null) return null;
+  
   // 🔧 修正: 保存されたLyric Notes（階層構造）を反映
-  if (task != null && _taskLyricNotes.containsKey(task.id)) {
-    return task.copyWith(lyricNotes: _taskLyricNotes[task.id]);
+  if (_taskLyricNotes.containsKey(task.id)) {
+    final notesFromMap = _taskLyricNotes[task.id]!;
+    print('📝 タスク "${task.title}" のメモ取得: ${notesFromMap.length}行 (taskId: ${task.id})'); // 🔧 追加
+    return task.copyWith(lyricNotes: notesFromMap);
   }
   
+  print('📝 タスク "${task.title}" のメモなし (taskId: ${task.id})'); // 🔧 追加
   return task;
 }
 
 
-// 🆕 修正版: Lyric Notesウィジェットを構築
-/// 🔧 修正: 階層構造対応
 Widget _buildLyricNotes(double coverSize) {
   final task = _getCurrentTask();
   if (task == null) {
     return const SizedBox.shrink();
   }
+  
+  print('🎨 LyricNotesWidget構築: タスク="${task.title}", ID=${task.id}, メモ数=${task.lyricNotes?.length ?? 0}'); // 🔧 追加
   
   return LyricNotesWidget(
     task: task,
@@ -1927,17 +1950,22 @@ Widget _buildLyricNotes(double coverSize) {
     albumColor: _dominantColor,
     albumId: widget.playingSingleAlbumId,
     isSingleAlbum: widget.isPlayingSingleAlbum,
-    onNoteSaved: (taskId, notes) async {  // 🔧 変更: String → List<LyricNoteItem>
+    onNoteSaved: (taskId, notes) async {
+      print('💾 onNoteSaved呼び出し: taskId=$taskId, notes=${notes.length}行'); // 🔧 追加
+      
+      // 🔧 修正: まずローカル変数を更新
       setState(() {
         _taskLyricNotes[taskId] = notes;
+        
+        // 🆕 追加: _tasksリストも更新
+        final taskIndex = _tasks.indexWhere((t) => t.id == taskId);
+        if (taskIndex != -1) {
+          _tasks[taskIndex] = _tasks[taskIndex].copyWith(lyricNotes: notes);
+          print('✅ _tasksリスト更新: index=$taskIndex, notes=${notes.length}行'); // 🔧 追加
+        }
       });
       
-      // 🔧 修正: シングルアルバムの場合も更新
-      if (widget.isPlayingSingleAlbum) {
-        await _loadTaskLyricNotes();
-      } else {
-        await _loadTaskLyricNotes();
-      }
+      print('✅ PlayerScreen: Lyric Notes更新完了 (${notes.length}行)');
     },
   );
 }

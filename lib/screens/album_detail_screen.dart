@@ -98,37 +98,59 @@ Future<void> _extractColorsFromImage() async {
         }
         
         double scoreColor(PaletteColor paletteColor) {
-          final color = paletteColor.color;
-          final population = paletteColor.population;
-          final saturation = getSaturation(color);
-          final luminance = color.computeLuminance();
-          
-          double score = 0;
-          
-          if (population < 500) {
-            score -= 300;
-          }
-          
-          score += saturation * 100;
-          
-          if (saturation > 0.15) {
-            score += (population / 1000) * 100;
-          }
-          
-          if (luminance > 0.15 && luminance < 0.7) {
-            score += 30;
-          }
-          
-          if (saturation < 0.15) {
-            score -= 200;
-          }
-          
-          if (luminance > 0.8) {
-            score -= 100;
-          }
-          
-          return score;
-        }
+  final color = paletteColor.color;
+  final population = paletteColor.population; // 出現頻度
+  final saturation = getSaturation(color); // 彩度
+  final luminance = color.computeLuminance(); // 明度
+  
+  double score = 0;
+  
+  // 🔧 修正1: 出現頻度のベーススコア（より柔軟に）
+  if (population < 100) {
+    score -= 500; // 極端に少ない色は除外
+  } else if (population < 500) {
+    score -= 100; // やや少ない色は減点
+  } else if (population > 2000) {
+    score += 150; // 多い色は加点
+  } else {
+    score += 50; // 適度な出現頻度
+  }
+  
+  // 🔧 修正2: 彩度を最重視（Spotifyスタイル）
+  if (saturation > 0.4) {
+    score += 300; // 高彩度の色を大幅優遇
+  } else if (saturation > 0.25) {
+    score += 150; // 中程度の彩度も評価
+  } else if (saturation < 0.15) {
+    score -= 400; // 無彩色（白・グレー・黒）を大幅減点
+  }
+  
+  // 🔧 修正3: 明度の評価（暗すぎず明るすぎず）
+  if (luminance < 0.1) {
+    score -= 200; // 真っ黒に近い色は減点
+  } else if (luminance > 0.85) {
+    score -= 300; // 真っ白に近い色は大幅減点
+  } else if (luminance >= 0.2 && luminance <= 0.6) {
+    score += 100; // 適度な明度は加点
+  }
+  
+  // 🔧 修正4: 彩度と出現頻度の組み合わせボーナス
+  if (saturation > 0.3 && population > 1000) {
+    score += 200; // 特徴的で目立つ色にボーナス
+  }
+  
+  // 🔧 修正5: 極端な色相の調整（オレンジ・赤・青・紫を優遇）
+  final hue = HSLColor.fromColor(color).hue;
+  if ((hue >= 0 && hue <= 30) ||     // 赤
+      (hue >= 180 && hue <= 240) ||  // 青
+      (hue >= 270 && hue <= 330)) {  // 紫・マゼンタ
+    score += 50; // 視覚的に印象的な色相にボーナス
+  }
+  
+  print('🎨 AlbumDetail色スコア: $color - sat:${saturation.toStringAsFixed(2)}, lum:${luminance.toStringAsFixed(2)}, pop:$population, hue:${hue.toStringAsFixed(0)}, score:${score.toStringAsFixed(1)}');
+  
+  return score;
+}
         
         final List<PaletteColor> allColors = [
           if (paletteGenerator.vibrantColor != null) paletteGenerator.vibrantColor!,

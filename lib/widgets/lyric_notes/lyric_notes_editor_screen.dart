@@ -3,13 +3,14 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import '../../models/lyric_note_item.dart';
 import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
 
-/// Lyric Notesの編集専用画面（親子関係管理版）
 class LyricNotesEditorScreen extends StatefulWidget {
   final String taskTitle;
   final List<LyricNoteItem>? initialNotes;
   final Function(List<LyricNoteItem>) onSave;
   final VoidCallback onClose;
+  final Color backgroundColor;
 
   const LyricNotesEditorScreen({
     super.key,
@@ -17,6 +18,7 @@ class LyricNotesEditorScreen extends StatefulWidget {
     required this.initialNotes,
     required this.onSave,
     required this.onClose,
+    this.backgroundColor = Colors.black, // 🔧 修正: const Color(0xFF121212) → Colors.black
   });
 
   @override
@@ -337,16 +339,32 @@ controller.addListener(() {
 
   /// ノートを保存
 void _saveNotes() {
-  final nonEmptyNotes = _notes
-      .where((note) => note.text.trim().isNotEmpty && note.text != _dummyChar) // 🔧 修正: ダミー文字を除外
-      .toList();
+  final notesToSave = <LyricNoteItem>[];
   
-  print('💾 保存実行: ${nonEmptyNotes.length}行');
-  for (var note in nonEmptyNotes) {
-    print('  ${note.toString()}');
+  // 最後の空行（新規入力用）を除外したリストを作成
+  for (int i = 0; i < _notes.length; i++) {
+    final note = _notes[i];
+    
+    // 最後の行で、かつ空の場合はスキップ（新規入力用の空行）
+    if (i == _notes.length - 1 && note.text.trim().isEmpty) {
+      continue;
+    }
+    
+    // それ以外の行を追加
+    notesToSave.add(note);
   }
   
-  widget.onSave(nonEmptyNotes);
+  // 🔧 修正: デバッグログを追加
+  if (notesToSave.isEmpty) {
+    print('💾 保存実行: 空リスト（全削除済み）');
+  } else {
+    print('💾 保存実行: ${notesToSave.length}行');
+    for (var note in notesToSave) {
+      print('  ${note.toString()}');
+    }
+  }
+  
+  widget.onSave(notesToSave);
 }
 
   /// LISTボタンの処理
@@ -973,44 +991,102 @@ String _getHintText(int visibleIndex) {
     return 'Listify';
   }
   
-  // 子（Level 2）でリスト化されていて空の場合
-  if (note.text.isEmpty && note.level == 2 && note.isCollapsed) {
+  // 🔧 修正: Level 2（子）でリスト化されていて空の場合
+  final hasGrandchildren = _notes.any((n) => n.parentId == note.id && n.level == 3);
+  final isLevel2Listified = note.level == 2 && (hasGrandchildren || note.isCollapsed == true); // 🔧 修正
+  
+  if (note.text.isEmpty && isLevel2Listified) {
     return 'Listify';
   }
   
   // 子（Level 2）で通常の子の場合
-  if (note.text.isEmpty && note.level == 2 && !note.isCollapsed && note.parentId != null) {
-    // この親の子要素（Level 2）を取得
-    final siblings = _notes.where((n) => 
-      n.parentId == note.parentId && n.level == 2
-    ).toList();
+  if (note.text.isEmpty && note.level == 2 && note.parentId != null) {
+    // 親が展開中（isCollapsed == false）かチェック
+    final parent = _notes.firstWhere(
+      (n) => n.id == note.parentId,
+      orElse: () => note,
+    );
     
-    // この行が、この親の最初の子かつ全ての兄弟が空の場合のみ表示
-    final isFirstChild = siblings.isNotEmpty && siblings.first.id == note.id;
-    final allSiblingsEmpty = siblings.every((n) => n.text.isEmpty);
-    
-    if (isFirstChild && allSiblingsEmpty) {
-      return 'Empty list.';
+    // 親が展開中の場合のみプレースホルダを表示
+    if (parent.isCollapsed == false) {
+      // この親の子要素（Level 2）を取得
+      final siblings = _notes.where((n) => 
+        n.parentId == note.parentId && n.level == 2
+      ).toList();
+      
+      // この行が、この親の最初の子かつ全ての兄弟が空の場合のみ表示
+      final isFirstChild = siblings.isNotEmpty && siblings.first.id == note.id;
+      final allSiblingsEmpty = siblings.every((n) => n.text.isEmpty);
+      
+      if (isFirstChild && allSiblingsEmpty) {
+        return 'Empty list.';
+      }
     }
   }
   
   // 孫（Level 3）の場合
   if (note.text.isEmpty && note.level == 3 && note.parentId != null) {
-    // この親の孫要素（Level 3）を取得
-    final siblings = _notes.where((n) => 
-      n.parentId == note.parentId && n.level == 3
-    ).toList();
+    // 親（Level 2）が展開中（isCollapsed == false）かチェック
+    final parent = _notes.firstWhere(
+      (n) => n.id == note.parentId,
+      orElse: () => note,
+    );
     
-    // この行が、この親の最初の孫かつ全ての兄弟が空の場合のみ表示
-    final isFirstChild = siblings.isNotEmpty && siblings.first.id == note.id;
-    final allSiblingsEmpty = siblings.every((n) => n.text.isEmpty);
-    
-    if (isFirstChild && allSiblingsEmpty) {
-      return 'Empty list.';
+    // 親が展開中の場合のみプレースホルダを表示
+    if (parent.isCollapsed == false) {
+      // この親の孫要素（Level 3）を取得
+      final siblings = _notes.where((n) => 
+        n.parentId == note.parentId && n.level == 3
+      ).toList();
+      
+      // この行が、この親の最初の孫かつ全ての兄弟が空の場合のみ表示
+      final isFirstChild = siblings.isNotEmpty && siblings.first.id == note.id;
+      final allSiblingsEmpty = siblings.every((n) => n.text.isEmpty);
+      
+      if (isFirstChild && allSiblingsEmpty) {
+        return 'Empty list.';
+      }
     }
   }
   
   return '';
+}
+
+/// ヒントテキストを表示すべきか判定
+bool _shouldShowHint(int visibleIndex) {
+  final realIndex = _getRealIndex(visibleIndex);
+  if (realIndex == -1) return false;
+  
+  if (visibleIndex >= _controllers.length) return false;
+  
+  final controllerText = _controllers[visibleIndex].text;
+  
+  // 🔧 修正: コントローラーのテキストから判定
+  // ダミー文字のみ、または完全に空の場合のみヒントを表示
+  final cleanText = controllerText == _dummyChar ? '' : controllerText;
+  
+  return cleanText.isEmpty;
+}
+
+/// レベルに応じたヒントテキストの左パディングを取得
+double _getHintLeftPadding(int level, bool isLevel2Listified) {
+  if (level == 0) {
+    return 0; // インデントなし
+  } else if (level == 1) {
+    return 20; // 親の矢印分
+  } else if (level == 2) {
+    if (isLevel2Listified) {
+      // リスト化された子の場合: 親のインデント(20) + 自身の矢印(20)
+      return 40;
+    } else {
+      // 通常の子の場合: 親のインデント(20)のみ
+      return 20;
+    }
+  } else if (level == 3) {
+    // 孫の場合: 親(20) + 子(20)
+    return 40;
+  }
+  return 0;
 }
 
   Widget _buildLine(int visibleIndex) {
@@ -1026,20 +1102,17 @@ String _getHintText(int visibleIndex) {
   
   // Level 2 がリスト化されているかを判定
   final hasGrandchildren = _notes.any((n) => n.parentId == note.id && n.level == 3);
-  final isLevel2Listified = note.level == 2 && (hasGrandchildren || note.isCollapsed == true);
+  final isLevel2Listified = note.level == 2 && (hasGrandchildren || note.isCollapsed == true); 
   
   return Padding(
     key: ValueKey('line_${note.id}'),
     padding: const EdgeInsets.only(bottom: 2),
     child: GestureDetector(
-      // 🆕 追加：行全体をタップ可能に
       behavior: HitTestBehavior.translucent,
       onTap: () {
-        // タップされた行にフォーカスを移動
         if (visibleIndex < _focusNodes.length) {
           _focusNodes[visibleIndex].requestFocus();
           
-          // カーソルを先頭に配置
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (visibleIndex < _controllers.length) {
               _controllers[visibleIndex].selection = 
@@ -1048,207 +1121,352 @@ String _getHintText(int visibleIndex) {
           });
         }
       },
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Stack(
         children: [
-          // 親（Level 1）のくの字記号
-          if (note.level == 1) ...[
-            GestureDetector(
-              onTap: () {
-                print('🎯 矢印タップ: level=1');
-                _toggleCollapse(visibleIndex);
-              },
-              child: Container(
-                width: 20,
-                height: 16 * 1.3,
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  note.isCollapsed ? '→' : '↓',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    height: 1.3,
-                    fontWeight: FontWeight.w400,
-                    fontFamily: 'Courier',
-                  ),
-                ),
-              ),
-            ),
-          ],
-          
-          // Level 2（子）の場合
-          if (note.level == 2) ...[
-            const SizedBox(width: 20), // 親の矢印分インデント
-            
-            // リスト化された子の場合は矢印を表示
-            if (isLevel2Listified) ...[
-              GestureDetector(
-                onTap: () {
-                  print('🎯 矢印タップ: level=2, isCollapsed=${note.isCollapsed}, text="${note.text}"');
-                  _toggleCollapse(visibleIndex);
-                },
-                child: Container(
-                  width: 20,
-                  height: 16 * 1.3,
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    note.isCollapsed ? '→' : '↓',
-                    style: const TextStyle(
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start, // 🔧 修正: center → start（元に戻す）
+            children: [
+              // 🔧 修正: 親（Level 1）の矢印
+              // 🔧 修正: 親（Level 1）の矢印
+if (note.level == 1) ...[
+  GestureDetector(
+    onTap: () {
+      print('🎯 矢印タップ: level=1');
+      _toggleCollapse(visibleIndex);
+    },
+    child: Container(
+      width: 20,
+      height: 16 * 1.3,
+      // 🔧 修正: padding を削除（または top: 0）
+      child: Text(
+        note.isCollapsed ? '→' : '↓',
+        style: GoogleFonts.inter(
+          color: Colors.white,
+          fontSize: 16,
+          height: 1.3,
+          fontWeight: FontWeight.w700,
+        ).copyWith(
+          fontFamilyFallback: const ['Hiragino Sans'],
+        ),
+      ),
+    ),
+  ),
+],
+
+// Level 2（子）の場合
+if (note.level == 2) ...[
+  const SizedBox(width: 20),
+  
+  // 🔧 修正: リスト化された子の矢印
+  if (isLevel2Listified) ...[
+    GestureDetector(
+      onTap: () {
+        print('🎯 矢印タップ: level=2, isCollapsed=${note.isCollapsed}, text="${note.text}"');
+        _toggleCollapse(visibleIndex);
+      },
+      child: Container(
+        width: 20,
+        height: 16 * 1.3,
+        // 🔧 修正: padding を削除（または top: 0）
+        child: Text(
+          note.isCollapsed ? '→' : '↓',
+          style: GoogleFonts.inter(
+            color: Colors.white,
+            fontSize: 16,
+            height: 1.3,
+            fontWeight: FontWeight.w700,
+          ).copyWith(
+            fontFamilyFallback: const ['Hiragino Sans'],
+          ),
+        ),
+      ),
+    ),
+  ],
+],
+              
+              // Level 3（孫）の場合、親＋子の矢印分だけインデント
+              if (note.level == 3)
+                const SizedBox(width: 40),
+              
+              // テキスト入力
+              Expanded(
+                child: Focus(
+                  onKeyEvent: (node, event) {
+                    // ... (既存のBackspace処理コード、変更なし)
+                    if (event.logicalKey == LogicalKeyboardKey.backspace && 
+                        event is KeyDownEvent) {
+                      
+                      final controller = _controllers[visibleIndex];
+                      final currentNote = _notes[realIndex];
+                      
+                      print('🔍 Backspace押下: visibleIndex=$visibleIndex, level=${currentNote.level}, text="${currentNote.text}", isEmpty=${controller.text.isEmpty}');
+                      
+                      if (visibleIndex == 0 && controller.text.isEmpty) {
+                        print('🔍 最初の行で空: level=${currentNote.level}');
+                        
+                        if (currentNote.level == 1) {
+                          print('🔍 最初の親（Level 1）→ 子孫を削除してLevel 0に変換');
+                          _isUpdating = true;
+                          
+                          final nodesToDelete = <String>[];
+                          _collectDescendants(currentNote.id, nodesToDelete);
+                          
+                          if (nodesToDelete.isNotEmpty) {
+                            print('🔍 削除する子孫: ${nodesToDelete.length}個');
+                            _notes.removeWhere((note) => nodesToDelete.contains(note.id));
+                          }
+                          
+                          final updatedRealIndex = _notes.indexWhere((n) => n.id == currentNote.id);
+                          if (updatedRealIndex != -1) {
+                            _notes[updatedRealIndex] = _notes[updatedRealIndex].copyWith(level: 0, parentId: null);
+                          }
+                          
+                          setState(() {
+                            _rebuildControllers();
+                          });
+                          
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            _isUpdating = false;
+                            if (visibleIndex < _focusNodes.length) {
+                              _focusNodes[visibleIndex].requestFocus();
+                              
+                              WidgetsBinding.instance.addPostFrameCallback((_) {
+                                if (visibleIndex < _controllers.length) {
+                                  _controllers[visibleIndex].selection = 
+                                      const TextSelection.collapsed(offset: 0);
+                                }
+                              });
+                            }
+                          });
+                          
+                          return KeyEventResult.handled;
+                        }
+                        return KeyEventResult.ignored;
+                      }
+                      
+                      if (currentNote.level == 1 && controller.text.isEmpty) {
+                        print('🔍 親（Level 1）で空 → 削除処理開始');
+                        
+                        if (visibleIndex > 0) {
+                          print('🔍 _handleBackspace呼び出し（親削除）');
+                          _handleBackspace(visibleIndex);
+                          return KeyEventResult.handled;
+                        }
+                      }
+                      
+                      if (currentNote.level == 2 && currentNote.isCollapsed && controller.text.isEmpty) {
+                        _isUpdating = true;
+                        
+                        _notes[realIndex] = currentNote.copyWith(isCollapsed: false);
+                        
+                        setState(() {
+                          _rebuildControllers();
+                        });
+                        
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          _isUpdating = false;
+                          if (visibleIndex < _focusNodes.length) {
+                            _focusNodes[visibleIndex].requestFocus();
+                            
+                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                              if (visibleIndex < _controllers.length) {
+                                _controllers[visibleIndex].selection = 
+                                    const TextSelection.collapsed(offset: 0);
+                              }
+                            });
+                          }
+                        });
+                        
+                        return KeyEventResult.handled;
+                      }
+                      
+                      if (controller.text.isEmpty && 
+                          controller.selection.baseOffset == 0 && 
+                          visibleIndex > 0) {
+                        print('🔍 _handleBackspace呼び出し: visibleIndex=$visibleIndex, level=${currentNote.level}');
+                        _handleBackspace(visibleIndex);
+                        return KeyEventResult.handled;
+                      }
+                    }
+                    return KeyEventResult.ignored;
+                  },
+                  child: TextField(
+                    controller: _controllers[visibleIndex],
+                    focusNode: _focusNodes[visibleIndex],
+                    style: GoogleFonts.inter(
                       color: Colors.white,
                       fontSize: 16,
                       height: 1.3,
                       fontWeight: FontWeight.w400,
-                      fontFamily: 'Courier',
+                      letterSpacing: 0,
+                      // 🗑️ 削除: leadingDistribution
+                    ).copyWith(
+                      fontFamilyFallback: const ['Hiragino Sans'],
+                    ),
+                    decoration: const InputDecoration(
+                      border: InputBorder.none,
+                      contentPadding: EdgeInsets.zero,
+                      isDense: true,
+                    ),
+                    maxLines: null,
+                    keyboardType: TextInputType.text,
+                    onSubmitted: (value) => _onSubmitted(visibleIndex),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          
+          // カスタムヒント表示
+AnimatedBuilder(
+  animation: _controllers[visibleIndex],
+  builder: (context, child) {
+    final controllerText = _controllers[visibleIndex].text;
+    final cleanText = controllerText == _dummyChar ? '' : controllerText;
+    
+    if (cleanText.isEmpty && hintText.isNotEmpty) {
+      return Positioned(
+        left: _getHintLeftPadding(note.level, isLevel2Listified),
+        top: 0, // 🔧 修正: 1 → 0
+        child: IgnorePointer(
+          child: Text(
+            hintText,
+            style: GoogleFonts.inter(
+              color: Colors.white.withOpacity(0.3),
+              fontSize: 16,
+              height: 1.3,
+              fontWeight: FontWeight.w400,
+              letterSpacing: 0,
+            ).copyWith(
+              fontFamilyFallback: const ['Hiragino Sans'],
+            ),
+          ),
+        ),
+      );
+    }
+    
+    return const SizedBox.shrink();
+  },
+),
+        ],
+      ),
+    ),
+  );
+}
+  @override
+Widget build(BuildContext context) {
+  return Material(
+    color: widget.backgroundColor,
+    child: SafeArea(
+      child: Column(
+        children: [
+          // ヘッダー
+// ヘッダー
+Padding(
+  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+  child: SizedBox(
+    height: 36,
+    child: Stack(
+      alignment: Alignment.center,
+      children: [
+        // 中央: タスク名（絶対的な中央に固定）
+        Center(
+          child: Text(
+            widget.taskTitle,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.w900,
+              fontFamily: 'Hiragino Sans',
+            ),
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        
+        // 左: 戻るボタン（下向きのくの字）
+        Positioned(
+          left: 0,
+          child: IconButton(
+            icon: const Icon(
+              Icons.keyboard_arrow_down, // 🔧 修正: arrow_back → keyboard_arrow_down
+              color: Colors.white,
+              size: 32, // 🔧 修正: 28 → 32（少し大きく）
+            ),
+            onPressed: _saveAndClose,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+          ),
+        ),
+        
+        // 右: ゴミ箱ボタン + Listボタン
+        Positioned(
+          right: 0,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // ゴミ箱ボタン
+              IconButton(
+                icon: const Icon(
+                  Icons.delete_outline,
+                  color: Colors.white,
+                  size: 24,
+                ),
+                onPressed: _showDeleteAllConfirmation,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+              
+              const SizedBox(width: 12),
+              
+              // Listボタン（緑の円 + アイコンのみ）
+              GestureDetector(
+                onTap: _onListifyButtonPressed,
+                child: Container(
+                  width: 36,
+                  height: 36,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF1DB954),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Center(
+                    child: Icon(
+                      Icons.format_list_bulleted,
+                      color: Colors.white,
+                      size: 20,
                     ),
                   ),
                 ),
               ),
             ],
-          ],
-          
-          // Level 3（孫）の場合、親＋子の矢印分だけインデント
-          if (note.level == 3)
-            const SizedBox(width: 40), // 20px（親） + 20px（子）
-
-          
-          // テキスト入力
+          ),
+        ),
+      ],
+    ),
+  ),
+),
+          // 編集エリア（既存のコード）
           Expanded(
-            child: Focus(
-  onKeyEvent: (node, event) {
-  // Backspaceが押された時
-  if (event.logicalKey == LogicalKeyboardKey.backspace && 
-      event is KeyDownEvent) {
-    
-    final controller = _controllers[visibleIndex];
-    final currentNote = _notes[realIndex];
-    
-    print('🔍 Backspace押下: visibleIndex=$visibleIndex, level=${currentNote.level}, text="${currentNote.text}", isEmpty=${controller.text.isEmpty}');
-    
-    // 🔧 修正：最初の行で空の場合
-    if (visibleIndex == 0 && controller.text.isEmpty) {
-      print('🔍 最初の行で空: level=${currentNote.level}');
-      
-      if (currentNote.level == 1) {
-        print('🔍 最初の親（Level 1）→ 子孫を削除してLevel 0に変換');
-        _isUpdating = true;
-        
-        // 🆕 追加：子孫を削除
-        final nodesToDelete = <String>[];
-        _collectDescendants(currentNote.id, nodesToDelete);
-        
-        if (nodesToDelete.isNotEmpty) {
-          print('🔍 削除する子孫: ${nodesToDelete.length}個');
-          _notes.removeWhere((note) => nodesToDelete.contains(note.id));
-        }
-        
-        // 親をLevel 0に変換
-        final updatedRealIndex = _notes.indexWhere((n) => n.id == currentNote.id);
-        if (updatedRealIndex != -1) {
-          _notes[updatedRealIndex] = _notes[updatedRealIndex].copyWith(level: 0, parentId: null);
-        }
-        
-        setState(() {
-          _rebuildControllers();
-        });
-        
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _isUpdating = false;
-          if (visibleIndex < _focusNodes.length) {
-            _focusNodes[visibleIndex].requestFocus();
-            
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (visibleIndex < _controllers.length) {
-                _controllers[visibleIndex].selection = 
-                    const TextSelection.collapsed(offset: 0);
-              }
-            });
-          }
-        });
-        
-        return KeyEventResult.handled;
-      }
-      return KeyEventResult.ignored;
-    }
-    
-    // 親（Level 1）で空の場合 → 子孫も含めて削除
-    if (currentNote.level == 1 && controller.text.isEmpty) {
-      print('🔍 親（Level 1）で空 → 削除処理開始');
-      
-      // visibleIndexが0より大きい場合のみ削除
-      if (visibleIndex > 0) {
-        print('🔍 _handleBackspace呼び出し（親削除）');
-        _handleBackspace(visibleIndex);
-        return KeyEventResult.handled;
-      }
-    }
-    
-    // 🆕 追加：子（Level 2）でリスト化されていて空の場合 → 通常の子に戻る
-    if (currentNote.level == 2 && currentNote.isCollapsed && controller.text.isEmpty) {
-      _isUpdating = true;
-      
-      _notes[realIndex] = currentNote.copyWith(isCollapsed: false);
-      
-      setState(() {
-        _rebuildControllers();
-      });
-      
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _isUpdating = false;
-        if (visibleIndex < _focusNodes.length) {
-          _focusNodes[visibleIndex].requestFocus();
-          
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (visibleIndex < _controllers.length) {
-              _controllers[visibleIndex].selection = 
-                  const TextSelection.collapsed(offset: 0);
-            }
-          });
-        }
-      });
-      
-      return KeyEventResult.handled;
-    }
-    
-    // 2行目以降で、既にテキストが空の場合
-    if (controller.text.isEmpty && 
-        controller.selection.baseOffset == 0 && 
-        visibleIndex > 0) {
-      print('🔍 _handleBackspace呼び出し: visibleIndex=$visibleIndex, level=${currentNote.level}');
-      _handleBackspace(visibleIndex);
-      return KeyEventResult.handled;
-    }
-  }
-  return KeyEventResult.ignored;
-},
-              child: TextField(
-                controller: _controllers[visibleIndex],
-                focusNode: _focusNodes[visibleIndex],
-                // 🔧 修正：onTap を削除（外側の GestureDetector で処理）
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  height: 1.3,
-                  fontWeight: FontWeight.w400,
-                  fontFamily: 'Courier',
-                  letterSpacing: 0,
+            child: GestureDetector(
+              onTap: () {
+                FocusScope.of(context).unfocus();
+              },
+              child: Container(
+                color: Colors.transparent,
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: ListView.builder(
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                        itemCount: _controllers.length,
+                        itemBuilder: (context, index) {
+                          return _buildLine(index);
+                        },
+                      ),
+                    ),
+                  ],
                 ),
-                decoration: InputDecoration(
-                  hintText: hintText,
-                  hintStyle: TextStyle(
-                    color: Colors.white.withOpacity(0.3),
-                    fontSize: 16,
-                    height: 1.3,
-                    fontWeight: FontWeight.w400,
-                    fontFamily: 'Courier',
-                    letterSpacing: 0,
-                  ),
-                  border: InputBorder.none,
-                  contentPadding: EdgeInsets.zero,
-                  isDense: true,
-                ),
-                maxLines: null,
-                keyboardType: TextInputType.text,
-                onSubmitted: (value) => _onSubmitted(visibleIndex),
               ),
             ),
           ),
@@ -1257,109 +1475,95 @@ String _getHintText(int visibleIndex) {
     ),
   );
 }
-  @override
-  Widget build(BuildContext context) {
-    final visibleNotes = _getVisibleNotes();
-    
-    return Material(
-      color: Colors.black,
-      child: SafeArea(
-        child: Column(
-          children: [
-            // ヘッダー
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: SizedBox(
-                height: 32,
-                child: Stack(
-                  children: [
-                    // 左: 戻るボタン
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: IconButton(
-                        icon: const Icon(
-                          Icons.keyboard_arrow_down,
-                          color: Colors.white,
-                          size: 32,
-                        ),
-                        onPressed: () {
-                          _saveNotes();
-                          widget.onClose();
-                        },
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                      ),
-                    ),
-                    
-                    // 中央: タスク名
-Center(
-  child: Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 48),
-    child: Text(
-      widget.taskTitle,
-      style: const TextStyle(
-        color: Colors.white,
-        fontSize: 16, // 🔧 修正: 14 → 16
-        fontWeight: FontWeight.w900, // 🔧 修正: w600 → w900
-        fontFamily: 'Hiragino Sans', // 🔧 修正: Courier → Hiragino Sans
-      ),
-      textAlign: TextAlign.center,
-      maxLines: 2,
-      overflow: TextOverflow.ellipsis,
-    ),
-  ),
-),
-                    
-                    // 右: LISTボタン
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: Padding(
-                        padding: const EdgeInsets.only(right: 8, top: 4),
-                        child: GestureDetector(
-                          onTap: _makeList,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: Colors.green,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Text(
-                              'LIST',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                fontFamily: 'Courier',
-                                letterSpacing: 0,
-                                height: 1.0,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            
-            // 入力エリア
-            Expanded(
-              child: SingleChildScrollView(
-                controller: _scrollController,
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    for (int i = 0; i < visibleNotes.length; i++)
-                      _buildLine(i),
-                  ],
-                ),
-              ),
-            ),
-          ],
+
+/// 🆕 新規追加: 全削除の確認ダイアログを表示
+void _showDeleteAllConfirmation() {
+  showDialog(
+    context: context,
+    builder: (BuildContext context) {
+      return AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
         ),
-      ),
-    );
-  }
+        title: const Text(
+          'すべてのメモを削除',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        content: const Text(
+          'このタスクのメモをすべて削除しますか？\nこの操作は取り消せません。',
+          style: TextStyle(
+            color: Colors.white70,
+            fontSize: 16,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop(); // ダイアログを閉じる
+            },
+            child: const Text(
+              'キャンセル',
+              style: TextStyle(
+                color: Colors.white70,
+                fontSize: 16,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop(); // ダイアログを閉じる
+              _deleteAllNotes(); // 全削除を実行
+            },
+            child: const Text(
+              'はい',
+              style: TextStyle(
+                color: Color(0xFFEF4444),
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      );
+    },
+  );
+}
+
+/// 🆕 新規追加: 全メモを削除
+void _deleteAllNotes() {
+  setState(() {
+    // すべてのノートをクリア
+    _notes.clear();
+    
+    // 新しい空行を1つだけ追加
+    _notes.add(LyricNoteItem(text: '', level: 0, parentId: null));
+    
+    // コントローラーを再構築
+    _rebuildControllers();
+  });
+  
+  // 🔧 修正: 空リストを明示的に保存
+  widget.onSave([]); // 空リストを保存
+  
+  print('🗑️ すべてのメモを削除しました（空リスト保存）');
+}
+
+/// 🆕 新規追加: Listボタン押下時の処理
+void _onListifyButtonPressed() {
+  _makeList();
+}
+
+/// 🆕 新規追加: 保存して閉じる
+void _saveAndClose() {
+  _saveNotes();
+  widget.onClose();
+}
+
+
+
 }

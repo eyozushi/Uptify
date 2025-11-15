@@ -21,91 +21,24 @@ class LyricNotesPreview extends StatelessWidget {
     required this.onEdit, // 🆕 追加
   });
 
-  /// プレビューテキスト生成
-  String _getPreviewText() {
-    if (notes == null || notes!.isEmpty) {
-      return 'タップして\nリリックを追加...';
-    }
-    
-    // 表示すべき行を抽出（最大4行、折りたたみ考慮）
-    final visibleNotes = <LyricNoteItem>[];
-    
-    for (int i = 0; i < notes!.length; i++) {
-      if (visibleNotes.length >= 4) break;
-      
-      final note = notes![i];
-      
-      // 空行はスキップ
-      if (note.text.trim().isEmpty) continue;
-      
-      // この行を表示すべきか判定（折りたたみ考慮）
-      if (_shouldShowLine(i)) {
-        visibleNotes.add(note);
-      }
-    }
-    
-    if (visibleNotes.isEmpty) {
-      return 'タップして\nリリックを追加...';
-    }
-    
-    // フォントサイズに応じたプレビュー行を生成
-    final previewLines = visibleNotes.map((note) {
-      String prefix = '';
-      
-      // Level 1には三角マークを追加
-      if (note.level == 1) {
-        final isExpanded = !note.isCollapsed;
-        prefix = isExpanded ? '▼ ' : '► ';
-      }
-      // Level 2以上にはインデントを追加
-      else if (note.level == 2) {
-        prefix = '  ';
-      } else if (note.level == 3) {
-        prefix = '    ';
-      }
-      
-      return prefix + note.text;
-    }).join('\n');
-    
-    // 100文字以上なら省略
-    if (previewLines.length > 100) {
-      return '${previewLines.substring(0, 100)}...';
-    }
-    
-    return previewLines;
-  }
 
-  /// 指定インデックスの行を表示すべきか判定（折りたたみ考慮）
-  bool _shouldShowLine(int index) {
-    if (index == 0) return true;
-    
-    final currentLevel = notes![index].level;
-    
-    // 親レベル（Level 1）は常に表示
-    if (currentLevel == 1) return true;
-    
-    // 親をさかのぼって、折りたたまれている親がいないかチェック
-    for (int i = index - 1; i >= 0; i--) {
-      final note = notes![i];
-      
-      // より浅いレベル（親）を見つけた
-      if (note.level < currentLevel) {
-        // その親が折りたたまれていたら、この行は非表示
-        if (note.isCollapsed) {
-          return false;
-        }
-        
-        // さらに上の親を探す必要があれば継続
-        if (note.level > 1) {
-          continue;
-        }
-        
-        break;
-      }
-    }
-    
-    return true;
+/// プレビューに表示する行を取得（Level 0 と Level 1 のみ、最大4行、空白行を除外）
+List<LyricNoteItem> _getPreviewLines() {
+  if (notes == null || notes!.isEmpty) {
+    return [];
   }
+  
+  // Level 0（通常メモ）と Level 1（親）のみを抽出し、空白行を除外
+  final previewNotes = notes!
+      .where((note) => 
+        (note.level == 0 || note.level == 1) && 
+        note.text.trim().isNotEmpty  // 🔧 追加: 空白行を除外
+      )
+      .take(4) // 最大4行
+      .toList();
+  
+  return previewNotes;
+}
 
   @override
 Widget build(BuildContext context) {
@@ -131,45 +64,50 @@ Widget build(BuildContext context) {
                 'Lyrics',
                 style: GoogleFonts.inter(
                   color: Colors.white70,
-                  fontSize: 12,
+                  fontSize: 16,
                   fontWeight: FontWeight.w800,
                   letterSpacing: 0.4,
                 ),
               ),
               
               // 編集ボタン（白ペン・緑円）
-              GestureDetector(
-                onTap: onEdit,
-                child: Container(
-                  width: 36,
-                  height: 36,
-                  decoration: const BoxDecoration(
-                    color: Colors.green,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Center(
-                    child: Icon(
-                      Icons.edit,
-                      color: Colors.white,
-                      size: 18,
-                    ),
-                  ),
-                ),
-              ),
+GestureDetector(
+  onTap: onEdit, // ← この onEdit が正しく LyricNotesExpandedView を開いているか確認
+  child: Container(
+    width: 36,
+    height: 36,
+    decoration: const BoxDecoration(
+      color: Colors.green,
+      shape: BoxShape.circle,
+    ),
+    child: const Center(
+      child: Icon(
+        Icons.edit,
+        color: Colors.white,
+        size: 18,
+      ),
+    ),
+  ),
+),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8), // 🔧 修正: 12 → 8（間隔を詰める）
           
           // プレビューテキスト
-          RichText( // 🔧 修正: Text → RichText に変更
+          RichText(
             maxLines: 4,
             overflow: TextOverflow.ellipsis,
+            textHeightBehavior: const TextHeightBehavior(
+              applyHeightToFirstAscent: false, // 🔧 修正: 最初の行の上部余白を削除
+              applyHeightToLastDescent: false,
+              leadingDistribution: TextLeadingDistribution.even,
+            ),
             text: TextSpan(
-              children: _buildPreviewTextSpans(), // 🆕 追加
+              children: _buildPreviewTextSpans(),
             ),
           ),
           
-          const SizedBox(height: 8),
+          const SizedBox(height: 4), // 🔧 修正: 8 → 4（間隔を詰める）
         ],
       ),
     ),
@@ -178,40 +116,9 @@ Widget build(BuildContext context) {
 
 /// プレビューテキストをTextSpanのリストとして生成（完了状態に応じて色分け）
 List<TextSpan> _buildPreviewTextSpans() {
-  if (notes == null || notes!.isEmpty) {
-    return [
-      TextSpan(
-        text: 'タップして\nリリックを追加...',
-        style: GoogleFonts.inter(
-          color: Colors.white.withOpacity(0.5),
-          fontSize: 20,
-          fontWeight: FontWeight.w700,
-          height: 1.6,
-        ).copyWith(
-          fontFamilyFallback: const ['Hiragino Sans'],
-        ),
-      ),
-    ];
-  }
+  final previewLines = _getPreviewLines();
   
-  // 表示すべき行を抽出（最大4行、折りたたみ考慮）
-  final visibleNotes = <LyricNoteItem>[];
-  
-  for (int i = 0; i < notes!.length; i++) {
-    if (visibleNotes.length >= 4) break;
-    
-    final note = notes![i];
-    
-    // 空行はスキップ
-    if (note.text.trim().isEmpty) continue;
-    
-    // この行を表示すべきか判定（折りたたみ考慮）
-    if (_shouldShowLine(i)) {
-      visibleNotes.add(note);
-    }
-  }
-  
-  if (visibleNotes.isEmpty) {
+  if (previewLines.isEmpty) {
     return [
       TextSpan(
         text: 'タップして\nリリックを追加...',
@@ -230,36 +137,30 @@ List<TextSpan> _buildPreviewTextSpans() {
   // 各行をTextSpanとして生成
   final spans = <TextSpan>[];
   
-  for (int i = 0; i < visibleNotes.length; i++) {
-    final note = visibleNotes[i];
+  for (int i = 0; i < previewLines.length; i++) {
+    final note = previewLines[i];
     
     String prefix = '';
     
-    // Level 1には三角マークを追加
+    // Level 1（親）には矢印を追加
     if (note.level == 1) {
-      final isExpanded = !note.isCollapsed;
-      prefix = isExpanded ? '▼ ' : '► ';
-    }
-    // Level 2以上にはインデントを追加
-    else if (note.level == 2) {
-      prefix = '  ';
-    } else if (note.level == 3) {
-      prefix = '    ';
+      prefix = note.isCollapsed ? '→ ' : '↓ ';
     }
     
     final lineText = prefix + note.text;
     
-    // 🆕 追加: 完了状態に応じた色
-    final textColor = note.isCompleted ? Colors.white : Colors.black;
+   // 完了状態に応じて文字色を変更
+final textColor = note.isCompleted ? Colors.white : Colors.grey[900]; // 🔧 修正: Colors.grey[800] → Colors.grey[900]
     
     spans.add(
       TextSpan(
-        text: i < visibleNotes.length - 1 ? '$lineText\n' : lineText,
+        text: i < previewLines.length - 1 ? '$lineText\n' : lineText,
         style: GoogleFonts.inter(
-          color: textColor, // 🔧 修正: 完了状態に応じた色
+          color: textColor,
           fontSize: 20,
           fontWeight: FontWeight.w700,
           height: 1.6,
+          // 🗑️ 削除: leadingDistribution（TextSpanではサポートされていない）
         ).copyWith(
           fontFamilyFallback: const ['Hiragino Sans'],
         ),

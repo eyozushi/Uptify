@@ -56,42 +56,73 @@ class _LyricNotesExpandedViewState extends State<LyricNotesExpandedView> {
   }
 
   /// 編集ページを開く
-  void _openEditor() {
-    Navigator.of(context).push(
-      PageRouteBuilder(
-        fullscreenDialog: true,
-        opaque: true,
-        pageBuilder: (context, animation, secondaryAnimation) {
-          return SlideTransition(
-            position: Tween<Offset>(
-              begin: const Offset(0, 1),
-              end: Offset.zero,
-            ).animate(CurvedAnimation(
-              parent: animation,
-              curve: Curves.easeInOut,
-            )),
-            child: LyricNotesEditorScreen(
-              taskTitle: widget.taskTitle,
-              initialNotes: _notes,
-              onSave: (notes) {
-                setState(() {
-                  _notes = notes;
-                  // 展開状態を更新
-                  _expandedStates.clear();
-                  for (int i = 0; i < _notes.length; i++) {
-                    _expandedStates[i] = !_notes[i].isCollapsed;
-                  }
-                });
-                widget.onSave(notes);
-              },
-              onClose: () => Navigator.of(context).pop(),
-            ),
-          );
-        },
-        transitionDuration: const Duration(milliseconds: 300),
-      ),
-    );
+void _openEditor() {
+  Navigator.of(context).push(
+    PageRouteBuilder(
+      fullscreenDialog: true,
+      opaque: true,
+      pageBuilder: (context, animation, secondaryAnimation) {
+        return SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0, 1),
+            end: Offset.zero,
+          ).animate(CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeInOut,
+          )),
+          child: LyricNotesEditorScreen(
+            taskTitle: widget.taskTitle,
+            initialNotes: _notes,
+            backgroundColor: Colors.black, // 🔧 追加: 黒色を明示的に指定
+            onSave: (notes) {
+              setState(() {
+                _notes = notes;
+                
+                // 展開状態も更新
+                _expandedStates.clear();
+                for (int i = 0; i < _notes.length; i++) {
+                  _expandedStates[i] = !_notes[i].isCollapsed;
+                }
+              });
+              
+              if (notes.isEmpty) {
+                print('🔍 ExpandedView: 空リストを受信（全削除）');
+              } else {
+                print('🔍 ExpandedView: ${notes.length}行を受信');
+              }
+              
+              widget.onSave(notes);
+            },
+            onClose: () => Navigator.of(context).pop(),
+          ),
+        );
+      },
+      transitionDuration: const Duration(milliseconds: 300),
+    ),
+  );
+}
+
+@override
+void didUpdateWidget(LyricNotesExpandedView oldWidget) {
+  super.didUpdateWidget(oldWidget);
+  
+  // 🆕 追加: 親からのデータが更新された場合、ローカル変数も更新
+  if (widget.initialNotes != oldWidget.initialNotes) {
+    setState(() {
+      _notes = widget.initialNotes != null && widget.initialNotes!.isNotEmpty
+          ? List.from(widget.initialNotes!)
+          : [];
+      
+      // 展開状態を再初期化
+      _expandedStates.clear();
+      for (int i = 0; i < _notes.length; i++) {
+        _expandedStates[i] = !_notes[i].isCollapsed;
+      }
+      
+      print('🔍 ExpandedView: データ更新 (${_notes.length}行)');
+    });
   }
+}
 
   /// くの字タップで展開/折りたたみ
 void _toggleCollapse(int index) {
@@ -101,7 +132,7 @@ void _toggleCollapse(int index) {
   
   // 🔧 修正: Level 1（親）または Level 2（リスト化された子）のみToggle可能
   final hasGrandchildren = _notes.any((n) => n.parentId == note.id && n.level == 3);
-  final isLevel2Listified = note.level == 2 && (hasGrandchildren || note.isCollapsed != null);
+  final isLevel2Listified = note.level == 2 && (hasGrandchildren || note.isCollapsed == true); 
   
   if (note.level != 1 && !isLevel2Listified) return;
   
@@ -161,87 +192,91 @@ bool _shouldShowLine(int index) {
   final fontWeight = (note.level == 0 || note.level == 1) ? FontWeight.w800 : FontWeight.w700;
   final lineHeight = fontSize * 1.6;
   
-  // 🆕 追加: 完了状態に応じて文字色を変更
-  final textColor = note.isCompleted ? Colors.white : Colors.black;
+  // 完了状態に応じて文字色を変更
+final textColor = note.isCompleted ? Colors.white : Colors.grey[900]; // 🔧 修正: Colors.grey[800] → Colors.grey[900]
   
   // Level 2がリスト化されているかを判定
   final hasGrandchildren = _notes.any((n) => n.parentId == note.id && n.level == 3);
-  final isLevel2Listified = note.level == 2 && (hasGrandchildren || note.isCollapsed != null);
+  final isLevel2Listified = note.level == 2 && (hasGrandchildren || note.isCollapsed == true);
   
   return Padding(
     padding: const EdgeInsets.only(bottom: 4),
-    child: GestureDetector( // 🆕 追加: タップ可能に
-      onTap: () => _toggleLineCompletion(index), // 🆕 追加
-      behavior: HitTestBehavior.opaque, // 🆕 追加: 空白部分もタップ可能に
+    child: GestureDetector(
+      onTap: () => _toggleLineCompletion(index),
+      behavior: HitTestBehavior.opaque,
       child: SizedBox(
         height: lineHeight,
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start, // 🔧 修正: center → start（元に戻す）
           children: [
-            // Level 1（親）の矢印（テキスト形式）
-            if (note.level == 1) ...[
-              GestureDetector(
-                onTap: () => _toggleCollapse(index),
-                child: Container(
-                  width: 24,
-                  height: lineHeight,
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    isExpanded ? '↓' : '→',
-                    style: TextStyle(
-                      color: textColor, // 🔧 修正: 完了状態に応じた色
-                      fontSize: fontSize,
-                      height: 1.6,
-                      fontWeight: FontWeight.w900,
-                      fontFamily: 'Courier',
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 4),
-            ],
-            
-            // Level 2（子）のインデントと矢印
-            if (note.level == 2) ...[
-              SizedBox(width: 24 + 4),
-              
-              // リスト化された子の場合は矢印を表示
-              if (isLevel2Listified) ...[
-                GestureDetector(
-                  onTap: () => _toggleCollapse(index),
-                  child: Container(
-                    width: 24,
-                    height: lineHeight,
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      isExpanded ? '↓' : '→',
-                      style: TextStyle(
-                        color: textColor, // 🔧 修正: 完了状態に応じた色
-                        fontSize: fontSize,
-                        height: 1.6,
-                        fontWeight: FontWeight.w900,
-                        fontFamily: 'Courier',
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 4),
-              ],
-            ],
+            // Level 1（親）の矢印
+if (note.level == 1) ...[
+  GestureDetector(
+    onTap: () => _toggleCollapse(index),
+    child: Container(
+      width: 24,
+      height: lineHeight,
+      // 🔧 修正: padding を削除
+      alignment: Alignment.topLeft,
+      child: Text(
+        isExpanded ? '↓' : '→',
+        style: GoogleFonts.inter(
+          color: textColor,
+          fontSize: fontSize,
+          height: 1.6,
+          fontWeight: FontWeight.w700,
+        ).copyWith(
+          fontFamilyFallback: const ['Hiragino Sans'],
+        ),
+      ),
+    ),
+  ),
+  const SizedBox(width: 4),
+],
+
+// Level 2（子）のインデントと矢印
+if (note.level == 2) ...[
+  const SizedBox(width: 24 + 4),
+  
+  if (isLevel2Listified) ...[
+    GestureDetector(
+      onTap: () => _toggleCollapse(index),
+      child: Container(
+        width: 24,
+        height: lineHeight,
+        // 🔧 修正: padding を削除
+        alignment: Alignment.topLeft,
+        child: Text(
+          isExpanded ? '↓' : '→',
+          style: GoogleFonts.inter(
+            color: textColor,
+            fontSize: fontSize,
+            height: 1.6,
+            fontWeight: FontWeight.w700,
+          ).copyWith(
+            fontFamilyFallback: const ['Hiragino Sans'],
+          ),
+        ),
+      ),
+    ),
+    const SizedBox(width: 4),
+  ],
+],
             
             // Level 3（孫）のインデント
             if (note.level == 3)
-              SizedBox(width: (24 + 4) * 2),
+              const SizedBox(width: (24 + 4) * 2),
             
-            // テキスト表示（読み取り専用）
+            // テキスト表示
             Expanded(
               child: Text(
-                note.text.isEmpty ? '' : note.text,
+                note.text,
                 style: GoogleFonts.inter(
-                  color: textColor, // 🔧 修正: 完了状態に応じた色
+                  color: textColor,
                   fontSize: fontSize,
                   height: 1.6,
                   fontWeight: fontWeight,
+                  // 🗑️ 削除: leadingDistribution
                 ).copyWith(
                   fontFamilyFallback: const ['Hiragino Sans'],
                 ),
@@ -253,7 +288,6 @@ bool _shouldShowLine(int index) {
     ),
   );
 }
-
 /// 行の完了状態を切り替え（子孫も連動）
 void _toggleLineCompletion(int index) {
   if (index >= _notes.length) return;
@@ -328,7 +362,7 @@ Widget build(BuildContext context) {
                         widget.taskTitle,
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 16,
+                          fontSize: 14,
                           fontWeight: FontWeight.w900,
                           fontFamily: 'Hiragino Sans',
                         ),
