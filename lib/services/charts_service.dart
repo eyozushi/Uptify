@@ -1,6 +1,8 @@
 // services/charts_service.dart - 新構造対応版（完全版）
 import '../models/concert_data.dart';
 import 'task_completion_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';  // 新規追加
+import 'dart:convert';  // 新規追加
 
 class ChartsService {
   final TaskCompletionService _taskCompletionService = TaskCompletionService();
@@ -75,6 +77,36 @@ class ChartsService {
       return 0;
     }
   }
+
+  /// 観客の位置データを保存
+Future<void> saveAudiencePositions(List<Map<String, dynamic>> positions) async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final jsonString = jsonEncode(positions);
+    await prefs.setString('audience_positions', jsonString);
+    print('✅ 観客位置を保存: ${positions.length}人');
+  } catch (e) {
+    print('❌ 観客位置保存エラー: $e');
+  }
+}
+
+/// 観客の位置データを読み込み
+Future<List<Map<String, dynamic>>> loadAudiencePositions() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final jsonString = prefs.getString('audience_positions');
+    
+    if (jsonString != null) {
+      final List<dynamic> decoded = jsonDecode(jsonString);
+      return decoded.cast<Map<String, dynamic>>();
+    }
+    
+    return [];
+  } catch (e) {
+    print('❌ 観客位置読み込みエラー: $e');
+    return [];
+  }
+}
   
   /// 累計タスク実行数を取得（成功・失敗含む）
   Future<int> getTotalAttemptedTasks() async {

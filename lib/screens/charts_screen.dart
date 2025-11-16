@@ -1,12 +1,15 @@
 // charts_screen.dart - シンプル化版
 import 'package:flutter/material.dart';
 import 'dart:async';
+import 'dart:typed_data';  // 新規追加
 import '../services/charts_service.dart';
 import '../services/task_completion_service.dart';
+import '../services/data_service.dart';  // 新規追加
 import '../models/concert_data.dart';
 import '../widgets/concert_stage.dart';
 import '../widgets/performer_widget.dart';
 import '../widgets/audience_grid.dart';
+
 
 // ファン入場データモデル
 class FanEntranceData {
@@ -53,15 +56,39 @@ class _ChartsScreenState extends State<ChartsScreen> {
   String _errorMessage = '';
   bool _isEntering = false;
   int _lastKnownTaskCount = 0;
+  Uint8List? _userImageBytes; 
+  int _enteringFansCount = 0;
 
   @override
-  void initState() {
-    super.initState();
-    _chartsService = ChartsService();
-    _taskCompletionService = TaskCompletionService();
-    _loadConcertData();
-    _startTaskMonitoring();
+void initState() {
+  super.initState();
+  _chartsService = ChartsService();
+  _taskCompletionService = TaskCompletionService();
+  _loadConcertData();
+  _startTaskMonitoring();
+}
+
+// ユーザーの顔写真を読み込み
+Future<void> _loadUserImage() async {
+  try {
+    print('📸 ユーザー画像読み込み開始...');
+    final dataService = DataService();
+    final imageBytes = await dataService.loadIdealImageBytes();
+    
+    print('📸 読み込み結果: ${imageBytes != null ? "${imageBytes.length} bytes" : "null"}');
+    
+    if (mounted && imageBytes != null) {
+      setState(() {
+        _userImageBytes = imageBytes;
+      });
+      print('✅ ユーザー画像読み込み完了: ${imageBytes.length} bytes');
+    } else {
+      print('⚠️ ユーザー画像がありません');
+    }
+  } catch (e) {
+    print('❌ ユーザー画像読み込みエラー: $e');
   }
+}
 
   // シンプルなタスク監視
   void _startTaskMonitoring() {
@@ -99,66 +126,74 @@ class _ChartsScreenState extends State<ChartsScreen> {
     }
   }
 
-  // データ読み込み（シンプル版）
   Future<void> _loadConcertData() async {
-    try {
-      setState(() {
-        _isLoading = true;
-        _errorMessage = '';
-      });
-
-      final data = await _chartsService.getConcertData();
-      
-      if (mounted) {
-        // 待機ファン = 累計タスク - 現在観客
-        final waitingFans = (data.totalCompletedTasks - data.audienceCount).clamp(0, data.totalCompletedTasks);
-        
-        setState(() {
-          _fanData = FanEntranceData(
-            currentAudience: data.audienceCount,
-            stockedFans: waitingFans,
-            totalCompletedTasks: data.totalCompletedTasks,
-          );
-          _lastKnownTaskCount = data.totalCompletedTasks;
-          _isLoading = false;
-        });
-        
-        print('初期データ読み込み完了 - 観客数: ${data.audienceCount}, 累計タスク: ${data.totalCompletedTasks}, 待機ファン: $waitingFans');
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _errorMessage = 'データの読み込みに失敗しました';
-          _isLoading = false;
-        });
-      }
-      print('コンサートデータ読み込みエラー: $e');
-    }
-  }
-
-  // ファン入場処理（シンプル版）
-  Future<void> _handleFanEntrance() async {
-    if (_fanData?.stockedFans == 0 || _isEntering) return;
-    
+  try {
     setState(() {
-      _isEntering = true;
+      _isLoading = true;
+      _errorMessage = '';
     });
+
+    // 画像読み込みを先に実行
+    await _loadUserImage();
+
+    final data = await _chartsService.getConcertData();
     
-    final enteringFans = _fanData!.stockedFans;
-    
-    // 観客を入場させる
-    await _chartsService.addAudienceMembers(enteringFans);
-    
+    if (mounted) {
+      final waitingFans = (data.totalCompletedTasks - data.audienceCount).clamp(0, data.totalCompletedTasks);
+      
+      setState(() {
+        _fanData = FanEntranceData(
+          currentAudience: data.audienceCount,
+          stockedFans: waitingFans,
+          totalCompletedTasks: data.totalCompletedTasks,
+        );
+        _lastKnownTaskCount = data.totalCompletedTasks;
+        _isLoading = false;
+      });
+      
+      print('初期データ読み込み完了 - 観客数: ${data.audienceCount}, 累計タスク: ${data.totalCompletedTasks}, 待機ファン: $waitingFans');
+    }
+  } catch (e) {
+    if (mounted) {
+      setState(() {
+        _errorMessage = 'データの読み込みに失敗しました';
+        _isLoading = false;
+      });
+    }
+    print('コンサートデータ読み込みエラー: $e');
+  }
+}
+
+  // ファン入場処理（修正版：アニメーション完了後にDB更新）
+Future<void> _handleFanEntrance() async {
+  if (_fanData?.stockedFans == 0 || _isEntering) return;
+  
+  final enteringFans = _fanData!.stockedFans;
+  
+  setState(() {
+    _isEntering = true;
+    _enteringFansCount = enteringFans;  // 入場人数を設定
+  });
+  
+  // アニメーション完了を待つ（3秒 + バッファ）
+  await Future.delayed(const Duration(milliseconds: 3200));
+  
+  // アニメーション完了後にデータベースを更新
+  await _chartsService.addAudienceMembers(enteringFans);
+  
+  if (mounted) {
     setState(() {
       _fanData = _fanData!.copyWith(
         currentAudience: _fanData!.currentAudience + enteringFans,
-        stockedFans: 0, // 待機ファンを完全にリセット
+        stockedFans: 0,
       );
+      _enteringFansCount = 0;  // リセット
       _isEntering = false;
     });
-    
-    print('${enteringFans}人が入場完了 → 待機ファンリセット');
   }
+  
+  print('${enteringFans}人が入場完了 → 最終観客数: ${_fanData!.currentAudience}人');
+}
 
   @override
   Widget build(BuildContext context) {
@@ -316,51 +351,53 @@ class _ChartsScreenState extends State<ChartsScreen> {
   }
 
   Widget _buildConcertScene(int audienceCount) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final totalHeight = constraints.maxHeight;
-        final screenHeight = totalHeight * 0.25;
-        final screenTop = totalHeight * 0.05;
-        final stageTop = screenTop + screenHeight;
-        final stageHeight = totalHeight * 0.04;
-        final performerY = stageTop + (stageHeight / 2);
-        
-        return Stack(
-          children: [
-            Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                color: const Color(0xFF2E7D32),
-              ),
+  return LayoutBuilder(
+    builder: (context, constraints) {
+      final totalHeight = constraints.maxHeight;
+      final screenHeight = totalHeight * 0.25;
+      final screenTop = totalHeight * 0.05;
+      final stageTop = screenTop + screenHeight;
+      final stageHeight = totalHeight * 0.04;
+      final performerY = stageTop + (stageHeight / 2);
+      
+      return Stack(
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              color: const Color(0xFF2E7D32),
             ),
-            Positioned.fill(
-              child: ConcertStage(
-                width: constraints.maxWidth,
-                height: constraints.maxHeight,
-                videoAssetPath: 'assets/videos/concert_video.mp4',
-              ),
+          ),
+          Positioned.fill(
+            child: ConcertStage(
+              width: constraints.maxWidth,
+              height: constraints.maxHeight,
+              imageAssetPath: 'assets/images/artistpic.png',
+              userImageBytes: _userImageBytes,
             ),
-            Positioned.fill(
-              child: AudienceGrid(
-                audienceCount: audienceCount,
-                width: constraints.maxWidth,
-                height: constraints.maxHeight,
-                stageHeight: stageTop + stageHeight + (totalHeight * 0.03),
-              ),
+          ),
+          Positioned.fill(
+            child: AudienceGrid(
+              audienceCount: audienceCount,
+              width: constraints.maxWidth,
+              height: constraints.maxHeight,
+              stageHeight: stageTop + stageHeight + (totalHeight * 0.03),
+              enteringFansCount: _enteringFansCount,  // 新規追加: 入場人数を渡す
             ),
-            Positioned(
-              top: performerY - 10,
-              left: constraints.maxWidth * 0.48,
-              child: const PerformerWidget(
-                size: 20,
-                color: Colors.white,
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
+          ),
+         Positioned(
+  top: performerY - 15,
+  left: constraints.maxWidth * 0.47,
+  child: const PerformerWidget(
+    size: 20,
+    color: Color(0xFF1DB954),  // 修正: Colors.white → Color(0xFF1DB954)
+  ),
+),
+        ],
+      );
+    },
+  );
+}
 
   // コンパクトな情報表示ウィジェット
   Widget _buildCompactInfo({
