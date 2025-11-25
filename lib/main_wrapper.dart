@@ -5540,33 +5540,52 @@ Widget build(BuildContext context) {
 }
 
   Widget _buildArtistScreen() {
-    return FutureBuilder<List<SingleAlbum>>(
-      future: _dataService.loadSingleAlbums(),
-      builder: (context, snapshot) {
-        final singleAlbums = snapshot.data ?? [];
-        
-        return ArtistScreen(
-          artistName: _currentArtistName,
-          profileImageBytes: _dataService.getSavedIdealImageBytes(),
-          tasks: _currentTasks,
-          singleAlbums: singleAlbums,
-          onClose: _hideArtistScreen,
-          onPlayTask: (taskIndex) {
-            _hideArtistScreen();
-            Future.delayed(const Duration(milliseconds: 100), () {
-              _showFullPlayerWithTask(taskIndex);
-            });
-          },
-          onNavigateToAlbumDetail: (album) {
-            _hideArtistScreen();
-            Future.delayed(const Duration(milliseconds: 100), () {
-              _showSingleAlbumDetail(album);
-            });
-          },
-        );
-      },
-    );
-  }
+  return FutureBuilder<List<SingleAlbum>>(
+    future: _dataService.loadSingleAlbums(),
+    builder: (context, snapshot) {
+      final singleAlbums = snapshot.data ?? [];
+      
+      print('🎤 アーティスト画面に渡すシングルアルバム数: ${singleAlbums.length}');
+      for (final album in singleAlbums) {
+        print('  - ${album.albumName}: ${album.tasks.length}タスク');
+      }
+      
+      return ArtistScreen(
+        artistName: _currentArtistName,
+        profileImageBytes: _dataService.getSavedIdealImageBytes(),
+        lifeDreamAlbumCoverImage: _imageBytes,
+        tasks: _currentTasks,
+        singleAlbums: singleAlbums,
+        onClose: _hideArtistScreen,
+        onPlayTask: (taskIndex) {
+          _hideArtistScreen();
+          Future.delayed(const Duration(milliseconds: 100), () {
+            _showFullPlayerWithTask(taskIndex);
+          });
+        },
+        onNavigateToAlbumDetail: (album) {
+          _hideArtistScreen();
+          Future.delayed(const Duration(milliseconds: 100), () {
+            _showSingleAlbumDetail(album);
+          });
+        },
+        onPlaySingleAlbumTask: (album, taskIndex) {
+          _hideArtistScreen();
+          Future.delayed(const Duration(milliseconds: 100), () {
+            _showSingleAlbumPlayer(album, taskIndex: taskIndex);
+          });
+        },
+        // 🆕 追加：ライフドリームアルバム詳細に遷移
+        onNavigateToLifeDreamAlbumDetail: () {
+          _hideArtistScreen();
+          Future.delayed(const Duration(milliseconds: 100), () {
+            _showAlbumDetail();
+          });
+        },
+      );
+    },
+  );
+}
 
   Widget _buildInitialLoadingScreen() {
     return Scaffold(

@@ -374,120 +374,107 @@ class _SingleAlbumCreateScreenState extends State<SingleAlbumCreateScreen> {
 
   @override
 Widget build(BuildContext context) {
-  return Container(
-    // 🔧 修正：背景を黒に統一
-    color: Colors.black,
-    child: Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(20),
-          child: _buildHeader(),
-        ),
-        
-        Expanded(
-          child: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+  return Scaffold(
+    backgroundColor: Colors.black,
+    body: SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 🔧 修正：ヘッダー（タップ判定を拡大）
+            Container(
+              height: 60,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const SizedBox(height: 10),
-                  
-                  _buildImageSection(),
-                  
-                  const SizedBox(height: 32),
-                  
-                  _buildAlbumInfoSection(),
-                  
-                  const SizedBox(height: 40),
-                  
-                  _buildTasksSection(),
-                  
-                  const SizedBox(height: 20),
+                  const Text(
+                    'アルバム作成',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                      fontFamily: 'Hiragino Sans',
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      // 🔧 修正：リセットボタン（タップ領域拡大）
+                      GestureDetector(
+                        onTap: () {
+                          _resetForm();
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(12), // 🔧 タップ領域拡大
+                          child: const Icon(
+                            Icons.refresh,
+                            color: Colors.white,
+                            size: 28,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      // 🔧 修正：リリースボタン（タップ領域拡大）
+                      GestureDetector(
+                        onTap: _isLoading ? null : _saveAlbum,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20, // 🔧 パディング拡大
+                            vertical: 12,   // 🔧 パディング拡大
+                          ),
+                          decoration: BoxDecoration(
+                            color: _isLoading 
+                                ? Colors.white.withOpacity(0.1)
+                                : const Color(0xFF1DB954),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: _isLoading
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                  ),
+                                )
+                              : const Text(
+                                  'リリース',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    fontFamily: 'Hiragino Sans',
+                                  ),
+                                ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
-          ),
+            
+            const SizedBox(height: 40),
+            
+            _buildImageSection(),
+            
+            const SizedBox(height: 32),
+            
+            _buildAlbumInfoSection(),
+            
+            const SizedBox(height: 40),
+            
+            _buildTasksSection(),
+            
+            const SizedBox(height: 20),
+          ],
         ),
-      ],
+      ),
     ),
   );
 }
 
-  // 🆕 新規追加メソッド：ヘッダー
-  Widget _buildHeader() {
-    return Container(
-      height: 60,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          const Text(
-            'アルバム作成',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 32,
-              fontWeight: FontWeight.bold,
-              fontFamily: 'Hiragino Sans',
-            ),
-          ),
-          Row(
-            children: [
-              GestureDetector(
-                onTap: () {
-                  _resetForm();
-                },
-                child: Container(
-                  width: 48,
-                  height: 48,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF1E1E1E),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.refresh,
-                    color: Colors.white,
-                    size: 24,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              GestureDetector(
-                onTap: _isLoading ? null : _saveAlbum,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: _isLoading 
-                        ? Colors.white.withOpacity(0.1)
-                        : const Color(0xFF1DB954),  // 🔧 修正：緑単色に変更
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                  child: _isLoading
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                          ),
-                        )
-                      : const Text(
-                          'リリース',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            fontFamily: 'Hiragino Sans',
-                          ),
-                        ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
 
   // 既存メソッドの変更
 Widget _buildImageSection() {

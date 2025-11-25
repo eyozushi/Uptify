@@ -5,25 +5,32 @@ import '../models/task_item.dart';
 import '../models/single_album.dart';
 import '../services/data_service.dart';
 import '../services/task_completion_service.dart';
+import '../services/achievement_service.dart'; // 🆕 追加
 
 class ArtistScreen extends StatefulWidget {
   final String artistName;
   final Uint8List? profileImageBytes;
+  final Uint8List? lifeDreamAlbumCoverImage;
   final List<TaskItem> tasks;
   final List<SingleAlbum> singleAlbums;
   final VoidCallback? onClose;
   final Function(int taskIndex)? onPlayTask;
   final Function(SingleAlbum album)? onNavigateToAlbumDetail;
+  final Function(SingleAlbum album, int taskIndex)? onPlaySingleAlbumTask;
+  final VoidCallback? onNavigateToLifeDreamAlbumDetail; // 🆕 追加
 
   const ArtistScreen({
     super.key,
     required this.artistName,
     this.profileImageBytes,
+    this.lifeDreamAlbumCoverImage,
     required this.tasks,
     required this.singleAlbums,
     this.onClose,
     this.onPlayTask,
     this.onNavigateToAlbumDetail,
+    this.onPlaySingleAlbumTask,
+    this.onNavigateToLifeDreamAlbumDetail, // 🆕 追加
   });
 
   @override
@@ -33,298 +40,470 @@ class ArtistScreen extends StatefulWidget {
 class _ArtistScreenState extends State<ArtistScreen> {
   final DataService _dataService = DataService();
   final TaskCompletionService _taskCompletionService = TaskCompletionService();
+  final AchievementService _achievementService = AchievementService();
   
   int _totalTasksCompleted = 0;
   List<Map<String, dynamic>> _taskRanking = [];
   bool _isLoading = true;
 
   @override
-  void initState() {
-    super.initState();
-    _loadArtistData();
-  }
+void initState() {
+  super.initState();
+  // 🔧 修正：少し遅延させてからデータ読み込み
+  Future.delayed(const Duration(milliseconds: 200), () {
+    if (mounted) {
+      _loadArtistData();
+    }
+  });
+}
 
   Future<void> _loadArtistData() async {
-    try {
-      // 総完了回数を計算
-      int totalCompleted = 0;
-      List<Map<String, dynamic>> taskStats = [];
+  try {
+    // 累計完了回数を取得
+    final totalCompleted = await _taskCompletionService.getTotalCompletedTasks();
+    
+    // 🔧 修正：シングルアルバムが渡されるまで待機
+    if (widget.singleAlbums.isEmpty) {
+      print('⚠️ シングルアルバムがまだ読み込まれていません。再試行します...');
+      // 少し待ってから再試行
+      await Future.delayed(const Duration(milliseconds: 100));
+      if (mounted) {
+        _loadArtistData();
+      }
+      return;
+    }
+    
+    // 全完了記録を一度だけ取得
+    final allCompletions = await _achievementService.loadTaskCompletions();
+    
+    List<Map<String, dynamic>> taskStats = [];
+    
+    // ライフドリームアルバムのタスクを追加
+    print('📊 ライフドリームアルバムのタスク数: ${widget.tasks.length}');
+    for (final task in widget.tasks) {
+      final taskCompletions = allCompletions.where((c) => c.taskId == task.id && c.wasSuccessful).length;
       
-      for (final task in widget.tasks) {
-        final completions = await _taskCompletionService.getTodayTaskSuccesses(task.id);
-        totalCompleted += completions;
+      taskStats.add({
+        'task': task,
+        'completions': taskCompletions,
+      });
+      print('  - ${task.title}: $taskCompletions回');
+    }
+    
+    // シングルアルバムのタスクを追加
+    print('📊 シングルアルバム数: ${widget.singleAlbums.length}');
+    for (final album in widget.singleAlbums) {
+      print('  - アルバム: ${album.albumName}, タスク数: ${album.tasks.length}');
+      for (final task in album.tasks) {
+        final taskCompletions = allCompletions.where((c) => c.taskId == task.id && c.wasSuccessful).length;
         
         taskStats.add({
           'task': task,
-          'completions': completions,
+          'completions': taskCompletions,
         });
+        print('    - ${task.title}: $taskCompletions回');
       }
-      
-      // 完了回数でソートしてランキング作成
-      taskStats.sort((a, b) => (b['completions'] as int).compareTo(a['completions'] as int));
-      
-      setState(() {
-        _totalTasksCompleted = totalCompleted;
-        _taskRanking = taskStats.take(5).toList(); // 上位5位まで
-        _isLoading = false;
-      });
-    } catch (e) {
-      print('❌ アーティストデータ読み込みエラー: $e');
-      setState(() {
-        _isLoading = false;
-      });
     }
-  }
-
-  Widget _buildProfileImage() {
-    final screenHeight = MediaQuery.of(context).size.height;
-    final profileHeight = screenHeight * 0.5; // 画面の半分
     
-    return SizedBox(
-      width: double.infinity,
-      height: profileHeight,
-      child: Stack(
-        children: [
-          // 顔写真
-          Positioned.fill(
-            child: widget.profileImageBytes != null
-                ? Image.memory(
-                    widget.profileImageBytes!,
-                    width: double.infinity,
-                    height: profileHeight,
-                    fit: BoxFit.cover,
-                  )
-                : Container(
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          Color(0xFF8B5CF6),
-                          Color(0xFF06B6D4),
-                        ],
-                      ),
-                    ),
-                    child: Center(
-                      child: Icon(
-                        Icons.person,
-                        color: Colors.white,
-                        size: profileHeight * 0.3,
-                      ),
+    print('📊 全タスク統計数: ${taskStats.length}');
+    
+    // 完了回数でソートしてランキング作成
+    taskStats.sort((a, b) => (b['completions'] as int).compareTo(a['completions'] as int));
+    
+    setState(() {
+      _totalTasksCompleted = totalCompleted;
+      _taskRanking = taskStats.take(5).toList(); // 上位5位
+      _isLoading = false;
+    });
+    
+    print('📊 ランキング表示数: ${_taskRanking.length}');
+  } catch (e) {
+    print('❌ アーティストデータ読み込みエラー: $e');
+    setState(() {
+      _isLoading = false;
+    });
+  }
+}
+  Widget _buildProfileImage() {
+  final screenHeight = MediaQuery.of(context).size.height;
+  final profileHeight = screenHeight * 0.5; // 画面の半分
+  
+  return SizedBox(
+    width: double.infinity,
+    height: profileHeight,
+    child: Stack(
+      children: [
+        // 顔写真
+        Positioned.fill(
+          child: widget.profileImageBytes != null
+              ? Image.memory(
+                  widget.profileImageBytes!,
+                  width: double.infinity,
+                  height: profileHeight,
+                  fit: BoxFit.cover,
+                )
+              : Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Color(0xFF8B5CF6),
+                        Color(0xFF06B6D4),
+                      ],
                     ),
                   ),
-          ),
-          
-          // 下部グラデーション影
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: Container(
-              height: profileHeight * 0.4, // 画像の下部40%に影
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.transparent,
-                    Color(0x40000000), // 薄い黒
-                    Color(0x80000000), // 中程度の黒
-                    Color(0xCC000000), // 濃い黒
-                  ],
-                  stops: [0.0, 0.3, 0.7, 1.0],
+                  child: Center(
+                    child: Icon(
+                      Icons.person,
+                      color: Colors.white,
+                      size: profileHeight * 0.3,
+                    ),
+                  ),
                 ),
+        ),
+        
+        // 下部グラデーション影
+        Positioned(
+          bottom: 0,
+          left: 0,
+          right: 0,
+          child: Container(
+            height: profileHeight * 0.4, // 画像の下部40%に影
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.transparent,
+                  Color(0x40000000), // 薄い黒
+                  Color(0x80000000), // 中程度の黒
+                  Color(0xCC000000), // 濃い黒
+                ],
+                stops: [0.0, 0.3, 0.7, 1.0],
               ),
             ),
           ),
-          
-          // アーティスト名（プロフィール画像の下部に配置）
-          Positioned(
-            left: 20,
-            bottom: 20,
-            right: 20,
+        ),
+        
+        // 🔧 修正：アーティスト名（影を削除）
+        Positioned(
+          left: 20,
+          bottom: 20,
+          right: 20,
+          child: Text(
+            widget.artistName,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 36,
+              fontWeight: FontWeight.w900,
+              fontFamily: 'Hiragino Sans',
+              // 🔧 修正：shadowsプロパティを削除
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+  Widget _buildTaskRanking() {
+  if (_isLoading) {
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: 40),
+      child: Center(
+        child: CircularProgressIndicator(
+          color: Color(0xFF1DB954),
+        ),
+      ),
+    );
+  }
+
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const Padding(
+        padding: EdgeInsets.only(left: 20, bottom: 12),
+        child: Text(
+          'トップタスク',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.w900, // 🔧 修正：w600 → w900
+            fontFamily: 'Hiragino Sans',
+          ),
+        ),
+      ),
+      ..._taskRanking.asMap().entries.map((entry) {
+        final index = entry.key;
+        final data = entry.value;
+        final task = data['task'] as TaskItem;
+        final completions = data['completions'] as int;
+        
+        return _buildRankingItem(
+          rank: index + 1,
+          task: task,
+          completions: completions,
+        );
+      }).toList(),
+    ],
+  );
+}
+
+  /// タスクが所属するアルバムのジャケット画像を取得
+Widget _getAlbumCoverForTask(TaskItem task) {
+  // シングルアルバムのタスクかチェック
+  for (final album in widget.singleAlbums) {
+    if (album.tasks.any((t) => t.id == task.id)) {
+      if (album.albumCoverImage != null) {
+        return Image.memory(
+          album.albumCoverImage!,
+          width: 48,
+          height: 48,
+          fit: BoxFit.cover,
+        );
+      }
+      break;
+    }
+  }
+  
+  // 🔧 修正：ライフドリームアルバムのジャケット画像
+  if (widget.lifeDreamAlbumCoverImage != null) {
+    return Image.memory(
+      widget.lifeDreamAlbumCoverImage!,
+      width: 48,
+      height: 48,
+      fit: BoxFit.cover,
+    );
+  }
+  
+  // デフォルト画像
+  return Container(
+    decoration: const BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          Color(0xFF1DB954),
+          Color(0xFF1ED760),
+        ],
+      ),
+    ),
+    child: const Center(
+      child: Icon(
+        Icons.album,
+        color: Colors.white,
+        size: 24,
+      ),
+    ),
+  );
+}
+
+  Widget _buildRankingItem({
+  required int rank,
+  required TaskItem task,
+  required int completions,
+}) {
+  return GestureDetector(
+    onTap: () {
+      // 🔧 修正：ライフドリームアルバムのタスクかチェック
+      final lifeDreamTaskIndex = widget.tasks.indexWhere((t) => t.id == task.id);
+      
+      if (lifeDreamTaskIndex >= 0) {
+        // ライフドリームアルバムのタスク
+        if (widget.onPlayTask != null) {
+          widget.onPlayTask!(lifeDreamTaskIndex);
+        }
+      } else {
+        // 🔧 修正：シングルアルバムのタスク → PlayerScreenに移動
+        for (final album in widget.singleAlbums) {
+          final taskIndex = album.tasks.indexWhere((t) => t.id == task.id);
+          if (taskIndex >= 0) {
+            if (widget.onPlaySingleAlbumTask != null) {
+              widget.onPlaySingleAlbumTask!(album, taskIndex);
+            }
+            break;
+          }
+        }
+      }
+    },
+    child: Padding(
+      padding: const EdgeInsets.only(left: 16, right: 20, top: 6, bottom: 6),
+      child: Row(
+        children: [
+          // ランク番号（固定幅で揃える）
+          SizedBox(
+            width: 16,
             child: Text(
-              widget.artistName,
+              rank.toString(),
               style: const TextStyle(
                 color: Colors.white,
-                fontSize: 36,
-                fontWeight: FontWeight.w900,
-                fontFamily: 'Hiragino Sans',
-                shadows: [
-                  Shadow(
-                    color: Colors.black54,
-                    offset: Offset(2, 2),
-                    blurRadius: 4,
-                  ),
-                ],
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                fontFamily: 'SF Pro Text',
               ),
+              textAlign: TextAlign.left,
+            ),
+          ),
+          const SizedBox(width: 16),
+          
+          // 所属アルバムのジャケット画像
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: _getAlbumCoverForTask(task),
+            ),
+          ),
+          const SizedBox(width: 12),
+          
+          // タスク名（左寄せ）
+          Expanded(
+            child: Text(
+              task.title,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+                fontFamily: 'Hiragino Sans',
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          
+          const SizedBox(width: 12),
+          
+          // 完了回数
+          Text(
+            '$completions回',
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.6),
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              fontFamily: 'SF Pro Text',
             ),
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
-  Widget _buildTaskRanking() {
-    if (_isLoading) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 40),
-        child: Center(
-          child: CircularProgressIndicator(
-            color: Color(0xFF1DB954),
-          ),
-        ),
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Padding(
-          padding: EdgeInsets.only(left: 20, bottom: 12),
-          child: Text(
-            'トップタスク',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-              fontFamily: 'Hiragino Sans',
-            ),
-          ),
-        ),
-        ..._taskRanking.asMap().entries.map((entry) {
-          final index = entry.key;
-          final data = entry.value;
-          final task = data['task'] as TaskItem;
-          final completions = data['completions'] as int;
-          
-          return _buildRankingItem(
-            rank: index + 1,
-            task: task,
-            completions: completions,
-          );
-        }).toList(),
-      ],
-    );
-  }
-
-  Widget _buildRankingItem({
-    required int rank,
-    required TaskItem task,
-    required int completions,
-  }) {
-    return GestureDetector(
-      onTap: () {
-        final taskIndex = widget.tasks.indexOf(task);
-        if (taskIndex >= 0 && widget.onPlayTask != null) {
-          widget.onPlayTask!(taskIndex);
-        }
-      },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-        child: Row(
-          children: [
-            // ランク番号（シンプルな白文字）
-            SizedBox(
-              width: 20,
-              child: Text(
-                rank.toString(),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w400,
-                  fontFamily: 'SF Pro Text',
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ),
-            const SizedBox(width: 16),
-            
-            // タスクアイコン
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                color: task.color,
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Center(
-                child: Icon(
-                  _getTaskIcon(rank - 1),
-                  color: Colors.white,
-                  size: 16,
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            
-            // タスク名
-            Expanded(
-              child: Text(
-                task.title,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w400,
-                  fontFamily: 'Hiragino Sans',
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            
-            // 完了回数
-            Text(
-              '$completions回',
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.6),
-                fontSize: 13,
-                fontWeight: FontWeight.w400,
-                fontFamily: 'SF Pro Text',
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  IconData _getTaskIcon(int index) {
-    switch (index) {
-      case 0:
-        return Icons.star_rounded;
-      case 1:
-        return Icons.local_fire_department_rounded;
-      case 2:
-        return Icons.trending_up_rounded;
-      case 3:
-        return Icons.bolt_rounded;
-      default:
-        return Icons.task_alt_rounded;
-    }
-  }
 
   Widget _buildAlbumList() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Padding(
-          padding: EdgeInsets.only(left: 20, bottom: 12),
-          child: Text(
-            'アルバム',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-              fontFamily: 'Hiragino Sans',
-            ),
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const Padding(
+        padding: EdgeInsets.only(left: 20, bottom: 12),
+        child: Text(
+          'アルバム',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.w900,
+            fontFamily: 'Hiragino Sans',
           ),
         ),
-        
-        // ライフドリームアルバム
-        GestureDetector(
+      ),
+      
+      // 🔧 修正：ライフドリームアルバム
+      GestureDetector(
+        onTap: () {
+          // 🔧 修正：ライフドリームアルバム詳細に移動
+          if (widget.onNavigateToLifeDreamAlbumDetail != null) {
+            widget.onNavigateToLifeDreamAlbumDetail!();
+          }
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+          child: Row(
+            children: [
+              Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: widget.lifeDreamAlbumCoverImage != null
+                      ? Image.memory(
+                          widget.lifeDreamAlbumCoverImage!,
+                          width: 50,
+                          height: 50,
+                          fit: BoxFit.cover,
+                        )
+                      : Container(
+                          decoration: const BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                Color(0xFF1DB954),
+                                Color(0xFF1ED760),
+                              ],
+                            ),
+                          ),
+                          child: const Center(
+                            child: Icon(
+                              Icons.album,
+                              color: Colors.white,
+                              size: 24,
+                            ),
+                          ),
+                        ),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'ライフドリームアルバム',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w400,
+                        fontFamily: 'Hiragino Sans',
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${widget.tasks.length} タスク',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.6),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w400,
+                        fontFamily: 'Hiragino Sans',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right,
+                color: Colors.white.withOpacity(0.4),
+                size: 20,
+              ),
+            ],
+          ),
+        ),
+      ),
+      
+      // シングルアルバム一覧
+      ...widget.singleAlbums.map((album) {
+        return GestureDetector(
           onTap: () {
-            // ライフドリームアルバム詳細に移動（実装は後で）
+            if (widget.onNavigateToAlbumDetail != null) {
+              widget.onNavigateToAlbumDetail!(album);
+            }
           },
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
@@ -335,21 +514,35 @@ class _ArtistScreenState extends State<ArtistScreen> {
                   height: 50,
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(8),
-                    gradient: const LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        Color(0xFF1DB954),
-                        Color(0xFF1ED760),
-                      ],
-                    ),
                   ),
-                  child: const Center(
-                    child: Icon(
-                      Icons.album,
-                      color: Colors.white,
-                      size: 24,
-                    ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: album.albumCoverImage != null
+                        ? Image.memory(
+                            album.albumCoverImage!,
+                            width: 50,
+                            height: 50,
+                            fit: BoxFit.cover,
+                          )
+                        : Container(
+                            decoration: const BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  Color(0xFF8B5CF6),
+                                  Color(0xFF06B6D4),
+                                ],
+                              ),
+                            ),
+                            child: const Center(
+                              child: Icon(
+                                Icons.music_note,
+                                color: Colors.white,
+                                size: 24,
+                              ),
+                            ),
+                          ),
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -357,18 +550,20 @@ class _ArtistScreenState extends State<ArtistScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'ライフドリームアルバム',
-                        style: TextStyle(
+                      Text(
+                        album.albumName,
+                        style: const TextStyle(
                           color: Colors.white,
                           fontSize: 15,
                           fontWeight: FontWeight.w400,
                           fontFamily: 'Hiragino Sans',
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        '${widget.tasks.length} タスク',
+                        '${album.tasks.length} タスク',
                         style: TextStyle(
                           color: Colors.white.withOpacity(0.6),
                           fontSize: 13,
@@ -387,131 +582,13 @@ class _ArtistScreenState extends State<ArtistScreen> {
               ],
             ),
           ),
-        ),
-        
-        // シングルアルバム一覧
-        ...widget.singleAlbums.map((album) {
-          return GestureDetector(
-            onTap: () {
-              if (widget.onNavigateToAlbumDetail != null) {
-                widget.onNavigateToAlbumDetail!(album);
-              }
-            },
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-              child: Row(
-                children: [
-                  Container(
-                    width: 50,
-                    height: 50,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: album.albumCoverImage != null
-                          ? Image.memory(
-                              album.albumCoverImage!,
-                              width: 50,
-                              height: 50,
-                              fit: BoxFit.cover,
-                            )
-                          : Container(
-                              decoration: const BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                  colors: [
-                                    Color(0xFF8B5CF6),
-                                    Color(0xFF06B6D4),
-                                  ],
-                                ),
-                              ),
-                              child: const Center(
-                                child: Icon(
-                                  Icons.music_note,
-                                  color: Colors.white,
-                                  size: 24,
-                                ),
-                              ),
-                            ),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          album.albumName,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w400,
-                            fontFamily: 'Hiragino Sans',
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '${album.tasks.length} タスク',
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.6),
-                            fontSize: 13,
-                            fontWeight: FontWeight.w400,
-                            fontFamily: 'Hiragino Sans',
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Icon(
-                    Icons.chevron_right,
-                    color: Colors.white.withOpacity(0.4),
-                    size: 20,
-                  ),
-                ],
-              ),
-            ),
-          );
-        }).toList(),
-      ],
-    );
-  }
+        );
+      }).toList(),
+    ],
+  );
+}
 
-  Widget _buildAboutSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Padding(
-          padding: EdgeInsets.only(left: 20, bottom: 12),
-          child: Text(
-            'About the Artist',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-              fontFamily: 'SF Pro Text',
-            ),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Text(
-            'あなたの人生という音楽の主人公。毎日新しい楽曲を作り続ける唯一無二のアーティスト。時には激しく、時には優しく、常に成長を続けている。今日もまた新しいメロディーを奏でている。',
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.8),
-              fontSize: 15,
-              height: 1.6,
-              fontWeight: FontWeight.w400,
-              fontFamily: 'Hiragino Sans',
-            ),
-          ),
-        ),
-      ],
-    );
-  }
+  
 
   @override
   Widget build(BuildContext context) {
@@ -591,13 +668,6 @@ class _ArtistScreenState extends State<ArtistScreen> {
                   // アルバム一覧
                   _buildAlbumList(),
                   
-                  const SizedBox(height: 40),
-                  
-                  // About the Artist
-                  _buildAboutSection(),
-                  
-                  // 下部の余白（ミニプレイヤー + ページセレクター分）
-                  const SizedBox(height: 160),
                 ],
               ),
             ),
