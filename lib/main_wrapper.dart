@@ -1730,43 +1730,46 @@ Future<void> _initializeAudioService() async {
   }
 
   Future<void> _loadUserData() async {
-    try {
-      final data = await _dataService.loadUserData();
-      setState(() {
-        _currentIdealSelf = data['idealSelf'] ?? '理想の自分';
-        _currentArtistName = data['artistName'] ?? 'You';
-        _currentAlbumImagePath = data['albumImagePath'] ?? '';
-        
-        final savedImageBytes = _dataService.getSavedImageBytes();
-        if (savedImageBytes != null) {
-          _imageBytes = savedImageBytes;
-        }
-        
-        if (data['tasks'] != null) {
-          if (data['tasks'] is List<TaskItem>) {
-            _currentTasks = List<TaskItem>.from(data['tasks']);
-          } else if (data['tasks'] is List) {
-            _currentTasks = (data['tasks'] as List)
-                .map((taskJson) => TaskItem.fromJson(taskJson))
-                .take(4)
-                .toList();
-          }
-        }
-        
-        if (_currentTasks.isEmpty) {
-          _currentTasks = _dataService.getDefaultTasks();
-        }
-        
-        _playingTasks = List.from(_currentTasks);
-      });
+  try {
+    final data = await _dataService.loadUserData();
+    setState(() {
+      _currentIdealSelf = data['idealSelf'] ?? '理想の自分';
+      _currentArtistName = data['artistName'] ?? 'You';
+      _currentAlbumImagePath = data['albumImagePath'] ?? '';
       
-      await _loadTodayCompletions();
-    } catch (e) {
-      setState(() {
+      final savedImageBytes = _dataService.getSavedImageBytes();
+      if (savedImageBytes != null) {
+        _imageBytes = savedImageBytes;
+      }
+      
+      if (data['tasks'] != null) {
+        if (data['tasks'] is List<TaskItem>) {
+          _currentTasks = List<TaskItem>.from(data['tasks']);
+        } else if (data['tasks'] is List) {
+          _currentTasks = (data['tasks'] as List)
+              .map((taskJson) => TaskItem.fromJson(taskJson))
+              .take(4)
+              .toList();
+        }
+      }
+      
+      if (_currentTasks.isEmpty) {
         _currentTasks = _dataService.getDefaultTasks();
-      });
-    }
+      }
+      
+      // 🔧 修正：シングルアルバム再生中は_playingTasksを上書きしない
+      if (!_isPlayingSingleAlbum) {
+        _playingTasks = List.from(_currentTasks);
+      }
+    });
+    
+    await _loadTodayCompletions();
+  } catch (e) {
+    setState(() {
+      _currentTasks = _dataService.getDefaultTasks();
+    });
   }
+}
 
   void _onPlayerStateChanged({
   int? currentTaskIndex,
@@ -1922,6 +1925,9 @@ Future<void> _initializeAudioService() async {
   print('🎵 現在の状態: albumDetail=$_isAlbumDetailVisible, player=$_isPlayerScreenVisible');
   print('🎵 現在のdragOffset: $_playerDragOffset, isAnimating: $_isAnimating');
   
+  // 🔧 追加：シングルアルバムのタスク完了回数を読み込み
+  _loadSingleAlbumTaskCompletions(album);
+  
   setState(() {
     _playingTasks = List.from(album.tasks);
     _isPlayingSingleAlbum = true;
@@ -1932,12 +1938,10 @@ Future<void> _initializeAudioService() async {
     
     _isPlayerScreenVisible = true;
     
-    // 🔧 重要: アニメーション状態を強制的にリセット
     _isAnimating = false;
     _isDraggingPlayer = false;
   });
   
-  // 🔧 修正: setStateの後にすぐ実行
   WidgetsBinding.instance.addPostFrameCallback((_) {
     if (mounted) {
       print('🎵 PostFrameCallback: _openPlayerWithAnimation()を実行');
@@ -1948,7 +1952,32 @@ Future<void> _initializeAudioService() async {
   
   print('🎵 PlayerScreen表示完了: isVisible=$_isPlayerScreenVisible, albumDetail=$_isAlbumDetailVisible');
 }
+
+// 🆕 シングルアルバムのタスク完了回数を読み込み
+Future<void> _loadSingleAlbumTaskCompletions(SingleAlbum album) async {
+  try {
+    for (final task in album.tasks) {
+      final count = await _taskCompletionService.getTodayTaskSuccesses(task.id);
+      setState(() {
+        _todayTaskCompletions[task.id] = count;
+      });
+    }
+    print('✅ シングルアルバムのタスク完了回数読み込み完了: ${album.albumName}');
+  } catch (e) {
+    print('❌ シングルアルバムのタスク完了回数読み込みエラー: $e');
+  }
+}
+
+
   void _hideFullPlayer() {
+
+  print('🔍 _hideFullPlayer呼び出し');
+  print('  - _currentTaskIndex: $_currentTaskIndex');
+  print('  - _isPlayingSingleAlbum: $_isPlayingSingleAlbum');
+  print('  - _playingTasks.length: ${_playingTasks.length}');
+  if (_currentTaskIndex >= 0 && _currentTaskIndex < _playingTasks.length) {
+    print('  - 現在のタスク: ${_playingTasks[_currentTaskIndex].title}');
+  }
   _closePlayerWithAnimation();
   
   print('🔧 MainWrapper: プレイヤーを閉じました - タイマー継続: $_isPlaying');
@@ -2961,28 +2990,14 @@ int _getCurrentTaskNumberForNotification() {
         _todayTaskCompletions[task.id] = (_todayTaskCompletions[task.id] ?? 0) + 1;
       });
       
-      // 追加：ChartsScreenに新規タスク完了を通知
+      // 🔧 修正：PlayerScreenに直接通知する必要はない（MainWrapperが管理）
+      
       await _notifyNewTaskCompletion();
     } else {
       await _audioService.playNotificationSound();
     }
     
     await _loadUserData();
-    
-    // この部分を削除またはコメントアウト
-    /*
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(wasSuccessful 
-              ? '✅ 「${task.title}」の達成を記録しました！'
-              : '📝 「${task.title}」を未達成として記録しました'),
-          backgroundColor: wasSuccessful ? const Color(0xFF1DB954) : Colors.orange,
-          duration: const Duration(seconds: 2),
-        ),
-      );
-    }
-    */
   } catch (e) {
     print('❌ アプリ内タスク完了記録エラー: $e');
   }
@@ -3515,22 +3530,37 @@ void _showCompletionResultDialog(bool allCompleted) {
 }
 
   Future<void> _onTaskCompletedFromPlayer(TaskItem task, bool wasSuccessful) async {
-    await _recordTaskCompletionInApp(
-      task, 
-      _isPlayingSingleAlbum && _playingSingleAlbum != null 
-          ? _playingSingleAlbum!.albumName 
-          : _currentIdealSelf,
-      _elapsedSeconds,
-      wasSuccessful,
-    );
-  }
+  print('🔍 MainWrapper._onTaskCompletedFromPlayer 呼び出し');
+  print('  - taskId: ${task.id}');
+  print('  - taskTitle: ${task.title}');
+  print('  - wasSuccessful: $wasSuccessful');
+  print('  - isPlayingSingleAlbum: $_isPlayingSingleAlbum');
+  print('  - 現在のカウント: ${_todayTaskCompletions[task.id] ?? 0}');
+  
+  await _recordTaskCompletionInApp(
+    task, 
+    _isPlayingSingleAlbum && _playingSingleAlbum != null 
+        ? _playingSingleAlbum!.albumName 
+        : _currentIdealSelf,
+    _elapsedSeconds,
+    wasSuccessful,
+  );
+  
+  print('✅ MainWrapper._onTaskCompletedFromPlayer 完了');
+  print('  - 更新後カウント: ${_todayTaskCompletions[task.id]}');
+}
 
   void _onCompletionCountsChanged(Map<String, int> newCounts) {
-    setState(() {
-      _todayTaskCompletions = Map.from(newCounts);
-    });
-    print('🔔 MainWrapper: 完了回数が更新されました: $newCounts');
-  }
+  print('🔍 MainWrapper._onCompletionCountsChanged 呼び出し');
+  print('  - 受信したカウント: $newCounts');
+  
+  setState(() {
+    _todayTaskCompletions = Map.from(newCounts);
+  });
+  
+  print('✅ MainWrapper._onCompletionCountsChanged 完了');
+  print('  - 更新後の_todayTaskCompletions: $_todayTaskCompletions');
+}
 
   Widget _buildSettingsScreen() {
   // シングルアルバムの設定を編集中の場合
@@ -3641,6 +3671,14 @@ void _showCompletionResultDialog(bool allCompleted) {
 
 Widget _buildMiniPlayerWithDrag() {
   final screenHeight = MediaQuery.of(context).size.height;
+  
+  print('🔍 _buildMiniPlayerWithDrag 呼び出し:');
+  print('  - _currentTaskIndex: $_currentTaskIndex');
+  print('  - _isPlayingSingleAlbum: $_isPlayingSingleAlbum');
+  print('  - _playingTasks.length: ${_playingTasks.length}');
+  if (_playingTasks.isNotEmpty && _currentTaskIndex >= 0 && _currentTaskIndex < _playingTasks.length) {
+    print('  - 表示するタスク: ${_playingTasks[_currentTaskIndex].title}');
+  }
   
   return GestureDetector(
     onVerticalDragStart: (details) {
@@ -4108,6 +4146,19 @@ void _closePlayerWithAnimation() {
   if (!mounted || _isAnimating) return;
   
   print('🔧 閉じるアニメーション開始: 現在offset=$_playerDragOffset');
+  print('🔍 現在の状態:');
+  print('  - _currentTaskIndex: $_currentTaskIndex');
+  print('  - _isPlayingSingleAlbum: $_isPlayingSingleAlbum');
+  print('  - _playingTasks.length: ${_playingTasks.length}');
+  if (_playingTasks.isNotEmpty) {
+    print('  - _playingTasks[0].title: ${_playingTasks[0].title}');
+    if (_currentTaskIndex >= 0 && _currentTaskIndex < _playingTasks.length) {
+      print('  - _playingTasks[_currentTaskIndex].title: ${_playingTasks[_currentTaskIndex].title}');
+    }
+  }
+  if (_playingSingleAlbum != null) {
+    print('  - _playingSingleAlbum.albumName: ${_playingSingleAlbum!.albumName}');
+  }
   
   setState(() {
     _isAnimating = true;

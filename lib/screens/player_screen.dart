@@ -221,11 +221,8 @@ void initState() {
     }
   }
   
-  if (widget.todayTaskCompletions != null) {
-    _todayTaskCompletions = Map.from(widget.todayTaskCompletions!);
-  } else {
-    _loadTodayCompletions();
-  }
+  // 🔧 修正：完了回数の初期化を改善
+  _initializeTodayCompletions();
   
   if (widget.initialElapsedSeconds != null) {
     _elapsedSeconds = widget.initialElapsedSeconds!;
@@ -239,7 +236,6 @@ void initState() {
     _isPlaying = widget.initialIsPlaying!;
   }
   
-  // 初期タスクインデックス設定
   if (widget.initialTaskIndex != null) {
     if (widget.isPlayingSingleAlbum) {
       _currentIndex = widget.initialTaskIndex!;
@@ -262,6 +258,37 @@ void initState() {
         _isInitializationComplete = true;
       });
     });
+  }
+}
+
+// 🆕 完了回数の初期化処理
+Future<void> _initializeTodayCompletions() async {
+  if (widget.todayTaskCompletions != null) {
+    setState(() {
+      _todayTaskCompletions = Map.from(widget.todayTaskCompletions!);
+    });
+    
+    // 🔧 追加：不足しているタスクの完了回数を補完
+    await _loadMissingTaskCompletions();
+  } else {
+    await _loadTodayCompletions();
+  }
+}
+
+// 🆕 不足しているタスクの完了回数を読み込み
+Future<void> _loadMissingTaskCompletions() async {
+  try {
+    for (final task in _tasks) {
+      if (!_todayTaskCompletions.containsKey(task.id)) {
+        final count = await _taskCompletionService.getTodayTaskSuccesses(task.id);
+        setState(() {
+          _todayTaskCompletions[task.id] = count;
+        });
+      }
+    }
+    print('✅ 不足タスクの完了回数補完完了');
+  } catch (e) {
+    print('❌ 不足タスク完了回数読み込みエラー: $e');
   }
 }
 
@@ -328,7 +355,6 @@ void didUpdateWidget(PlayerScreen oldWidget) {
     _extractColorsFromImage();
   }
 
-  // 強制ページ変更の処理
   if (widget.forcePageIndex != null && 
       widget.forcePageIndex != oldWidget.forcePageIndex) {
     final newPageIndex = widget.forcePageIndex!;
@@ -338,7 +364,7 @@ void didUpdateWidget(PlayerScreen oldWidget) {
     
     setState(() {
       _currentIndex = newPageIndex;
-      _dragDistance = 0.0; // 🔧 追加
+      _dragDistance = 0.0;
     });
     
     Future.delayed(const Duration(milliseconds: 100), () {
@@ -351,9 +377,18 @@ void didUpdateWidget(PlayerScreen oldWidget) {
     
   bool needsUpdate = false;
   
+  // 🔧 修正：完了回数の更新をマージ（上書きではなく）
   if (widget.todayTaskCompletions != null && 
       widget.todayTaskCompletions != oldWidget.todayTaskCompletions) {
+    setState(() {
+      // 🔧 重要：既存のカウントを保持しつつ、MainWrapperからの更新をマージ
+      for (final entry in widget.todayTaskCompletions!.entries) {
+        _todayTaskCompletions[entry.key] = entry.value;
+      }
+    });
     needsUpdate = true;
+    print('✅ MainWrapperからの完了回数更新をマージ: ${_todayTaskCompletions.length}件');
+    print('  - マージ後の内容: $_todayTaskCompletions');
   }
   
   if (widget.initialAutoPlayEnabled != null && 
@@ -378,11 +413,6 @@ void didUpdateWidget(PlayerScreen oldWidget) {
   
   if (needsUpdate) {
     setState(() {
-      if (widget.todayTaskCompletions != null && 
-          widget.todayTaskCompletions != oldWidget.todayTaskCompletions) {
-        _todayTaskCompletions = Map.from(widget.todayTaskCompletions!);
-      }
-      
       if (widget.initialAutoPlayEnabled != null && 
           widget.initialAutoPlayEnabled != oldWidget.initialAutoPlayEnabled) {
         _isAutoPlayEnabled = widget.initialAutoPlayEnabled!;
@@ -635,26 +665,21 @@ void _resetPosition() {
   }
 
   Future<void> _loadTodayCompletions() async {
-    if (widget.todayTaskCompletions != null) {
-      setState(() {
-        _todayTaskCompletions = Map.from(widget.todayTaskCompletions!);
-      });
-      return;
+  // 🔧 修正：widget.todayTaskCompletionsの確認を削除
+  try {
+    final completions = <String, int>{};
+    for (final task in _tasks) {
+      final count = await _taskCompletionService.getTodayTaskSuccesses(task.id);
+      completions[task.id] = count;
     }
-    
-    try {
-      final completions = <String, int>{};
-      for (final task in _tasks) {
-        final count = await _taskCompletionService.getTodayTaskSuccesses(task.id);
-        completions[task.id] = count;
-      }
-      setState(() {
-        _todayTaskCompletions = completions;
-      });
-    } catch (e) {
-      print('❌ 今日の完了回数読み込みエラー: $e');
-    }
+    setState(() {
+      _todayTaskCompletions = completions;
+    });
+    print('✅ 全タスクの完了回数読み込み完了: ${completions.length}件');
+  } catch (e) {
+    print('❌ 今日の完了回数読み込みエラー: $e');
   }
+}
 
   Future<void> _extractColorsFromImage() async {
   if (_isExtractingColors) return;
@@ -927,31 +952,41 @@ void _toggleAutoPlay() {
 
   Future<void> _recordTaskCompletion(TaskItem task, bool wasSuccessful) async {
   try {
+    print('🔍 _recordTaskCompletion開始');
+    print('  - taskId: ${task.id}');
+    print('  - taskTitle: ${task.title}');
+    print('  - wasSuccessful: $wasSuccessful');
+    print('  - isPlayingSingleAlbum: ${widget.isPlayingSingleAlbum}');
+    print('  - 現在のカウント: ${_todayTaskCompletions[task.id] ?? 0}');
+    
     if (wasSuccessful) {
       await _audioService.playAchievementSound();
     } else {
       await _audioService.playNotificationSound();
     }
 
-    int oldCount = 0;
+    int oldCount = _todayTaskCompletions[task.id] ?? 0;
+    
     if (wasSuccessful) {
-      oldCount = _todayTaskCompletions[task.id] ?? 0;
       setState(() {
         _todayTaskCompletions[task.id] = oldCount + 1;
       });
-      print('🔔 即座にカウント更新: ${task.title} ${oldCount} → ${oldCount + 1}');
+      print('✅ ローカルカウント更新: ${task.title} ${oldCount} → ${_todayTaskCompletions[task.id]}');
       
-      // 新規追加：新しく完了したタスクをSharedPreferencesに記録
       await _recordNewTaskCompletion();
     }
 
+    // 🔧 修正：MainWrapperのコールバックを確実に呼ぶ
     if (widget.onTaskCompleted != null) {
+      print('📞 MainWrapper.onTaskCompleted を呼び出し');
       await widget.onTaskCompleted!(task, wasSuccessful);
       
-      if (wasSuccessful) {
-        widget.onCompletionCountsChanged?.call(_todayTaskCompletions);
+      if (wasSuccessful && widget.onCompletionCountsChanged != null) {
+        print('📞 MainWrapper.onCompletionCountsChanged を呼び出し');
+        widget.onCompletionCountsChanged!(_todayTaskCompletions);
       }
     } else {
+      print('⚠️ widget.onTaskCompleted が null のため直接記録');
       await _taskCompletionService.recordTaskCompletion(
         taskId: task.id,
         taskTitle: task.title,
@@ -959,11 +994,11 @@ void _toggleAutoPlay() {
         elapsedSeconds: _elapsedSeconds,
         albumType: widget.isPlayingSingleAlbum ? 'single' : 'life_dream',
         albumName: _idealSelf,
-        albumId: widget.isPlayingSingleAlbum ? 'single_album_id' : null,
+        albumId: widget.isPlayingSingleAlbum ? widget.playingSingleAlbumId : null,
       );
       
-      if (wasSuccessful) {
-        widget.onCompletionCountsChanged?.call(_todayTaskCompletions);
+      if (wasSuccessful && widget.onCompletionCountsChanged != null) {
+        widget.onCompletionCountsChanged!(_todayTaskCompletions);
       }
       
       await _loadTodayCompletions();
@@ -971,19 +1006,11 @@ void _toggleAutoPlay() {
     
     widget.onDataChanged?.call();
     
-    /*
-    if (wasSuccessful) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('✅ 「${task.title}」の達成を記録しました！'),
-          backgroundColor: const Color(0xFF1DB954),
-          duration: const Duration(seconds: 2),
-        ),
-      );
-    }
-    */
+    print('✅ _recordTaskCompletion完了');
+    print('  - 最終カウント: ${_todayTaskCompletions[task.id]}');
 
   } catch (e) {
+    print('❌ _recordTaskCompletion エラー: $e');
     if (wasSuccessful) {
       setState(() {
         _todayTaskCompletions[task.id] = (_todayTaskCompletions[task.id] ?? 1) - 1;
@@ -991,10 +1018,10 @@ void _toggleAutoPlay() {
     }
     
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
+      const SnackBar(
         content: Text('❌ 記録の保存に失敗しました'),
         backgroundColor: Colors.red,
-        duration: const Duration(seconds: 2),
+        duration: Duration(seconds: 2),
       ),
     );
   }
