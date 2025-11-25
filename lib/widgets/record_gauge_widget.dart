@@ -230,6 +230,8 @@ class TonearmPainter extends CustomPainter {
   }
 }
 
+// lib/widgets/record_gauge_widget.dart
+
 /// レコード盤を描画するCustomPainter
 class _RecordPainter extends CustomPainter {
   final RecordGaugeState state;
@@ -260,8 +262,6 @@ class _RecordPainter extends CustomPainter {
       });
     }
 
-
-
     for (int i = 0; i < 4; i++) {
       final isCompleted = state.isTrackCompleted(i);
       final outerRadius = trackRadii[i]['outer']!;
@@ -284,7 +284,6 @@ class _RecordPainter extends CustomPainter {
     _drawCenterLabel(canvas, center, centerLabelRadius);
   }
 
-
   void _drawTrackRing(
     Canvas canvas,
     Offset center,
@@ -294,7 +293,7 @@ class _RecordPainter extends CustomPainter {
   ) {
     final color = isCompleted 
         ? Colors.black 
-        : Colors.grey[600]!; // 棒と同じ色
+        : Colors.grey[600]!;
 
     final paint = Paint()
       ..color = color
@@ -325,25 +324,34 @@ class _RecordPainter extends CustomPainter {
   }
 
   void _drawCenterLabel(Canvas canvas, Offset center, double labelRadius) {
-    if (state.isFullyCompleted) {
-      _drawCompletedLabel(canvas, center, labelRadius);
-    } else {
-      _drawIncompleteLabel(canvas, center, labelRadius);
+    // 🆕 修正：完了数に応じて緑枠を描画
+    if (state.completedCount > 0) {
+      _drawProgressiveBorder(canvas, center, labelRadius);
     }
   }
 
-  void _drawCompletedLabel(Canvas canvas, Offset center, double labelRadius) {
-    // アルバム画像はウィジェットで描画されるため、ここでは緑枠のみ描画
+  // 🆕 新規追加：完了数に応じた段階的な緑枠
+  void _drawProgressiveBorder(Canvas canvas, Offset center, double labelRadius) {
+    // 完了数に応じた枠の太さ（1〜4タスク完了で3px〜12px）
+    final borderWidth = 3.0 + (state.completedCount * 2.25); // 1個: 5.25px, 2個: 7.5px, 3個: 9.75px, 4個: 12px
+    
     final borderPaint = Paint()
       ..color = const Color(0xFF1DB954)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 6.0;
+      ..strokeWidth = borderWidth;
 
     canvas.drawCircle(center, labelRadius, borderPaint);
-  }
-
-  void _drawIncompleteLabel(Canvas canvas, Offset center, double labelRadius) {
-    // 中心ラベル部分は画像で覆われるため描画不要
+    
+    // 🆕 オプション：完了数に応じて内側に光彩効果（グロー）を追加
+    if (state.completedCount >= 2) {
+      final glowPaint = Paint()
+        ..color = const Color(0xFF1DB954).withOpacity(0.3)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = borderWidth + 4.0
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4.0);
+      
+      canvas.drawCircle(center, labelRadius, glowPaint);
+    }
   }
 
   @override

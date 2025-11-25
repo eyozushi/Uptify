@@ -1676,23 +1676,23 @@ Widget _buildDefaultAlbumCover(double size, {required bool isSingle}) {
               const SizedBox(width: 24),
               
               // 再生ボタン（中央）
-              GestureDetector(
-                onTap: _togglePlayPause,
-                child: Container(
-                  width: 64,
-                  height: 64,
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
-                  ),
-                  alignment: Alignment.center,
-                  child: Icon(
-                    (widget.initialIsPlaying ?? _isPlaying) ? Icons.pause : Icons.play_arrow,
-                    color: _dominantColor,
-                    size: 38,
-                  ),
-                ),
-              ),
+GestureDetector(
+  onTap: _togglePlayPause,
+  child: Container(
+    width: 64,
+    height: 64,
+    decoration: const BoxDecoration(
+      color: Colors.white,
+      shape: BoxShape.circle,
+    ),
+    alignment: Alignment.center,
+    child: Icon(
+      (widget.initialIsPlaying ?? _isPlaying) ? Icons.pause : Icons.play_arrow,
+      color: Colors.black,  // 🔧 変更: _dominantColor → Colors.black
+      size: 38,
+    ),
+  ),
+),
               
               const SizedBox(width: 24),
               

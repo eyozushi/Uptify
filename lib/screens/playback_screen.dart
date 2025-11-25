@@ -8,16 +8,24 @@ import '../widgets/playback/daily_report_widget.dart';
 import '../widgets/playback/weekly_report_widget.dart';
 import '../widgets/playback/monthly_report_widget.dart';
 import '../widgets/playback/annual_report_widget.dart';
-/// Playbackメイン画面（Phase 2: カレンダー表示確認用）
+
+
 class PlaybackScreen extends StatefulWidget {
-  const PlaybackScreen({super.key});
+  
+  const PlaybackScreen({
+    super.key,
+  });
 
   @override
   State<PlaybackScreen> createState() => _PlaybackScreenState();
 }
 
-class _PlaybackScreenState extends State<PlaybackScreen> {
+class _PlaybackScreenState extends State<PlaybackScreen> with AutomaticKeepAliveClientMixin {
   final PlaybackService _playbackService = PlaybackService();
+
+  bool _hasLoadedAnnual = false;
+
+  
   
   // 現在表示中の年月
   late int _currentYear;
@@ -39,21 +47,36 @@ class _PlaybackScreenState extends State<PlaybackScreen> {
   bool _isReportLoading = true;
 
   @override
-  void initState() {
-    super.initState();
-    
-    // 現在の年月を初期値に設定
-    final now = DateTime.now();
-    _currentYear = now.year;
-    _currentMonth = now.month;
-    
-    // PageController初期化
-    _reportPageController = PageController(initialPage: 0);
-    
-    // データ読み込み
-    _loadCalendarData();
-    _loadAllReports();
-  }
+void initState() {
+  super.initState();
+  
+  // 現在の年月を初期値に設定
+  final now = DateTime.now();
+  _currentYear = now.year;
+  _currentMonth = now.month;
+  
+  // PageController初期化
+  _reportPageController = PageController(initialPage: 0);
+  
+  // 🔧 変更：初回のみキャッシュクリアとデータ読み込み
+  _playbackService.clearCache();
+  _loadCalendarData();
+  _loadAllReports(); // デイリー、ウィークリー、マンスリーのみ
+}
+
+void refreshData() {
+  if (!mounted) return;
+  
+  final startTime = DateTime.now();
+  print('🔄 PlaybackScreen: データ更新開始');
+  
+  _playbackService.clearCache();
+  _loadCalendarData();
+  _loadAllReports(); // 🔧 変更：アニュアル以外を更新
+  
+  final duration = DateTime.now().difference(startTime);
+  print('✅ PlaybackScreen: データ更新完了 (${duration.inMilliseconds}ms)');
+}
 
   @override
   void dispose() {
@@ -61,91 +84,125 @@ class _PlaybackScreenState extends State<PlaybackScreen> {
     super.dispose();
   }
 
-  /// 【新規追加】カレンダーデータを読み込み
   Future<void> _loadCalendarData() async {
-    setState(() {
-      _isCalendarLoading = true;
-    });
+  final startTime = DateTime.now(); // 🆕 追加
+  print('📅 カレンダーデータ読み込み開始...');
+  
+  setState(() {
+    _isCalendarLoading = true;
+  });
+  
+  try {
+    final data = await _playbackService.getMonthCalendarData(
+      _currentYear,
+      _currentMonth,
+    );
     
-    try {
-      final data = await _playbackService.getMonthCalendarData(
-        _currentYear,
-        _currentMonth,
-      );
-      
-      if (mounted) {
-        setState(() {
-          _calendarData = data;
-          _isCalendarLoading = false;
-        });
-      }
-    } catch (e) {
-      print('カレンダーデータ読み込みエラー: $e');
-      if (mounted) {
-        setState(() {
-          _isCalendarLoading = false;
-        });
-      }
+    if (mounted) {
+      setState(() {
+        _calendarData = data;
+        _isCalendarLoading = false;
+      });
+    }
+    
+    final duration = DateTime.now().difference(startTime); // 🆕 追加
+    print('✅ カレンダーデータ読み込み完了: ${duration.inMilliseconds}ms'); // 🆕 追加
+  } catch (e) {
+    print('カレンダーデータ読み込みエラー: $e');
+    if (mounted) {
+      setState(() {
+        _isCalendarLoading = false;
+      });
     }
   }
+}
 
-  /// 【新規追加】全レポートを読み込み
+
+
+/// 【新規追加】AutomaticKeepAliveClientMixin用
+@override
+bool get wantKeepAlive => true;
+
+
   Future<void> _loadAllReports() async {
-    setState(() {
-      _isReportLoading = true;
-    });
+  final startTime = DateTime.now();
+  print('📊 レポートデータ読み込み開始...');
+  
+  setState(() {
+    _isReportLoading = true;
+  });
+  
+  try {
+    final now = DateTime.now();
     
-    try {
-      final now = DateTime.now();
-      
-      // デイリーレポート
-      final daily = await _playbackService.getDailyReport(now);
-      
-      // ウィークリーレポート（今週の日曜日を計算）
-      final weekStart = now.subtract(Duration(days: now.weekday % 7));
-      final weekly = await _playbackService.getWeeklyReport(weekStart);
-      
-      // マンスリーレポート
-      final monthly = await _playbackService.getMonthlyReport(_currentYear, _currentMonth);
-      
-      // アニュアルレポート
-      final annual = await _playbackService.getAnnualReport(_currentYear);
-      
-      if (mounted) {
-        setState(() {
-          _dailyReport = daily;
-          _weeklyReport = weekly;
-          _monthlyReport = monthly;
-          _annualReport = annual;
-          _isReportLoading = false;
-        });
-      }
-    } catch (e) {
-      print('レポート読み込みエラー: $e');
-      if (mounted) {
-        setState(() {
-          _isReportLoading = false;
-        });
-      }
+    // デイリーレポート
+    final dailyStart = DateTime.now();
+    final daily = await _playbackService.getDailyReport(now);
+    print('  - デイリー: ${DateTime.now().difference(dailyStart).inMilliseconds}ms');
+    
+    // ウィークリーレポート（今週の日曜日を計算）
+    final weeklyStart = DateTime.now();
+    final weekStart = now.subtract(Duration(days: now.weekday % 7));
+    final weekly = await _playbackService.getWeeklyReport(weekStart);
+    print('  - ウィークリー: ${DateTime.now().difference(weeklyStart).inMilliseconds}ms');
+    
+    // マンスリーレポート
+    final monthlyStart = DateTime.now();
+    final monthly = await _playbackService.getMonthlyReport(_currentYear, _currentMonth);
+    print('  - マンスリー: ${DateTime.now().difference(monthlyStart).inMilliseconds}ms');
+    
+    // 🗑️ 削除：アニュアルレポートの読み込みを削除
+    // final annualStart = DateTime.now();
+    // final annual = await _playbackService.getAnnualReport(_currentYear);
+    // print('  - アニュアル: ${DateTime.now().difference(annualStart).inMilliseconds}ms');
+    
+    if (mounted) {
+      setState(() {
+        _dailyReport = daily;
+        _weeklyReport = weekly;
+        _monthlyReport = monthly;
+        // _annualReport = annual; // 🗑️ 削除
+        _isReportLoading = false;
+      });
+    }
+    
+    final duration = DateTime.now().difference(startTime);
+    print('✅ レポートデータ読み込み完了: ${duration.inMilliseconds}ms');
+  } catch (e) {
+    print('レポート読み込みエラー: $e');
+    if (mounted) {
+      setState(() {
+        _isReportLoading = false;
+      });
     }
   }
+}
 
-  /// 【新規追加】日付タップ時の処理
-  void _onDayTapped(DateTime date) {
-    print('日付タップ: ${date.year}/${date.month}/${date.day}');
+/// 【新規追加】アニュアルレポートを必要な時だけ読み込み
+Future<void> _loadAnnualReportIfNeeded() async {
+  if (_hasLoadedAnnual) return; // 既に読み込み済み
+  
+  final startTime = DateTime.now();
+  print('📊 アニュアルレポート読み込み開始...');
+  
+  try {
+    final annual = await _playbackService.getAnnualReport(_currentYear);
     
-    // デイリーレポートに切り替え
-    if (_currentReportIndex != 0) {
-      _reportPageController.animateToPage(
-        0,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
-      );
+    if (mounted) {
+      setState(() {
+        _annualReport = annual;
+        _hasLoadedAnnual = true;
+      });
     }
     
-    // その日のデイリーレポートを読み込み
-    _loadDailyReportForDate(date);
+    final duration = DateTime.now().difference(startTime);
+    print('✅ アニュアルレポート読み込み完了: ${duration.inMilliseconds}ms');
+  } catch (e) {
+    print('❌ アニュアルレポート読み込みエラー: $e');
   }
+}
+
+  
 
   /// 【新規追加】特定日のデイリーレポートを読み込み
   Future<void> _loadDailyReportForDate(DateTime date) async {
@@ -162,15 +219,38 @@ class _PlaybackScreenState extends State<PlaybackScreen> {
     }
   }
 
-  /// 【新規追加】レポートページ変更時の処理
-  void _onReportPageChanged(int index) {
-    setState(() {
-      _currentReportIndex = index;
-    });
+  /// 【新規追加】日付タップ時の処理
+void _onDayTapped(DateTime date) {
+  print('日付タップ: ${date.year}/${date.month}/${date.day}');
+  
+  // デイリーレポートに切り替え
+  if (_currentReportIndex != 0) {
+    _reportPageController.animateToPage(
+      0,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
   }
+  
+  // その日のデイリーレポートを読み込み
+  _loadDailyReportForDate(date);
+}
+
+  void _onReportPageChanged(int index) {
+  setState(() {
+    _currentReportIndex = index;
+  });
+  
+  // 🆕 追加：アニュアルページ（index=3）に移動した時だけ読み込み
+  if (index == 3) {
+    _loadAnnualReportIfNeeded();
+  }
+}
 
   @override
 Widget build(BuildContext context) {
+  super.build(context); // AutomaticKeepAliveのため必要
+
   // 画面の高さを取得
   final screenHeight = MediaQuery.of(context).size.height;
   final topPadding = MediaQuery.of(context).padding.top;
@@ -266,8 +346,7 @@ Widget build(BuildContext context) {
     );
   }
 
-  /// 【修正】レポート表示エリアを構築
-Widget _buildReportArea() {
+  Widget _buildReportArea() {
   return Column(
     children: [
       _buildReportIndicator(),
@@ -294,9 +373,18 @@ Widget _buildReportArea() {
                   _monthlyReport != null
                       ? MonthlyReportWidget(report: _monthlyReport!)
                       : _buildEmptyReport('マンスリーレポート'),
+                  // 🔧 変更：アニュアルレポートは未読み込み時もローディング表示
                   _annualReport != null
                       ? AnnualReportWidget(report: _annualReport!)
-                      : _buildEmptyReport('アニュアルレポート'),
+                      : _hasLoadedAnnual
+                          ? _buildEmptyReport('アニュアルレポート')
+                          : Center(
+                              child: CircularProgressIndicator(
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Color(0xFF1DB954),
+                                ),
+                              ),
+                            ),
                 ],
               ),
       ),

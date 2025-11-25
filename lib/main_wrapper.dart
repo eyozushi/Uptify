@@ -95,6 +95,10 @@ class NotificationIds {
 }
 
 class _MainWrapperState extends State<MainWrapper> with WidgetsBindingObserver, TickerProviderStateMixin {
+
+  // 🆕 追加：PlaybackScreen用のGlobalKey
+  final GlobalKey<State<PlaybackScreen>> _playbackScreenKey = GlobalKey<State<PlaybackScreen>>();
+
   // サービスインスタンス（引数なしで初期化 - エラー修正）
   late final DataService _dataService;
   late final NotificationService _notificationService;
@@ -3105,9 +3109,11 @@ Widget _buildMainContent() {
         child: ChartsScreen(),
       ),
       
-      // プレイバック画面
+      // プレイバック画面（🔧 変更：ValueKeyを削除してGlobalKeyに変更）
       _buildBlackScreen(
-        child: const PlaybackScreen(),
+        child: PlaybackScreen(
+          key: _playbackScreenKey, // 🔧 変更
+        ),
       ),
       
       // シングルアルバム作成画面
@@ -4251,9 +4257,7 @@ void _closePlayerWithAnimation() {
     );
   }
 
-  // main_wrapper.dart の _buildPageSelector メソッド
-
-Widget _buildPageSelector() {
+  Widget _buildPageSelector() {
   if (_isSettingsVisible) {
     return const SizedBox.shrink();
   }
@@ -4278,9 +4282,13 @@ Widget _buildPageSelector() {
         
         return GestureDetector(
           onTap: () {
+            // 🆕 追加：PlaybackScreen表示時のみデータ更新を呼び出し
+            if (index == 2 && _selectedPageIndex != 2) {
+              _refreshPlaybackScreen();
+            }
+            
             setState(() {
               _selectedPageIndex = index;
-              // 🔧 追加：アルバム詳細を閉じる
               if (_isAlbumDetailVisible) {
                 _isAlbumDetailVisible = false;
                 _currentSingleAlbum = null;
@@ -4318,6 +4326,19 @@ Widget _buildPageSelector() {
       }),
     ),
   );
+}
+
+/// 【新規追加】PlaybackScreenのデータを更新
+void _refreshPlaybackScreen() {
+  try {
+    final playbackState = _playbackScreenKey.currentState;
+    if (playbackState != null) {
+      // 🔧 修正：dynamic経由でメソッド呼び出し
+      (playbackState as dynamic).refreshData();
+    }
+  } catch (e) {
+    print('PlaybackScreen更新エラー: $e');
+  }
 }
 
   // _initializeNotificationService を修正

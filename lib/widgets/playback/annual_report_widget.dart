@@ -106,140 +106,172 @@ class AnnualReportWidget extends StatelessWidget {
   }
 
   Widget _buildTopAlbums(List<Map<String, dynamic>> topAlbums) {
-    if (topAlbums.isEmpty) {
-      return const SizedBox.shrink();
-    }
-    
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          '年間トップアルバム',
-          style: TextStyle(
-            color: Colors.white.withOpacity(0.8),
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            fontFamily: 'Hiragino Sans',
-          ),
+  if (topAlbums.isEmpty) {
+    return const SizedBox.shrink();
+  }
+  
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const Text(
+        '年間トップアルバム',
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+          fontFamily: 'Hiragino Sans',
         ),
-        const SizedBox(height: 12),
-        ...topAlbums.take(3).toList().asMap().entries.map((entry) {
-          final rank = entry.key + 1;
-          final album = entry.value;
-          final name = album['albumName'] as String? ?? '不明';
-          final count = album['count'] as int? ?? 0;
-          
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Row(
-              children: [
-                Text(
-                  '$rank位：',
-                  style: const TextStyle(
-                    color: Color(0xFF1DB954),
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    fontFamily: 'SF Pro Text',
-                  ),
+      ),
+      const SizedBox(height: 12),
+      ...topAlbums.take(3).toList().asMap().entries.map((entry) {
+        final rank = entry.key + 1;
+        final album = entry.value;
+        final name = album['albumName'] as String? ?? '不明';
+        final count = album['count'] as int? ?? 0;
+        
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Row(
+            children: [
+              // ランキングバッジ
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: rank == 1 
+                      ? const Color(0xFF1DB954)
+                      : Colors.white.withOpacity(0.2),
+                  shape: BoxShape.circle,
                 ),
-                const SizedBox(width: 8),
-                Expanded(
+                child: Center(
                   child: Text(
-                    name,
+                    '$rank',
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      fontFamily: 'Hiragino Sans',
+                      fontWeight: FontWeight.w700,
+                      fontFamily: 'SF Pro Text',
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                Text(
-                  '（$count回）',
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.5),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w400,
-                    fontFamily: 'SF Pro Text',
+              ),
+              const SizedBox(width: 12),
+              // アルバム名
+              Expanded(
+                child: Text(
+                  name,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    fontFamily: 'Hiragino Sans',
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-              ],
-            ),
-          );
-        }).toList(),
-      ],
-    );
-  }
+              ),
+              const SizedBox(width: 8),
+              // 再生回数
+              Text(
+                '$count回',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.6),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  fontFamily: 'SF Pro Text',
+                ),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
+    ],
+  );
+}
 
   Widget _buildTopTasks(List<Map<String, dynamic>> topTasks) {
-    if (topTasks.isEmpty) {
-      return const SizedBox.shrink();
-    }
-    
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          '年間トップヒットタスク',
-          style: TextStyle(
-            color: Colors.white.withOpacity(0.8),
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            fontFamily: 'Hiragino Sans',
-          ),
+  if (topTasks.isEmpty) {
+    return const SizedBox.shrink();
+  }
+  
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const Text(
+        '年間トップヒット曲',
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+          fontFamily: 'Hiragino Sans',
         ),
-        const SizedBox(height: 12),
-        ...topTasks.take(3).toList().asMap().entries.map((entry) {
-          final rank = entry.key + 1;
-          final task = entry.value;
-          final title = task['taskTitle'] as String? ?? '不明';
-          final count = task['count'] as int? ?? 0;
-          
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Row(
-              children: [
-                Text(
-                  '$rank位：',
-                  style: const TextStyle(
-                    color: Color(0xFF1DB954),
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    fontFamily: 'SF Pro Text',
-                  ),
+      ),
+      const SizedBox(height: 12),
+      ...topTasks.take(3).toList().asMap().entries.map((entry) {
+        final rank = entry.key + 1;
+        final task = entry.value;
+        final title = task['taskTitle'] as String? ?? '不明';
+        final count = task['count'] as int? ?? 0;
+        
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Row(
+            children: [
+              // ランキングバッジ
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: rank == 1 
+                      ? const Color(0xFF1DB954)
+                      : Colors.white.withOpacity(0.2),
+                  shape: BoxShape.circle,
                 ),
-                const SizedBox(width: 8),
-                Expanded(
+                child: Center(
                   child: Text(
-                    title,
+                    '$rank',
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      fontFamily: 'Hiragino Sans',
+                      fontWeight: FontWeight.w700,
+                      fontFamily: 'SF Pro Text',
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                Text(
-                  '（$count回）',
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.5),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w400,
-                    fontFamily: 'SF Pro Text',
+              ),
+              const SizedBox(width: 12),
+              // タスク名
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    fontFamily: 'Hiragino Sans',
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-              ],
-            ),
-          );
-        }).toList(),
-      ],
-    );
-  }
+              ),
+              const SizedBox(width: 8),
+              // 再生回数
+              Text(
+                '$count回',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.6),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  fontFamily: 'SF Pro Text',
+                ),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
+    ],
+  );
+}
 
   Widget _buildStreakInfo(int maxStreakDays, String peakMonth) {
     return Column(

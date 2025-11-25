@@ -139,6 +139,13 @@ void didUpdateWidget(AudienceGrid oldWidget) {
   _entranceController.forward();
 }
 
+// 新規追加: ランダムな観客の色を取得
+Color _getRandomColor(math.Random random) {
+  return _AudiencePainter._audienceColors[
+    random.nextInt(_AudiencePainter._audienceColors.length)
+  ];
+}
+
 // アニメーション完了時にファンの位置を確定
 void _confirmFanPositions() {
   // 入場してきたファンをそのまま追加（再配置しない）
@@ -198,29 +205,45 @@ void _initializeStaticPositions() {
   List<_StaticFan> initialFans = [];
   
   for (int row = 0; row < maxRows && remainingAudience > 0; row++) {
-    // 🔧 修正: 1列目をステージに近づける（grassTopから開始）
-    final rowY = grassTop + (row * rowHeight) + 5;  // 変更: +5で少し下げるだけ
-    final depthFactor = (row + 1) / maxRows;
-    final audienceSize = 14.0 + (depthFactor * 4.0);
-    
-    final audienceInThisRow = _calculateAudienceForRow(
-      row, maxRows, remainingAudience, stageCenter, widget.width
-    );
-    
-    final spreadFactor = (row + 1) * 0.15;
-    final rowWidth = widget.width * (0.3 + spreadFactor).clamp(0.3, 0.9);
-    
-    final startX = stageCenter - (rowWidth / 2);
-    final spacing = rowWidth / math.max(1, audienceInThisRow - 1);
-    
-    for (int i = 0; i < audienceInThisRow; i++) {
-  final x = startX + (i * spacing);
+  final rowY = grassTop + (row * rowHeight) + 5;
+  final depthFactor = (row + 1) / maxRows;
+  final audienceSize = 14.0 + (depthFactor * 4.0);
   
-  // 🔧 修正: Y方向のランダムオフセットを大きく（前後のばらつき）
-  final yOffset = (random.nextDouble() - 0.5) * (rowHeight * 0.8);  // 変更: 0.2 → 0.8
+  // 1行あたりの最大人数を計算（最大50人）
+  final frontRowBonus = maxRows - row;
+  final maxInRow = math.min(50, 20 + (frontRowBonus * 2));
+  final audienceInThisRow = math.min(remainingAudience, maxInRow);
+  
+  final spreadFactor = (row + 1) * 0.15;
+  final rowWidth = widget.width * (0.3 + spreadFactor).clamp(0.3, 0.9);
+  
+  // 🔧 修正: 中央を基準に左右対称に配置
+  final spacing = audienceInThisRow > 1 
+      ? rowWidth / (audienceInThisRow - 1)
+      : 0;
+  
+  for (int i = 0; i < audienceInThisRow; i++) {
+  // 🔧 修正: 中央から順番に左右交互に配置
+  // 0番目=中央、1番目=中央の左隣、2番目=中央の右隣、3番目=さらに左、4番目=さらに右...
+  
+  final stepSize = 5.0;  // 固定間隔
+  
+  double x;
+  if (i == 0) {
+    // 1人目は中央
+    x = stageCenter;
+  } else {
+    // 2人目以降は左右交互
+    final isLeft = i % 2 == 1;  // 奇数番目は左
+    final distanceStep = (i + 1) ~/ 2;  // 中央からの距離
+    final side = isLeft ? -1 : 1;
+    x = stageCenter + (side * distanceStep * stepSize);
+  }
+  
+  final yOffset = (random.nextDouble() - 0.5) * (rowHeight * 0.8);
   final y = rowY + yOffset;
   
-  final xOffset = (random.nextDouble() - 0.5) * 12;
+  final xOffset = (random.nextDouble() - 0.5) * 5;
   final finalX = x + xOffset;
   
   final colorIndex = random.nextInt(_AudiencePainter._audienceColors.length);
@@ -232,9 +255,9 @@ void _initializeStaticPositions() {
     size: audienceSize,
   ));
 }
-    
-    remainingAudience -= audienceInThisRow;
-  }
+  
+  remainingAudience -= audienceInThisRow;
+}
   
   setState(() {
     _confirmedPositions = initialFans;
@@ -285,14 +308,12 @@ void _initializeStaticPositions() {
   final audienceAreaHeight = widget.height - grassTop;
   final stageCenter = widget.width * 0.5;
   
-  // 🔧 修正: 固定行数を使用
   final maxRows = 40;
   final baseRowHeight = 12.0;
   final rowHeight = baseRowHeight;
   
   final random = math.Random(DateTime.now().millisecondsSinceEpoch);
   
-  // 🔧 修正: 既存の観客数を数えて、次の空きスロットから配置
   int positionsAdded = 0;
   int currentTotalAudience = _previousAudienceCount;
   
@@ -301,59 +322,71 @@ void _initializeStaticPositions() {
     final depthFactor = (row + 1) / maxRows;
     final audienceSize = 14.0 + (depthFactor * 4.0);
     
-    // 🔧 修正: この行の最大人数を計算
+    // この行の最大人数を50人に制限
     final frontRowBonus = maxRows - row;
-    final maxInRow = 30 + (frontRowBonus * 3);
+    final maxInRow = math.min(50, 20 + (frontRowBonus * 2));
     
-    // 🔧 修正: この行に既に何人いるかを計算
+    // この行に既に何人いるかを計算
     int existingInThisRow = 0;
     if (currentTotalAudience > 0) {
-      // 前の行までに何人いるか計算
       int peopleBefore = 0;
       for (int r = 0; r < row; r++) {
         final bonus = maxRows - r;
-        final maxInPrevRow = 30 + (bonus * 3);
+        final maxInPrevRow = math.min(50, 20 + (bonus * 2));
         peopleBefore += math.min(maxInPrevRow, math.max(0, currentTotalAudience - peopleBefore));
       }
       existingInThisRow = math.max(0, math.min(maxInRow, currentTotalAudience - peopleBefore));
     }
     
-    // 🔧 修正: この行に追加できる人数
+    // この行に追加できる人数
     final availableSlots = maxInRow - existingInThisRow;
     final newInThisRow = math.min(availableSlots, newFanCount - positionsAdded);
     
     if (newInThisRow > 0) {
       final spreadFactor = (row + 1) * 0.15;
       final rowWidth = widget.width * (0.3 + spreadFactor).clamp(0.3, 0.9);
-      final startX = stageCenter - (rowWidth / 2);
       
-      // 🔧 修正: 既存の人の後ろから配置
+      // この行の全体の配置を中央から計算
       final totalInRow = existingInThisRow + newInThisRow;
-      final spacing = rowWidth / math.max(1, totalInRow - 1);
+      final spacing = totalInRow > 1 
+          ? rowWidth / (totalInRow - 1)
+          : 0;
       
-      for (int i = existingInThisRow; i < totalInRow; i++) {
-  final x = startX + (i * spacing);
-  final yOffset = (random.nextDouble() - 0.5) * (rowHeight * 0.8);  // 変更: 0.2 → 0.8
+      // 新規ファンを中央寄りの空きスロットに配置
+for (int i = 0; i < newInThisRow; i++) {
+  final globalIndex = existingInThisRow + i;
+  
+  // 🔧 修正: 中央から順番に左右交互に配置
+  final stepSize = 5.0;
+  
+  double x;
+  if (globalIndex == 0) {
+    // 1人目は中央
+    x = stageCenter;
+  } else {
+    // 2人目以降は左右交互
+    final isLeft = globalIndex % 2 == 1;
+    final distanceStep = (globalIndex + 1) ~/ 2;
+    final side = isLeft ? -1 : 1;
+    x = stageCenter + (side * distanceStep * stepSize);
+  }
+  
+  final yOffset = (random.nextDouble() - 0.5) * (rowHeight * 0.8);
   final y = rowY + yOffset;
-  final xOffset = (random.nextDouble() - 0.5) * 12;
+  final xOffset = (random.nextDouble() - 0.5) * 5;
   
   newPositions.add(Offset(x + xOffset, y));
   positionsAdded++;
   
   if (positionsAdded >= newFanCount) break;
 }
+      
+      currentTotalAudience += newInThisRow;
     }
-    
-    currentTotalAudience += newInThisRow;
   }
   
   return newPositions;
 }
-  
-  Color _getRandomColor(math.Random random) {
-    return _AudiencePainter._audienceColors[random.nextInt(_AudiencePainter._audienceColors.length)];
-  }
-
   @override
 Widget build(BuildContext context) {
   return AnimatedBuilder(
@@ -381,7 +414,7 @@ Widget build(BuildContext context) {
   
   int _calculateAudienceForRow(int row, int maxRows, int remaining, double stageCenter, double totalWidth) {
   final frontRowBonus = maxRows - row;
-  final maxInRow = 30 + (frontRowBonus * 3);  // 変更: 20 + (frontRowBonus * 2) → 30 + (frontRowBonus * 3)
+  final maxInRow = math.min(50, 20 + (frontRowBonus * 2));  // 変更: 最大50人に制限
   
   if (row < maxRows * 0.4) {
     return math.min(remaining, maxInRow);

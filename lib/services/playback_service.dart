@@ -39,48 +39,47 @@ class PlaybackService {
     }
   }
   
-  /// 【新規追加】1日分のカレンダーデータを取得（キャッシュ対応）
   Future<CalendarDayData> _getCalendarDayData(DateTime date) async {
-    final cacheKey = _formatDateKey(date);
-    
-    // キャッシュチェック
-    if (_calendarCache.containsKey(cacheKey)) {
-      return _calendarCache[cacheKey]!;
-    }
-    
-    try {
-      // その日の完了記録を取得
-      final completions = await _achievementService.getTaskCompletionsByDate(date);
-      
-      // 成功タスクのみをカウント
-      final successfulCompletions = completions.where((c) => c.wasSuccessful).toList();
-      
-      // ユニークなタスクIDを抽出
-      final uniqueTaskIds = <String>{};
-      for (final completion in successfulCompletions) {
-        uniqueTaskIds.add(completion.taskId);
-      }
-      
-      // 4タスク全完了判定
-      final isFullCompletion = uniqueTaskIds.length >= 4;
-      
-      final dayData = CalendarDayData(
-        date: date,
-        completedTaskCount: successfulCompletions.length,
-        isFullCompletion: isFullCompletion,
-        completedTaskIds: uniqueTaskIds.toList(),
-        successfulTaskCount: successfulCompletions.length,
-      );
-      
-      // キャッシュに保存
-      _calendarCache[cacheKey] = dayData;
-      
-      return dayData;
-    } catch (e) {
-      print('❌ 日別カレンダーデータ取得エラー: $e');
-      return CalendarDayData.empty(date);
-    }
+  final cacheKey = _formatDateKey(date);
+  
+  // キャッシュチェック
+  if (_calendarCache.containsKey(cacheKey)) {
+    return _calendarCache[cacheKey]!;
   }
+  
+  try {
+    // その日の完了記録を取得
+    final completions = await _achievementService.getTaskCompletionsByDate(date);
+    
+    // 成功タスクのみをカウント
+    final successfulCompletions = completions.where((c) => c.wasSuccessful).toList();
+    
+    // ユニークなタスクIDを抽出
+    final uniqueTaskIds = <String>{};
+    for (final completion in successfulCompletions) {
+      uniqueTaskIds.add(completion.taskId);
+    }
+    
+    // 🔧 変更：1タスク以上完了で緑丸表示（ハードル下げ）
+    final isFullCompletion = uniqueTaskIds.length >= 1; // 🔧 4 → 1 に変更
+    
+    final dayData = CalendarDayData(
+      date: date,
+      completedTaskCount: successfulCompletions.length,
+      isFullCompletion: isFullCompletion,
+      completedTaskIds: uniqueTaskIds.toList(),
+      successfulTaskCount: successfulCompletions.length,
+    );
+    
+    // キャッシュに保存
+    _calendarCache[cacheKey] = dayData;
+    
+    return dayData;
+  } catch (e) {
+    print('❌ 日別カレンダーデータ取得エラー: $e');
+    return CalendarDayData.empty(date);
+  }
+}
 
   // ==================== デイリーレポート用メソッド ====================
   
@@ -244,43 +243,110 @@ class PlaybackService {
 
   // ==================== マンスリーレポート用メソッド ====================
   
-  /// 【新規追加】マンスリーレポートを取得
   Future<PlaybackReport> getMonthlyReport(int year, int month) async {
-    final cacheKey = 'monthly_${year}_${month}';
-    
-    // キャッシュチェック
-    if (_reportCache.containsKey(cacheKey)) {
-      return _reportCache[cacheKey]!;
-    }
-    
-    try {
-      final dailyTrend = await getMonthlyTrend(year, month);
-      final totalTasks = dailyTrend.fold(0, (sum, count) => sum + count);
-      final topAlbums = await getMonthlyTopAlbums(year, month);
-      
-      final report = PlaybackReport.monthly(
-        year: year,
-        month: month,
-        dailyTrend: dailyTrend,
-        totalTasks: totalTasks,
-        topAlbums: topAlbums,
-      );
-      
-      // キャッシュに保存
-      _reportCache[cacheKey] = report;
-      
-      return report;
-    } catch (e) {
-      print('❌ マンスリーレポート取得エラー: $e');
-      return PlaybackReport.monthly(
-        year: year,
-        month: month,
-        dailyTrend: [],
-        totalTasks: 0,
-        topAlbums: [],
-      );
-    }
+  final cacheKey = 'monthly_${year}_${month}';
+  
+  // キャッシュチェック
+  if (_reportCache.containsKey(cacheKey)) {
+    return _reportCache[cacheKey]!;
   }
+  
+  try {
+  final dailyTrend = await getMonthlyTrend(year, month);
+  final totalTasks = dailyTrend.fold(0, (sum, count) => sum + count);
+  final topAlbums = await getMonthlyTopAlbums(year, month);
+  final topTasks = await getMonthlyTopTasks(year, month); // 🆕 追加
+  
+  final weeklyData = await _calculateWeeklyAverage(year, month);
+  
+  final report = PlaybackReport.monthly(
+    year: year,
+    month: month,
+    dailyTrend: dailyTrend,
+    weeklyAverage: (weeklyData['averages'] as List).cast<double>(),
+    weekLabels: (weeklyData['labels'] as List).cast<String>(),
+    totalTasks: totalTasks,
+    topAlbums: topAlbums,
+    topTasks: topTasks, // 🆕 追加
+  );
+    
+    // キャッシュに保存
+    _reportCache[cacheKey] = report;
+    
+    return report;
+  } catch (e) {
+    print('❌ マンスリーレポート取得エラー: $e');
+    return PlaybackReport.monthly(
+      year: year,
+      month: month,
+      dailyTrend: [],
+      weeklyAverage: [],
+      weekLabels: [],
+      totalTasks: 0,
+      topAlbums: [],
+    );
+  }
+}
+
+/// 【新規追加】週別平均タスク数を計算
+Future<Map<String, List<dynamic>>> _calculateWeeklyAverage(int year, int month) async {
+  try {
+    // 月の最初と最後の日を取得
+    final firstDay = DateTime(year, month, 1);
+    final lastDay = DateTime(year, month + 1, 0);
+    
+    // 週別データを格納
+    final weeklyAverages = <double>[]; // 🔧 修正：明示的に<double>型
+    final weekLabels = <String>[];     // 🔧 修正：明示的に<String>型
+    
+    // 現在の週の開始日
+    DateTime currentWeekStart = firstDay;
+    int weekNumber = 1;
+    
+    while (currentWeekStart.isBefore(lastDay) || currentWeekStart.isAtSameMomentAs(lastDay)) {
+      // その週の終了日を計算（日曜日 or 月末）
+      DateTime currentWeekEnd = currentWeekStart.add(const Duration(days: 6));
+      
+      // 月末を超えないように調整
+      if (currentWeekEnd.isAfter(lastDay)) {
+        currentWeekEnd = lastDay;
+      }
+      
+      // その週の日数
+      final daysInWeek = currentWeekEnd.difference(currentWeekStart).inDays + 1;
+      
+      // その週のタスク数を集計
+      int weekTotalTasks = 0;
+      for (var date = currentWeekStart; 
+           date.isBefore(currentWeekEnd.add(const Duration(days: 1))); 
+           date = date.add(const Duration(days: 1))) {
+        final dayCount = await getDailyTaskCount(date);
+        weekTotalTasks += dayCount;
+      }
+      
+      // 平均を計算（小数点第1位まで）
+      final average = daysInWeek > 0 ? weekTotalTasks / daysInWeek : 0.0;
+      
+      weeklyAverages.add(double.parse(average.toStringAsFixed(1)));
+      weekLabels.add('第${weekNumber}週');
+      
+      // 次の週へ
+      currentWeekStart = currentWeekEnd.add(const Duration(days: 1));
+      weekNumber++;
+    }
+    
+    return {
+      'averages': weeklyAverages,  // 🔧 既に<double>型なので問題なし
+      'labels': weekLabels,        // 🔧 既に<String>型なので問題なし
+    };
+  } catch (e) {
+    print('❌ 週別平均計算エラー: $e');
+    return {
+      'averages': <double>[],  // 🔧 修正：明示的に<double>[]
+      'labels': <String>[],    // 🔧 修正：明示的に<String>[]
+    };
+  }
+}
   
   /// 【新規追加】月間の日別トレンド（折れ線グラフ用）
   Future<List<int>> getMonthlyTrend(int year, int month) async {
@@ -344,6 +410,48 @@ class PlaybackService {
       return [];
     }
   }
+
+  /// 【新規追加】月間のトップタスクを取得（上位3つ）
+Future<List<Map<String, dynamic>>> getMonthlyTopTasks(int year, int month) async {
+  try {
+    final monthStart = DateTime(year, month, 1);
+    final monthEnd = DateTime(year, month + 1, 0, 23, 59, 59);
+    
+    final allCompletions = await _achievementService.loadTaskCompletions();
+    
+    // 月間のタスクをフィルタ
+    final monthCompletions = allCompletions.where((c) {
+      return c.wasSuccessful &&
+             c.completedAt.isAfter(monthStart.subtract(const Duration(days: 1))) &&
+             c.completedAt.isBefore(monthEnd.add(const Duration(days: 1)));
+    }).toList();
+    
+    // タスクごとの再生回数を集計
+    final taskCounts = <String, Map<String, dynamic>>{};
+    
+    for (final completion in monthCompletions) {
+      if (!taskCounts.containsKey(completion.taskId)) {
+        taskCounts[completion.taskId] = {
+          'taskId': completion.taskId,
+          'taskTitle': completion.taskTitle,
+          'count': 0,
+        };
+      }
+      taskCounts[completion.taskId]!['count'] = 
+          (taskCounts[completion.taskId]!['count'] as int) + 1;
+    }
+    
+    // 回数順にソート
+    final sortedTasks = taskCounts.values.toList()
+      ..sort((a, b) => (b['count'] as int).compareTo(a['count'] as int));
+    
+    // 上位3つを返す
+    return sortedTasks.take(3).toList();
+  } catch (e) {
+    print('❌ 月間トップタスク取得エラー: $e');
+    return [];
+  }
+}
 
   // ==================== アニュアルレポート用メソッド ====================
   
