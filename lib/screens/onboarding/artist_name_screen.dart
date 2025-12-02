@@ -117,10 +117,10 @@ class _ArtistNameScreenState extends State<ArtistNameScreen>
         setState(() {
           _selectedImageBytes = bytes;
         });
-        _showSuccessMessage('写真を選択しました');
+        _showSuccessMessage('Photo selected');
       }
     } catch (e) {
-      _showErrorMessage('写真の選択に失敗しました');
+      _showErrorMessage('Failed to select photo');
     }
   }
 
@@ -129,30 +129,30 @@ class _ArtistNameScreenState extends State<ArtistNameScreen>
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          backgroundColor: const Color(0xFF1A1A2E),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: const Text(
-            'プロフィール写真を選択',
-            style: TextStyle(
-              color: Colors.white, 
-              fontFamily: 'Hiragino Sans',
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          content: const Text(
-            'どこから写真を選びますか？',
-            style: TextStyle(
-              color: Colors.white70, 
-              fontFamily: 'Hiragino Sans',
-            ),
-          ),
+  backgroundColor: const Color(0xFF2A2A2A), // 🔄 0xFF1A1A2E → 灰色に変更
+  shape: RoundedRectangleBorder(
+    borderRadius: BorderRadius.circular(20),
+  ),
+  title: const Text(
+    'Select Profile Photo', // 🔄 改行なし
+    style: TextStyle(
+      color: Colors.white, 
+      fontFamily: 'Hiragino Sans',
+      fontWeight: FontWeight.bold,
+    ),
+  ),
+  content: const Text(
+  'Where would you like\nto choose from?', // 🔄 改行位置を調整
+  style: TextStyle(
+    color: Colors.white70, 
+    fontFamily: 'Hiragino Sans',
+  ),
+),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
               child: const Text(
-                'キャンセル',
+                'Cancel',
                 style: TextStyle(color: Colors.white54),
               ),
             ),
@@ -164,7 +164,7 @@ class _ArtistNameScreenState extends State<ArtistNameScreen>
                   Icon(Icons.camera_alt, color: Color(0xFF1DB954), size: 20),
                   SizedBox(width: 8),
                   Text(
-                    'カメラ',
+                    'Camera',
                     style: TextStyle(color: Color(0xFF1DB954)),
                   ),
                 ],
@@ -178,7 +178,7 @@ class _ArtistNameScreenState extends State<ArtistNameScreen>
                   Icon(Icons.photo_library, color: Color(0xFF1DB954), size: 20),
                   SizedBox(width: 8),
                   Text(
-                    'ギャラリー',
+                    'Gallery',
                     style: TextStyle(color: Color(0xFF1DB954)),
                   ),
                 ],
@@ -242,7 +242,7 @@ class _ArtistNameScreenState extends State<ArtistNameScreen>
             Icon(Icons.info_outline, color: Colors.white),
             SizedBox(width: 12),
             Text(
-              'アーティスト名を入力してください',
+              'Please enter your artist name',
               style: TextStyle(fontFamily: 'Hiragino Sans'),
             ),
           ],
@@ -333,10 +333,6 @@ class _ArtistNameScreenState extends State<ArtistNameScreen>
                     decoration: BoxDecoration(
                       color: const Color(0xFF1DB954),
                       shape: BoxShape.circle,
-                      border: Border.all(
-                        color: Colors.white.withOpacity(0.3),
-                        width: 2,
-                      ),
                     ),
                     child: ClipOval(
                       child: _selectedImageBytes != null
@@ -382,6 +378,22 @@ class _ArtistNameScreenState extends State<ArtistNameScreen>
                 ),
               ),
             ),
+
+            // 🆕 以下を追加
+Positioned(
+  top: iconPosition + 70,
+  left: 0,
+  right: 0,
+  child: Text(
+    'Tap to set icon',
+    style: TextStyle(
+      fontSize: 12,
+      color: Colors.white.withOpacity(0.4),
+      fontFamily: 'Hiragino Sans',
+    ),
+    textAlign: TextAlign.center,
+  ),
+),
             
             // 質問文（画面の50%の位置）
             Positioned(
@@ -389,7 +401,7 @@ class _ArtistNameScreenState extends State<ArtistNameScreen>
               left: 0,
               right: 0,
               child: const Text(
-                'あなたのアーティスト名は？',
+                'What\'s your artist name?',
                 style: TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
@@ -436,7 +448,7 @@ class _ArtistNameScreenState extends State<ArtistNameScreen>
           fontFamily: 'Hiragino Sans',
         ),
         decoration: InputDecoration(
-          hintText: 'あなたの名前',
+          hintText: 'Your name',
           hintStyle: TextStyle(
             color: Colors.white.withOpacity(0.4),
             fontSize: 20,
@@ -450,10 +462,7 @@ class _ArtistNameScreenState extends State<ArtistNameScreen>
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(
-              color: Color(0xFF1DB954),
-              width: 3,
-            ),
+            
           ),
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 24,
@@ -489,7 +498,7 @@ class _ArtistNameScreenState extends State<ArtistNameScreen>
             ),
           ),
           child: const Text(
-            '次へ',
+            'Next',
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w600,

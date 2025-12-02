@@ -4,6 +4,9 @@ import 'package:palette_generator/palette_generator.dart';
 import 'dart:io';
 import 'dart:typed_data';
 import '../models/task_item.dart';
+import '../models/lyric_note_item.dart';
+import '../widgets/lyric_notes/lyric_notes_editor_screen.dart';
+import '../services/data_service.dart';
 
 
 class AlbumDetailScreen extends StatefulWidget {
@@ -15,7 +18,9 @@ class AlbumDetailScreen extends StatefulWidget {
   final VoidCallback? onPlayPressed;
   final Function(int)? onPlayTaskPressed;
   final VoidCallback? onClose;
-  final VoidCallback? onNavigateToSettings;  // 🆕 追加
+  final VoidCallback? onNavigateToSettings;
+  final String? albumId;           // 🆕 追加
+  final bool isSingleAlbum;        // 🆕 追加
 
   const AlbumDetailScreen({
     super.key,
@@ -27,7 +32,9 @@ class AlbumDetailScreen extends StatefulWidget {
     this.onPlayPressed,
     this.onPlayTaskPressed,
     this.onClose,
-    this.onNavigateToSettings,  // 🆕 追加
+    this.onNavigateToSettings,
+    this.albumId,                  // 🆕 追加
+    this.isSingleAlbum = false,    // 🆕 追加
   });
 
   @override
@@ -441,12 +448,10 @@ Widget build(BuildContext context) {
 
   Widget _buildTrackItem(TaskItem task, int index) {
   return GestureDetector(
-    // 🔧 修正: onCloseを呼ばずに直接PlayerScreenを開く
     onTap: () {
       print('🎵 タスクタップ: ${task.title} (index: $index)');
       
       if (widget.onPlayTaskPressed != null) {
-        // 🔧 重要: onCloseを呼ばずに直接PlayerScreenを開く
         widget.onPlayTaskPressed!(index);
       } else if (widget.onPlayPressed != null) {
         widget.onPlayPressed!();
@@ -508,16 +513,16 @@ Widget build(BuildContext context) {
 
           const SizedBox(width: 16),
 
-          // More Options (3点横、右詰め)
+          // 🔧 修正：鉛筆アイコンに変更
           GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: () {
-              _showTrackOptions(task, index);
+              _openLyricNotesEditor(task, index);
             },
             child: Container(
               padding: const EdgeInsets.all(8),
               child: Icon(
-                Icons.more_horiz,
+                Icons.edit_outlined, // 🔧 鉛筆アイコン
                 color: Colors.white.withOpacity(0.6),
                 size: 24,
               ),
@@ -527,6 +532,78 @@ Widget build(BuildContext context) {
       ),
     ),
   );
+}
+
+/// 🆕 新規追加：Lyric Notes エディタを開く
+void _openLyricNotesEditor(TaskItem task, int index) async {
+  // 🔧 修正：await で結果を待つ
+  await Navigator.of(context).push(
+    PageRouteBuilder(
+      fullscreenDialog: true,
+      opaque: true,
+      pageBuilder: (context, animation, secondaryAnimation) {
+        return SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0, 1),
+            end: Offset.zero,
+          ).animate(CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeInOut,
+          )),
+          child: LyricNotesEditorScreen(
+            taskTitle: task.title.isEmpty ? 'タスク${index + 1}' : task.title,
+            initialNotes: task.lyricNotes ?? [],
+            backgroundColor: Colors.black,
+            onSave: (notes) async {
+              await _saveLyricNotes(task.id, notes);
+            },
+            onClose: () => Navigator.of(context).pop(),
+          ),
+        );
+      },
+      transitionDuration: const Duration(milliseconds: 300),
+    ),
+  );
+  
+  // 🔧 修正：エディタから戻った後、PlayerScreenを開く
+  if (widget.onPlayTaskPressed != null) {
+    widget.onPlayTaskPressed!(index);
+  }
+}
+
+/// 🆕 新規追加：Lyric Notes を保存
+Future<void> _saveLyricNotes(String taskId, List<LyricNoteItem> notes) async {
+  try {
+    final dataService = DataService();
+    
+    // 🔧 修正：シングルアルバムかライフドリームアルバムかで分岐
+    if (widget.isSingleAlbum && widget.albumId != null) {
+      // シングルアルバムの場合
+      await dataService.updateSingleAlbumTaskLyricNotes(
+        albumId: widget.albumId!,
+        taskId: taskId,
+        notes: notes,
+      );
+      print('✅ シングルアルバムのLyric Notes保存完了: $taskId (${notes.length}行)');
+    } else {
+      // ライフドリームアルバムの場合
+      await dataService.updateTaskLyricNotes(taskId, notes);
+      print('✅ ライフドリームアルバムのLyric Notes保存完了: $taskId (${notes.length}行)');
+    }
+    
+    // タスクリストを更新
+    setState(() {
+      final taskIndex = widget.tasks.indexWhere((t) => t.id == taskId);
+      if (taskIndex != -1) {
+        widget.tasks[taskIndex] = widget.tasks[taskIndex].copyWith(
+          lyricNotes: notes,
+        );
+      }
+    });
+    
+  } catch (e) {
+    print('❌ Lyric Notes保存エラー: $e');
+  }
 }
 
   void _showTrackOptions(TaskItem task, int index) {

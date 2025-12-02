@@ -17,6 +17,7 @@ import 'screens/onboarding/onboarding_wrapper.dart';
 import 'screens/single_album_create_screen.dart';
 import 'screens/charts_screen.dart';
 import 'screens/playback_screen.dart'; 
+import 'screens/app_settings_screen.dart';
 import 'models/task_item.dart';
 import 'models/single_album.dart';
 import 'services/data_service.dart';
@@ -107,6 +108,8 @@ class _MainWrapperState extends State<MainWrapper> with WidgetsBindingObserver, 
   late final AudioService _audioService;
 
   final GlobalKey _playerScreenKey = GlobalKey(); // 🔧 変更：型指定を削除
+
+
   // 🆕 追加：アニメーション制御用
 bool _isAnimating = false;
 
@@ -177,6 +180,10 @@ double _playerDragVelocity = 0.0; // 🆕 追加：ドラッグ速度を記録
   // 今日のタスク完了回数をリアルタイム管理
   Map<String, int> _todayTaskCompletions = {};
 
+  late AnimationController _playerDragController;
+late Animation<double> _playerDragAnimation;
+  
+
   void _showArtistScreen() {
     setState(() {
       _isArtistScreenVisible = true;
@@ -201,9 +208,11 @@ double _playerDragVelocity = 0.0; // 🆕 追加：ドラッグ速度を記録
     _elapsedSeconds = 0;
     _currentProgress = 0.0;
     _isPlayerScreenVisible = true;
-    _playerDragOffset = 0.0; // 🔧 追加：完全に開いた状態
-    _isDraggingPlayer = false; // 🔧 追加
+    _isDraggingPlayer = false;
   });
+  
+  // 🔧 修正：AnimationController を 0.0 に設定
+  _playerDragController.value = 0.0;
   
   print('🌟 理想像ページでプレイヤーを開始しました（インデックス: -1）');
 }
@@ -291,6 +300,17 @@ void initState() {
   _registerWithController();
   _initializeNotificationService();
   _loadTodayCompletions();
+
+  // 🆕 追加：ドラッグ用 AnimationController
+_playerDragController = AnimationController(
+  vsync: this,
+  value: 1.0, // 初期値：閉じた状態
+);
+
+_playerDragAnimation = Tween<double>(
+  begin: 0.0,
+  end: 1.0,
+).animate(_playerDragController);
 }
 
   @override
@@ -303,6 +323,7 @@ void initState() {
     _audioService.dispose(); 
     _endLiveActivityIfNeeded();
     _activityUpdateTimer?.cancel();
+    _playerDragController.dispose();
 
     super.dispose();
   }
@@ -1889,51 +1910,54 @@ Future<void> _initializeAudioService() async {
       _playingSingleAlbum = null;
       _startNewTask();
       _isPlayerScreenVisible = true;
-      _playerDragOffset = 0.0; // 🔧 追加
-      _isDraggingPlayer = false; // 🔧 追加
+      _isDraggingPlayer = false;
     });
   } else {
     setState(() {
       _isPlayerScreenVisible = true;
-      _playerDragOffset = 0.0; // 🔧 追加
-      _isDraggingPlayer = false; // 🔧 追加
+      _isDraggingPlayer = false;
     });
   }
+  
+  // 🔧 修正：AnimationController を 0.0 に設定
+  _playerDragController.value = 0.0;
 }
 
   void _showFullPlayerWithTask(int taskIndex) {
   _stopProgressTimer();
   
-  setState(() {
-    _playingTasks = List.from(_currentTasks);
-    _isPlayingSingleAlbum = false;
-    _playingSingleAlbum = null;
-    _currentTaskIndex = taskIndex == -1 ? 0 : taskIndex;
-    _isPlaying = true;
-    _startNewTask();
-    _isPlayerScreenVisible = true;
-    _playerDragOffset = 0.0; // 🔧 追加
-    _isDraggingPlayer = false; // 🔧 追加
+  // 🔧 修正：最新のタスクデータを読み込み直す
+  _loadUserData().then((_) {
+    setState(() {
+      _playingTasks = List.from(_currentTasks);
+      _isPlayingSingleAlbum = false;
+      _playingSingleAlbum = null;
+      _currentTaskIndex = taskIndex == -1 ? 0 : taskIndex;
+      _isPlaying = true;
+      _startNewTask();
+      _isPlayerScreenVisible = true;
+      _isDraggingPlayer = false;
+    });
+    
+    _playerDragController.value = 0.0;
   });
 }
-
-  void _showSingleAlbumPlayer(SingleAlbum album, {int taskIndex = 0}) {
+  void _showSingleAlbumPlayer(SingleAlbum album, {int taskIndex = 0}) async {
   _stopProgressTimer();
   
   print('🎵 シングルアルバムプレイヤー開始: ${album.albumName}, タスクインデックス: $taskIndex');
-  print('🎵 アルバム画像あり: ${album.albumCoverImage != null}');
-  print('🎵 現在の状態: albumDetail=$_isAlbumDetailVisible, player=$_isPlayerScreenVisible');
-  print('🎵 現在のdragOffset: $_playerDragOffset, isAnimating: $_isAnimating');
   
-  // 🔧 追加：シングルアルバムのタスク完了回数を読み込み
-  _loadSingleAlbumTaskCompletions(album);
+  final latestAlbum = await _dataService.getSingleAlbum(album.id);
+  final albumToPlay = latestAlbum ?? album;
+  
+  _loadSingleAlbumTaskCompletions(albumToPlay);
   
   setState(() {
-    _playingTasks = List.from(album.tasks);
+    _playingTasks = List.from(albumToPlay.tasks);
     _isPlayingSingleAlbum = true;
-    _playingSingleAlbum = album;
+    _playingSingleAlbum = albumToPlay;
     _currentTaskIndex = taskIndex;
-    _isPlaying = true;
+    _isPlaying = false;  // 🔧 修正：falseに変更（デフォルトは停止状態）
     _startNewTask();
     
     _isPlayerScreenVisible = true;
@@ -1942,15 +1966,9 @@ Future<void> _initializeAudioService() async {
     _isDraggingPlayer = false;
   });
   
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    if (mounted) {
-      print('🎵 PostFrameCallback: _openPlayerWithAnimation()を実行');
-      print('🎵 実行前のdragOffset: $_playerDragOffset');
-      _openPlayerWithAnimation();
-    }
-  });
+  _playerDragController.value = 0.0;
   
-  print('🎵 PlayerScreen表示完了: isVisible=$_isPlayerScreenVisible, albumDetail=$_isAlbumDetailVisible');
+  print('🎵 PlayerScreen表示完了: isVisible=$_isPlayerScreenVisible, isPlaying=$_isPlaying');
 }
 
 // 🆕 シングルアルバムのタスク完了回数を読み込み
@@ -3017,81 +3035,69 @@ Widget _buildCurrentScreen() {
       if (_isAlbumDetailVisible) _buildAlbumDetailScreen(),
       
       // PlayerScreen
-      if (_playingTasks.isNotEmpty && (_isDraggingPlayer || _playerDragOffset < 1.0 || _isPlayerScreenVisible))
-        Positioned(
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onVerticalDragStart: (details) {
-              print('🔧 MainWrapper: onVerticalDragStart呼ばれた');
-              
-              final isAtTop = PlayerScreen.isAtTopOfScroll(_playerScreenKey);
-              print('🔧 isAtTop: $isAtTop');
-              
-              if (!isAtTop) {
-                print('🔧 スクロールが上にいないため無視');
-                return;
-              }
-              
-              if (_isAnimating) {
-                setState(() {
-                  _isAnimating = false;
-                });
-              }
-              
-              setState(() {
-                _isDraggingPlayer = true;
-                _isPlayerScreenVisible = true;
-              });
-              
-              print('🔧 ドラッグ開始');
-            },
-            onVerticalDragUpdate: (details) {
-              if (_isDraggingPlayer && !_isAnimating) {
-                setState(() {
-                  final deltaOffset = details.delta.dy / screenHeight;
-                  _playerDragOffset = (_playerDragOffset + deltaOffset).clamp(0.0, 1.0);
-                });
-                
-                print('🔧 PlayerDragOffset: $_playerDragOffset');
-              }
-            },
-            onVerticalDragEnd: (details) {
-              print('🔧 MainWrapper: onVerticalDragEnd');
-              
-              if (!_isDraggingPlayer) return;
-              
-              setState(() {
-                _isDraggingPlayer = false;
-              });
-              
-              final velocity = details.primaryVelocity ?? 0;
-              
-              if (velocity > 500 || _playerDragOffset > 0.3) {
-                print('🔧 閉じる');
-                _closePlayerWithAnimation();
-              } else {
-                print('🔧 開く');
-                _openPlayerWithAnimation();
-              }
-            },
-            child: Transform.translate(
-              offset: Offset(0, screenHeight * _playerDragOffset),
-              child: Container(
-                height: screenHeight,
-                width: double.infinity,
-                color: Colors.transparent,
-                child: IgnorePointer(
-                  ignoring: false,
-                  child: _buildPlayerScreen(),
-                ),
-              ),
-            ),
+if (_playingTasks.isNotEmpty && (_isDraggingPlayer || _playerDragController.value < 1.0 || _isPlayerScreenVisible))
+  Positioned(
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    child: GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onVerticalDragStart: (details) {
+        final isAtTop = PlayerScreen.isAtTopOfScroll(_playerScreenKey);
+        if (!isAtTop) return;
+        
+        if (_isAnimating) {
+          setState(() {
+            _isAnimating = false;
+          });
+        }
+        
+        setState(() {
+          _isDraggingPlayer = true;
+          _isPlayerScreenVisible = true;
+        });
+      },
+      onVerticalDragUpdate: (details) {
+        if (_isDraggingPlayer && !_isAnimating) {
+          final deltaOffset = details.delta.dy / screenHeight;
+          _playerDragController.value = (_playerDragController.value + deltaOffset).clamp(0.0, 1.0);
+        }
+      },
+      onVerticalDragEnd: (details) {
+  if (!_isDraggingPlayer) return;
+  
+  // 🔧 修正：setState を削除して即座にアニメーション開始
+  _isDraggingPlayer = false;
+  
+  final velocity = details.primaryVelocity ?? 0;
+  final currentValue = _playerDragController.value;
+  
+  if (velocity > 500 || currentValue > 0.3) {
+    _closePlayerWithAnimation();
+  } else {
+    _openPlayerWithAnimation();
+  }
+},
+      child: AnimatedBuilder(
+        animation: _playerDragAnimation,
+        builder: (context, child) {
+          return Transform.translate(
+            offset: Offset(0, screenHeight * _playerDragAnimation.value),
+            child: child,
+          );
+        },
+        child: RepaintBoundary(
+          child: Container(
+            height: screenHeight,
+            width: double.infinity,
+            color: Colors.transparent,
+            child: _buildPlayerScreen(),
           ),
         ),
+      ),
+    ),
+  ),
       
       // 設定画面（最前面）
       if (_isSettingsVisible) _buildSettingsScreen(),
@@ -3177,6 +3183,8 @@ Widget _buildMainContent() {
       artistName: _currentArtistName,
       tasks: album.tasks,
       imageBytes: album.albumCoverImage,
+      albumId: album.id,              // 🔧 追加
+      isSingleAlbum: true,            // 🔧 追加
       onPlayPressed: () {
         // 🔧 修正：PlayerScreenを開く（アルバム詳細は非表示）
         if (_isPlayingSingleAlbum && _playingSingleAlbum != null && _playingSingleAlbum!.id == album.id) {
@@ -3238,6 +3246,8 @@ Widget _buildMainContent() {
       artistName: _currentArtistName,
       tasks: _currentTasks,
       imageBytes: _imageBytes,
+      albumId: null,                  // 🔧 追加
+      isSingleAlbum: false,           // 🔧 追加
       onPlayPressed: () {
         // 🔧 修正：PlayerScreenを開く（アルバム詳細は非表示）
         setState(() {
@@ -3640,30 +3650,32 @@ void _showCompletionResultDialog(bool allCompleted) {
   }
 
   Widget _buildBottomSection() {
-  if ((_playerDragOffset <= 0.1 && _isPlayerScreenVisible) || _isSettingsVisible) {
-    return const SizedBox.shrink();
-  }
-  
-  // 🔧 修正：0.9以下で完全に消える、0.95以上で完全に表示
-  final opacity = _playerDragOffset >= 0.95 
-      ? 1.0 
-      : _playerDragOffset <= 0.9 
-          ? 0.0 
-          : ((_playerDragOffset - 0.9) / 0.05);
-  
-  return AnimatedOpacity(
-    opacity: opacity,
-    duration: _isAnimating 
-        ? const Duration(milliseconds: 300)
-        : Duration.zero,
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (_playingTasks.isNotEmpty) _buildMiniPlayerWithDrag(),
-        if (_playingTasks.isNotEmpty) _buildFullWidthProgressBar(),
-        _buildPageSelector(),
-      ],
-    ),
+  return AnimatedBuilder(
+    animation: _playerDragController,
+    builder: (context, child) {
+      if (_playerDragController.value < 0.1 || _isSettingsVisible) {
+        return const SizedBox.shrink();
+      }
+      
+      // 🔧 value が変わるたびに再計算
+      final opacity = _playerDragController.value >= 0.95 
+          ? 1.0 
+          : _playerDragController.value <= 0.7
+              ? 0.0 
+              : ((_playerDragController.value - 0.7) / 0.25);
+      
+      return Opacity(
+        opacity: opacity,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (_playingTasks.isNotEmpty) _buildMiniPlayerWithDrag(),
+            if (_playingTasks.isNotEmpty) _buildFullWidthProgressBar(),
+            _buildPageSelector(),
+          ],
+        ),
+      );
+    },
   );
 }
 
@@ -3696,34 +3708,26 @@ Widget _buildMiniPlayerWithDrag() {
       });
     },
     onVerticalDragUpdate: (details) {
-      if (_isDraggingPlayer && !_isAnimating) {
-        setState(() {
-          final deltaOffset = details.delta.dy / screenHeight;
-          _playerDragOffset = (_playerDragOffset + deltaOffset).clamp(0.0, 1.0);
-        });
-        
-        print('🎵 簡易プレイヤー: Offset = $_playerDragOffset');
-      }
-    },
+  if (_isDraggingPlayer && !_isAnimating) {
+    final deltaOffset = details.delta.dy / screenHeight;
+    _playerDragController.value = (_playerDragController.value + deltaOffset).clamp(0.0, 1.0);
+  }
+},
     onVerticalDragEnd: (details) {
-      print('🎵 簡易プレイヤー: ドラッグ終了');
-      
-      if (!_isDraggingPlayer) return;
-      
-      setState(() {
-        _isDraggingPlayer = false;
-      });
-      
-      final velocity = details.primaryVelocity ?? 0;
-      
-      if (velocity < -500 || _playerDragOffset < 0.7) {
-        print('🎵 簡易プレイヤー: PlayerScreenを開く');
-        _openPlayerWithAnimation();
-      } else {
-        print('🎵 簡易プレイヤー: PlayerScreenを閉じる');
-        _closePlayerWithAnimation();
-      }
-    },
+  if (!_isDraggingPlayer) return;
+  
+  // 🔧 修正：setState を削除
+  _isDraggingPlayer = false;
+  
+  final velocity = details.primaryVelocity ?? 0;
+  final currentValue = _playerDragController.value;
+  
+  if (velocity < -500 || currentValue < 0.7) {
+    _openPlayerWithAnimation();
+  } else {
+    _closePlayerWithAnimation();
+  }
+},
     onTap: () {
       print('🎵 簡易プレイヤー: タップで開く');
       _openPlayerWithAnimation();
@@ -4091,113 +4095,51 @@ final clampedOpacity = miniPlayerOpacity.clamp(0.0, 1.0);
 }
 
 void _openPlayerWithAnimation() {
-  print('🔧 _openPlayerWithAnimation()が呼ばれました');
-  print('🔧 現在の状態: mounted=$mounted, isAnimating=$_isAnimating, dragOffset=$_playerDragOffset');
+  if (!mounted) return;
   
-  if (!mounted || _isAnimating) {
-    print('🔧 条件により実行中止: mounted=$mounted, isAnimating=$_isAnimating');
-    return;
-  }
+  _isAnimating = true;
+  _isPlayerScreenVisible = true;
   
-  print('🔧 開くアニメーション開始: 現在offset=$_playerDragOffset');
+  final remainingDistance = _playerDragController.value;
+  final duration = (400 * remainingDistance).toInt().clamp(250, 400); // 🔧 修正：250〜400ms
   
-  setState(() {
-    _isPlayerScreenVisible = true;
-    _isAnimating = true;
-  });
-  
-  // 🔧 修正：AnimationControllerを使用して確実にアニメーション
-  final controller = AnimationController(
-    duration: const Duration(milliseconds: 300),
-    vsync: this,
-  );
-  
-  final animation = Tween<double>(
-    begin: _playerDragOffset,
-    end: 0.0,
-  ).animate(CurvedAnimation(
-    parent: controller,
-    curve: Curves.easeOut,
-  ));
-  
-  animation.addListener(() {
+  _playerDragController.animateTo(
+    0.0,
+    duration: Duration(milliseconds: duration),
+    curve: Curves.easeOutCubic,
+  ).then((_) {
     if (mounted) {
       setState(() {
-        _playerDragOffset = animation.value;
-      });
-      print('🔧 アニメーション中: offset=${_playerDragOffset.toStringAsFixed(2)}');
-    }
-  });
-  
-  controller.forward().then((_) {
-    if (mounted) {
-      setState(() {
-        _playerDragOffset = 0.0; // 🔧 重要：確実に0.0にする
         _isAnimating = false;
       });
-      controller.dispose();
-      print('🔧 開くアニメーション完了: offset=$_playerDragOffset');
     }
   });
 }
 
-
 void _closePlayerWithAnimation() {
-  if (!mounted || _isAnimating) return;
+  if (!mounted) return;
   
-  print('🔧 閉じるアニメーション開始: 現在offset=$_playerDragOffset');
-  print('🔍 現在の状態:');
-  print('  - _currentTaskIndex: $_currentTaskIndex');
-  print('  - _isPlayingSingleAlbum: $_isPlayingSingleAlbum');
-  print('  - _playingTasks.length: ${_playingTasks.length}');
-  if (_playingTasks.isNotEmpty) {
-    print('  - _playingTasks[0].title: ${_playingTasks[0].title}');
-    if (_currentTaskIndex >= 0 && _currentTaskIndex < _playingTasks.length) {
-      print('  - _playingTasks[_currentTaskIndex].title: ${_playingTasks[_currentTaskIndex].title}');
-    }
-  }
-  if (_playingSingleAlbum != null) {
-    print('  - _playingSingleAlbum.albumName: ${_playingSingleAlbum!.albumName}');
-  }
+  _isAnimating = true;
   
-  setState(() {
-    _isAnimating = true;
-  });
+  final remainingDistance = 1.0 - _playerDragController.value;
+  final duration = (400 * remainingDistance).toInt().clamp(250, 400); // 🔧 修正：250〜400ms
   
-  // 🔧 修正：AnimationControllerを使用
-  final controller = AnimationController(
-    duration: const Duration(milliseconds: 300),
-    vsync: this,
-  );
-  
-  final animation = Tween<double>(
-    begin: _playerDragOffset,
-    end: 1.0,
-  ).animate(CurvedAnimation(
-    parent: controller,
-    curve: Curves.easeOut,
-  ));
-  
-  animation.addListener(() {
-    if (mounted) {
-      setState(() {
-        _playerDragOffset = animation.value;
-      });
-    }
-  });
-  
-  controller.forward().then((_) {
+  _playerDragController.animateTo(
+    1.0,
+    duration: Duration(milliseconds: duration),
+    curve: Curves.easeOutCubic,
+  ).then((_) {
     if (mounted) {
       setState(() {
         _isPlayerScreenVisible = false;
-        _playerDragOffset = 1.0; // 🔧 重要：確実に1.0にする
         _isAnimating = false;
       });
-      controller.dispose();
-      print('🔧 閉じるアニメーション完了: offset=$_playerDragOffset');
     }
   });
 }
+
+
+
 
 
 

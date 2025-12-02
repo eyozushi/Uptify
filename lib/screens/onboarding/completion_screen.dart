@@ -143,7 +143,7 @@ class _CompletionScreenState extends State<CompletionScreen> {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Text(
-                'どんなSNSの投稿より\n素敵なあなたに出会おう',
+                'Meet the best version of yourself,\nbetter than any social media post',
                 style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w500,
@@ -155,7 +155,7 @@ class _CompletionScreenState extends State<CompletionScreen> {
               ),
               const SizedBox(height: 20),
               Text(
-                '今日の小さな選択が\nあなたの未来を変える',
+                'Today\'s small choices\nshape your future',
                 style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w500,
@@ -288,7 +288,7 @@ class _CompletionScreenState extends State<CompletionScreen> {
             ),
             SizedBox(height: 16),
             Text(
-              '理想像',
+              'Your Ideal',
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 16,
@@ -323,7 +323,7 @@ class _CompletionScreenState extends State<CompletionScreen> {
             ),
           ),
           child: const Text(
-            'タスクをプレイする',
+            'Play Your Tasks',
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w600,

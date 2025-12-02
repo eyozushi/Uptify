@@ -805,4 +805,73 @@ Future<Map<String, dynamic>> getAnnualStatistics(int year) async {
   }
 }
 
+/// 【新規追加】連続タスク実行日数を取得
+  /// 【新規追加】連続タスク実行日数を取得
+  Future<int> getConsecutiveDays() async {
+  try {
+    final allCompletions = await _achievementService.loadTaskCompletions();
+    
+    // 成功したタスクのみを日付でグループ化
+    final completionDates = <String>{};
+    for (final completion in allCompletions) {
+      if (completion.wasSuccessful) {
+        final dateKey = _formatDateKey(completion.completedAt);
+        completionDates.add(dateKey);
+      }
+    }
+    
+    if (completionDates.isEmpty) return 0;
+    
+    // 日付をDateTimeオブジェクトに変換してソート
+    final dates = completionDates.map((dateKey) {
+      final parts = dateKey.split('-');
+      return DateTime(
+        int.parse(parts[0]),
+        int.parse(parts[1]),
+        int.parse(parts[2]),
+      );
+    }).toList()
+      ..sort((a, b) => b.compareTo(a)); // 降順
+    
+    // 今日と昨日の日付（時刻を00:00:00に正規化）
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    
+    // 🔧 修正：最新の実行日を確認
+    final latestDate = dates.first;
+    
+    // 🔧 新ロジック：最新実行日が今日か昨日でなければ0
+    if (!latestDate.isAtSameMomentAs(today) && 
+        !latestDate.isAtSameMomentAs(yesterday)) {
+      print('⚠️ 最新実行日: ${_formatDateKey(latestDate)} - 今日でも昨日でもない → 0日');
+      return 0;
+    }
+    
+    // 🔧 新ロジック：昨日から遡って連続日数をカウント
+    // （今日実行していてもいなくても、昨日までの連続をカウント）
+    int consecutiveDays = 0;
+    DateTime checkDate = yesterday;
+    
+    // 昨日から過去に向かって連続日数をカウント
+    while (dates.any((date) => date.isAtSameMomentAs(checkDate))) {
+      consecutiveDays++;
+      checkDate = checkDate.subtract(const Duration(days: 1));
+    }
+    
+    // 🔧 新ロジック：今日実行済みなら +1
+    if (latestDate.isAtSameMomentAs(today)) {
+      consecutiveDays++;
+      print('✅ 今日実行済み: 昨日まで${consecutiveDays - 1}日 + 今日1日 = ${consecutiveDays}日');
+    } else {
+      print('📅 今日未実行: 昨日までの連続${consecutiveDays}日を表示');
+    }
+    
+    return consecutiveDays;
+  } catch (e) {
+    print('❌ 連続日数取得エラー: $e');
+    return 0;
+  }
+}
+
 }

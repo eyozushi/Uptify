@@ -111,7 +111,7 @@ class _ImageSelectionScreenState extends State<ImageSelectionScreen>
     setState(() {
       _selectedImageBytes = null;
     });
-    _showSuccessMessage('写真を削除しました');
+    _showSuccessMessage('Photo removed');
   }
 
   void _onNextPressed() {
@@ -124,30 +124,32 @@ class _ImageSelectionScreenState extends State<ImageSelectionScreen>
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          backgroundColor: const Color(0xFF1A1A2E),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: const Text(
-            '理想像の写真を選択',
-            style: TextStyle(
-              color: Colors.white, 
-              fontFamily: 'Hiragino Sans',
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          content: const Text(
-            'あなたの理想像を表す写真を\nどこから選びますか？',
-            style: TextStyle(
-              color: Colors.white70, 
-              fontFamily: 'Hiragino Sans',
-            ),
-          ),
+  backgroundColor: const Color(0xFF2A2A2A), // 🔄 0xFF1A1A2E → 灰色に変更
+  shape: RoundedRectangleBorder(
+    borderRadius: BorderRadius.circular(20),
+  ),
+  title: const Text(
+    'Select Your Ideal Image', // 🔄 改行なし
+    style: TextStyle(
+      color: Colors.white, 
+      fontFamily: 'Hiragino Sans',
+      fontWeight: FontWeight.bold,
+      fontSize: 18,
+    ),
+  ),
+  content: const Text(
+  'Where would you like to choose a photo that represents your ideal self?',
+  style: TextStyle(
+    color: Colors.white70, 
+    fontFamily: 'Hiragino Sans',
+    fontSize: 13, // 🆕 追加：サイズを小さく
+  ),
+),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
               child: const Text(
-                'キャンセル',
+                'Cancel',
                 style: TextStyle(color: Colors.white54),
               ),
             ),
@@ -159,7 +161,7 @@ class _ImageSelectionScreenState extends State<ImageSelectionScreen>
                   Icon(Icons.camera_alt, color: Color(0xFF1DB954), size: 20),
                   SizedBox(width: 8),
                   Text(
-                    'カメラ',
+                    'Camera',
                     style: TextStyle(color: Color(0xFF1DB954)),
                   ),
                 ],
@@ -173,7 +175,7 @@ class _ImageSelectionScreenState extends State<ImageSelectionScreen>
                   Icon(Icons.photo_library, color: Color(0xFF1DB954), size: 20),
                   SizedBox(width: 8),
                   Text(
-                    'ギャラリー',
+                    'Gallery',
                     style: TextStyle(color: Color(0xFF1DB954)),
                   ),
                 ],
@@ -319,9 +321,9 @@ class _ImageSelectionScreenState extends State<ImageSelectionScreen>
               left: 0,
               right: 0,
               child: const Text(
-                'その理想のイメージは？',
+                'What does that ideal look like?',
                 style: TextStyle(
-                  fontSize: 24,
+                  fontSize: 20,
                   fontWeight: FontWeight.bold,
                   color: Colors.white,
                   fontFamily: 'Hiragino Sans',
@@ -376,7 +378,7 @@ class _ImageSelectionScreenState extends State<ImageSelectionScreen>
                   ),
                   SizedBox(height: 12),
                   Text(
-                    '選択',
+                    'Select',
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 16,
@@ -408,7 +410,7 @@ class _ImageSelectionScreenState extends State<ImageSelectionScreen>
             ),
           ),
           child: Text(
-            _selectedImageBytes != null ? '次へ' : '写真なしで次へ',
+            _selectedImageBytes != null ? 'Next' : 'Continue without photo',
             style: const TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w600,

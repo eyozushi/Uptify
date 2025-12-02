@@ -221,8 +221,11 @@ void initState() {
     }
   }
   
-  // 🔧 修正：完了回数の初期化を改善
-  _initializeTodayCompletions();
+  if (widget.todayTaskCompletions != null) {
+    _todayTaskCompletions = Map.from(widget.todayTaskCompletions!);
+  } else {
+    _loadTodayCompletions();
+  }
   
   if (widget.initialElapsedSeconds != null) {
     _elapsedSeconds = widget.initialElapsedSeconds!;
@@ -236,6 +239,7 @@ void initState() {
     _isPlaying = widget.initialIsPlaying!;
   }
   
+  // 初期タスクインデックス設定
   if (widget.initialTaskIndex != null) {
     if (widget.isPlayingSingleAlbum) {
       _currentIndex = widget.initialTaskIndex!;
@@ -258,37 +262,6 @@ void initState() {
         _isInitializationComplete = true;
       });
     });
-  }
-}
-
-// 🆕 完了回数の初期化処理
-Future<void> _initializeTodayCompletions() async {
-  if (widget.todayTaskCompletions != null) {
-    setState(() {
-      _todayTaskCompletions = Map.from(widget.todayTaskCompletions!);
-    });
-    
-    // 🔧 追加：不足しているタスクの完了回数を補完
-    await _loadMissingTaskCompletions();
-  } else {
-    await _loadTodayCompletions();
-  }
-}
-
-// 🆕 不足しているタスクの完了回数を読み込み
-Future<void> _loadMissingTaskCompletions() async {
-  try {
-    for (final task in _tasks) {
-      if (!_todayTaskCompletions.containsKey(task.id)) {
-        final count = await _taskCompletionService.getTodayTaskSuccesses(task.id);
-        setState(() {
-          _todayTaskCompletions[task.id] = count;
-        });
-      }
-    }
-    print('✅ 不足タスクの完了回数補完完了');
-  } catch (e) {
-    print('❌ 不足タスク完了回数読み込みエラー: $e');
   }
 }
 
@@ -355,6 +328,7 @@ void didUpdateWidget(PlayerScreen oldWidget) {
     _extractColorsFromImage();
   }
 
+  // 強制ページ変更の処理
   if (widget.forcePageIndex != null && 
       widget.forcePageIndex != oldWidget.forcePageIndex) {
     final newPageIndex = widget.forcePageIndex!;
@@ -364,7 +338,7 @@ void didUpdateWidget(PlayerScreen oldWidget) {
     
     setState(() {
       _currentIndex = newPageIndex;
-      _dragDistance = 0.0;
+      _dragDistance = 0.0; // 🔧 追加
     });
     
     Future.delayed(const Duration(milliseconds: 100), () {
@@ -377,18 +351,9 @@ void didUpdateWidget(PlayerScreen oldWidget) {
     
   bool needsUpdate = false;
   
-  // 🔧 修正：完了回数の更新をマージ（上書きではなく）
   if (widget.todayTaskCompletions != null && 
       widget.todayTaskCompletions != oldWidget.todayTaskCompletions) {
-    setState(() {
-      // 🔧 重要：既存のカウントを保持しつつ、MainWrapperからの更新をマージ
-      for (final entry in widget.todayTaskCompletions!.entries) {
-        _todayTaskCompletions[entry.key] = entry.value;
-      }
-    });
     needsUpdate = true;
-    print('✅ MainWrapperからの完了回数更新をマージ: ${_todayTaskCompletions.length}件');
-    print('  - マージ後の内容: $_todayTaskCompletions');
   }
   
   if (widget.initialAutoPlayEnabled != null && 
@@ -413,6 +378,11 @@ void didUpdateWidget(PlayerScreen oldWidget) {
   
   if (needsUpdate) {
     setState(() {
+      if (widget.todayTaskCompletions != null && 
+          widget.todayTaskCompletions != oldWidget.todayTaskCompletions) {
+        _todayTaskCompletions = Map.from(widget.todayTaskCompletions!);
+      }
+      
       if (widget.initialAutoPlayEnabled != null && 
           widget.initialAutoPlayEnabled != oldWidget.initialAutoPlayEnabled) {
         _isAutoPlayEnabled = widget.initialAutoPlayEnabled!;
@@ -665,21 +635,26 @@ void _resetPosition() {
   }
 
   Future<void> _loadTodayCompletions() async {
-  // 🔧 修正：widget.todayTaskCompletionsの確認を削除
-  try {
-    final completions = <String, int>{};
-    for (final task in _tasks) {
-      final count = await _taskCompletionService.getTodayTaskSuccesses(task.id);
-      completions[task.id] = count;
+    if (widget.todayTaskCompletions != null) {
+      setState(() {
+        _todayTaskCompletions = Map.from(widget.todayTaskCompletions!);
+      });
+      return;
     }
-    setState(() {
-      _todayTaskCompletions = completions;
-    });
-    print('✅ 全タスクの完了回数読み込み完了: ${completions.length}件');
-  } catch (e) {
-    print('❌ 今日の完了回数読み込みエラー: $e');
+    
+    try {
+      final completions = <String, int>{};
+      for (final task in _tasks) {
+        final count = await _taskCompletionService.getTodayTaskSuccesses(task.id);
+        completions[task.id] = count;
+      }
+      setState(() {
+        _todayTaskCompletions = completions;
+      });
+    } catch (e) {
+      print('❌ 今日の完了回数読み込みエラー: $e');
+    }
   }
-}
 
   Future<void> _extractColorsFromImage() async {
   if (_isExtractingColors) return;
@@ -860,6 +835,12 @@ void _toggleAutoPlay() {
 }
 
   void _togglePlayPause() {
+  // 🔧 修正：理想像ページでは何もしない
+  if (_currentIndex == 0 && !widget.isPlayingSingleAlbum) {
+    print('🔧 PlayerScreen: 理想像ページでは再生/一時停止できません');
+    return;
+  }
+  
   // より広範囲の保護
   if (_isForcePageChange) {
     print('🔧 PlayerScreen: 強制ページ変更中のため_togglePlayPause()を無視');
@@ -952,41 +933,31 @@ void _toggleAutoPlay() {
 
   Future<void> _recordTaskCompletion(TaskItem task, bool wasSuccessful) async {
   try {
-    print('🔍 _recordTaskCompletion開始');
-    print('  - taskId: ${task.id}');
-    print('  - taskTitle: ${task.title}');
-    print('  - wasSuccessful: $wasSuccessful');
-    print('  - isPlayingSingleAlbum: ${widget.isPlayingSingleAlbum}');
-    print('  - 現在のカウント: ${_todayTaskCompletions[task.id] ?? 0}');
-    
     if (wasSuccessful) {
       await _audioService.playAchievementSound();
     } else {
       await _audioService.playNotificationSound();
     }
 
-    int oldCount = _todayTaskCompletions[task.id] ?? 0;
-    
+    int oldCount = 0;
     if (wasSuccessful) {
+      oldCount = _todayTaskCompletions[task.id] ?? 0;
       setState(() {
         _todayTaskCompletions[task.id] = oldCount + 1;
       });
-      print('✅ ローカルカウント更新: ${task.title} ${oldCount} → ${_todayTaskCompletions[task.id]}');
+      print('🔔 即座にカウント更新: ${task.title} ${oldCount} → ${oldCount + 1}');
       
+      // 新規追加：新しく完了したタスクをSharedPreferencesに記録
       await _recordNewTaskCompletion();
     }
 
-    // 🔧 修正：MainWrapperのコールバックを確実に呼ぶ
     if (widget.onTaskCompleted != null) {
-      print('📞 MainWrapper.onTaskCompleted を呼び出し');
       await widget.onTaskCompleted!(task, wasSuccessful);
       
-      if (wasSuccessful && widget.onCompletionCountsChanged != null) {
-        print('📞 MainWrapper.onCompletionCountsChanged を呼び出し');
-        widget.onCompletionCountsChanged!(_todayTaskCompletions);
+      if (wasSuccessful) {
+        widget.onCompletionCountsChanged?.call(_todayTaskCompletions);
       }
     } else {
-      print('⚠️ widget.onTaskCompleted が null のため直接記録');
       await _taskCompletionService.recordTaskCompletion(
         taskId: task.id,
         taskTitle: task.title,
@@ -994,11 +965,11 @@ void _toggleAutoPlay() {
         elapsedSeconds: _elapsedSeconds,
         albumType: widget.isPlayingSingleAlbum ? 'single' : 'life_dream',
         albumName: _idealSelf,
-        albumId: widget.isPlayingSingleAlbum ? widget.playingSingleAlbumId : null,
+        albumId: widget.isPlayingSingleAlbum ? 'single_album_id' : null,
       );
       
-      if (wasSuccessful && widget.onCompletionCountsChanged != null) {
-        widget.onCompletionCountsChanged!(_todayTaskCompletions);
+      if (wasSuccessful) {
+        widget.onCompletionCountsChanged?.call(_todayTaskCompletions);
       }
       
       await _loadTodayCompletions();
@@ -1006,11 +977,19 @@ void _toggleAutoPlay() {
     
     widget.onDataChanged?.call();
     
-    print('✅ _recordTaskCompletion完了');
-    print('  - 最終カウント: ${_todayTaskCompletions[task.id]}');
+    /*
+    if (wasSuccessful) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('✅ 「${task.title}」の達成を記録しました！'),
+          backgroundColor: const Color(0xFF1DB954),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+    */
 
   } catch (e) {
-    print('❌ _recordTaskCompletion エラー: $e');
     if (wasSuccessful) {
       setState(() {
         _todayTaskCompletions[task.id] = (_todayTaskCompletions[task.id] ?? 1) - 1;
@@ -1018,10 +997,10 @@ void _toggleAutoPlay() {
     }
     
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
+      SnackBar(
         content: Text('❌ 記録の保存に失敗しました'),
         backgroundColor: Colors.red,
-        duration: Duration(seconds: 2),
+        duration: const Duration(seconds: 2),
       ),
     );
   }
@@ -1714,8 +1693,9 @@ GestureDetector(
     ),
     alignment: Alignment.center,
     child: Icon(
-      (widget.initialIsPlaying ?? _isPlaying) ? Icons.pause : Icons.play_arrow,
-      color: Colors.black,  // 🔧 変更: _dominantColor → Colors.black
+      // 🔧 修正：シングルアルバムとライフドリームアルバムで分岐
+      _getPlayPauseIcon(),
+      color: Colors.black,
       size: 38,
     ),
   ),
@@ -1995,5 +1975,21 @@ Widget _buildLyricNotes(double coverSize) {
       print('✅ PlayerScreen: Lyric Notes更新完了 (${notes.length}行)');
     },
   );
+}
+
+/// 🆕 再生/一時停止アイコンを取得
+IconData _getPlayPauseIcon() {
+  // ライフドリームアルバムの理想像ページ（index=0）は常に一時停止アイコン
+  if (_currentIndex == 0 && !widget.isPlayingSingleAlbum) {
+    return Icons.pause;
+  }
+  
+  // シングルアルバムの場合：_isPlayingの値で判定
+  if (widget.isPlayingSingleAlbum) {
+    return _isPlaying ? Icons.pause : Icons.play_arrow;
+  }
+  
+  // ライフドリームアルバムのタスク（index≥1）：_isPlayingの値で判定
+  return _isPlaying ? Icons.pause : Icons.play_arrow;
 }
 }

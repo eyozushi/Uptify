@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
 import 'dart:typed_data';
+import 'app_settings_screen.dart';
 import '../widgets/record_gauge_widget.dart';
 import '../services/record_gauge_service.dart';
 import '../models/record_gauge_state.dart';
@@ -9,7 +10,7 @@ import '../models/task_item.dart';
 import '../models/single_album.dart';
 import '../services/data_service.dart';
 import '../services/habit_breaker_service.dart';
-import 'notification_settings_screen.dart';
+import '../services/task_completion_service.dart';
 import 'package:auto_size_text/auto_size_text.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -43,6 +44,9 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final DataService _dataService = DataService();
   final HabitBreakerService _habitBreakerService = HabitBreakerService();
+
+  final TaskCompletionService _taskCompletionService = TaskCompletionService();
+  int _consecutiveDays = 0;
   
   String _idealSelf = '自分の理想像';
   String _artistName = '自分の名前';
@@ -73,6 +77,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     
     _loadRecordStateAndCheckCompletion();
+    _loadConsecutiveDays();  // 🆕 追加
   }
 
   @override
@@ -179,6 +184,21 @@ void didUpdateWidget(covariant HomeScreen oldWidget) {
       print('❌ Record State読み込みエラー: $e');
     }
   }
+
+  Future<void> _loadConsecutiveDays() async {
+    try {
+      final days = await _taskCompletionService.getConsecutiveDays();
+      if (mounted) {
+        setState(() {
+          _consecutiveDays = days;
+        });
+      }
+    } catch (e) {
+      print('❌ 連続日数読み込みエラー: $e');
+    }
+  }
+
+
   // 🌅 新機能: 時間帯に応じた挨拶を取得
   String _getGreeting() {
     final now = DateTime.now();
@@ -347,11 +367,7 @@ void didUpdateWidget(covariant HomeScreen oldWidget) {
     );
   }
 
-  void _navigateToSettings() {
-    if (widget.onNavigateToSettings != null) {
-      widget.onNavigateToSettings!();
-    }
-  }
+
 
   void _navigateToPlayer() {
     if (widget.onNavigateToPlayer != null) {
@@ -385,15 +401,21 @@ void didUpdateWidget(covariant HomeScreen oldWidget) {
     }
   }
 
-  void _navigateToNotificationSettings() {
-    print('🔔 通知設定画面に移動します');
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => const NotificationSettingsScreen(),
+  void _navigateToAppSettings() async {  // 🔧 asyncを追加
+  print('⚙️ 設定画面に移動します');
+  await Navigator.push(  // 🔧 awaitを追加
+    context,
+    MaterialPageRoute(
+      builder: (context) => AppSettingsScreen(
+        onClose: () => Navigator.pop(context),
       ),
-    );
-  }
+    ),
+  );
+  
+  // 🔧 追加: 設定画面から戻ったらデータを再読み込み
+  await _loadData();
+  setState(() {});
+}
 
   Widget _buildAlbumCover({double size = 60}) {
     return Container(
@@ -500,6 +522,58 @@ void didUpdateWidget(covariant HomeScreen oldWidget) {
     );
   }
 
+  /// 🆕 連続タスク実行記録セクションを構築
+  Widget _buildConsecutiveDaysSection() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        children: [
+          const Text(
+            '連続タスク実行',
+            style: TextStyle(
+              color: Colors.white70,
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              fontFamily: 'Hiragino Sans',
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(
+                '$_consecutiveDays',
+                style: const TextStyle(
+                  color: Color(0xFF1DB954),
+                  fontSize: 48,
+                  fontWeight: FontWeight.w900,
+                  fontFamily: 'Hiragino Sans',
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                '日目',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.w600,
+                  fontFamily: 'Hiragino Sans',
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
 
   Widget _buildSingleAlbumCover(SingleAlbum album, {double size = 60}) {
     return Container(
@@ -559,6 +633,7 @@ void didUpdateWidget(covariant HomeScreen oldWidget) {
   height: 60,
   child: Row(
     mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    crossAxisAlignment: CrossAxisAlignment.center,  // 🔧 追加: 縦方向を中央揃え
     children: [
       Text(
         _getGreeting(),
@@ -569,34 +644,20 @@ void didUpdateWidget(covariant HomeScreen oldWidget) {
           fontFamily: 'Hiragino Sans',
         ),
       ),
-      Row(
-        children: [
-          // 🆕 設定アイコンのみ
-          GestureDetector(
-            onTap: () {
-              print('⚙️ 設定ボタンがタップされました！');
-              _navigateToSettings();
-            },
-            child: const Icon(
-              Icons.settings,
-              color: Colors.white,
-              size: 28,
-            ),
+      GestureDetector(  // 🔧 修正: 不要なRowを削除
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          print('⚙️ 設定画面に移動します！');
+          _navigateToAppSettings();
+        },
+        child: Container(
+          padding: const EdgeInsets.all(8),
+          child: const Icon(
+            Icons.settings,
+            color: Colors.white,
+            size: 28,
           ),
-          const SizedBox(width: 20),
-          // 🆕 通知アイコンのみ
-          GestureDetector(
-            onTap: () {
-              print('🔔 通知設定画面に移動します！');
-              _navigateToNotificationSettings();
-            },
-            child: const Icon(
-              Icons.notifications_outlined,
-              color: Colors.white,
-              size: 28,
-            ),
-          ),
-        ],
+        ),
       ),
     ],
   ),
@@ -783,6 +844,12 @@ void didUpdateWidget(covariant HomeScreen oldWidget) {
             _buildRecordGaugeSection(),
 
             const SizedBox(height: 20),
+
+            // 🆕 連続タスク実行記録セクション
+            _buildConsecutiveDaysSection(),
+
+            const SizedBox(height: 20),
+
 
 Align(
   alignment: Alignment.centerLeft,

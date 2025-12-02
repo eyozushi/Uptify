@@ -154,7 +154,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                     const SizedBox(height: 250), // 再生ボタンとの間隔を広げる
                     
                     const Text(
-                      'タップ',
+                      'Tap',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w300,
@@ -167,7 +167,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                     const SizedBox(height: 30),
                     
                     const Text(
-                      '音楽を再生するように',
+                      'Just like playing music',
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w300,
@@ -180,7 +180,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                     const SizedBox(height: 6),
                     
                     const Text(
-                      'タスクをプレイする',
+                      'Play Your Tasks',
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w300,

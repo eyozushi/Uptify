@@ -31,10 +31,10 @@ class _ActionsSetupScreenState extends State<ActionsSetupScreen>
   int _selectedTaskIndex = 0; // 現在選択されているタスクのインデックス
   
   final List<String> _placeholders = [
-    '例：毎朝30分読書する',
-    '例：週3回運動する',
-    '例：新しいスキルを学ぶ',
-    '例：人とのつながりを大切にする',
+    'e.g., Read for 10 minutes',
+    'e.g., Work out',
+    'e.g., Learn a new skill',
+    'e.g., Read a news',
   ];
   
   final List<Color> _actionColors = [
@@ -140,7 +140,7 @@ class _ActionsSetupScreenState extends State<ActionsSetupScreen>
             Icon(Icons.info_outline, color: Colors.white),
             SizedBox(width: 12),
             Text(
-              '最低1つの行動を入力してください',
+              'Please enter at least one action',
               style: TextStyle(fontFamily: 'Hiragino Sans'),
             ),
           ],
@@ -244,9 +244,9 @@ class _ActionsSetupScreenState extends State<ActionsSetupScreen>
               left: 0,
               right: 0,
               child: const Text(
-                '理想に近づくために今することは？',
+                'What will you do to reach your ideal?',
                 style: TextStyle(
-                  fontSize: 24,
+                  fontSize: 18,
                   fontWeight: FontWeight.bold,
                   color: Colors.white,
                   fontFamily: 'Hiragino Sans',
@@ -257,23 +257,23 @@ class _ActionsSetupScreenState extends State<ActionsSetupScreen>
             ),
             
             // 番号選択と入力フィールド（画面の75%の位置）
-            Positioned(
-              top: screenHeight * 0.75 - 60,
-              left: 32,
-              right: 32,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // 番号選択ボタン
-                  _buildNumberSelector(),
-                  
-                  const SizedBox(height: 20),
-                  
-                  // 入力フィールド
-                  _buildCurrentTaskField(),
-                ],
-              ),
-            ),
+Positioned(
+  top: screenHeight * 0.77 - 60, // 🔄 0.75 → 0.60 に変更（上に移動）
+  left: 32,
+  right: 32,
+  child: Column(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      // 番号選択ボタン
+      _buildNumberSelector(),
+      
+      const SizedBox(height: 1), // 🔄 20 → 12 に変更（間隔を詰める）
+      
+      // 入力フィールド
+      _buildCurrentTaskField(),
+    ],
+  ),
+),
           ],
         );
       },
@@ -294,31 +294,29 @@ class _ActionsSetupScreenState extends State<ActionsSetupScreen>
             });
           },
           child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 8),
-            width: 50,
-            height: 50,
+            margin: const EdgeInsets.symmetric(horizontal: 6),
+            width: 30,
+            height: 30,
             decoration: BoxDecoration(
-              color: isSelected 
-                  ? _actionColors[index]
-                  : (isCompleted 
-                      ? _actionColors[index].withOpacity(0.3)
-                      : Colors.white.withOpacity(0.2)),
-              shape: BoxShape.circle,
-              border: isSelected 
-                  ? Border.all(color: Colors.white, width: 2)
-                  : null,
-            ),
+  color: isSelected 
+      ? const Color(0xFF1DB954) // 🔄 _actionColors[index] → 緑色
+      : (isCompleted 
+          ? const Color(0xFF1DB954).withOpacity(0.3) // 🔄 緑色
+          : Colors.white.withOpacity(0.2)),
+  shape: BoxShape.circle,
+  border: null, // 🔄 isSelected の border を削除
+),
             child: Center(
               child: isCompleted && !isSelected
                   ? const Icon(
                       Icons.check,
-                      size: 24,
+                      size: 20,
                       color: Colors.white,
                     )
                   : Text(
                       '${index + 1}',
                       style: const TextStyle(
-                        fontSize: 18,
+                        fontSize: 16,
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
                       ),
@@ -340,14 +338,14 @@ class _ActionsSetupScreenState extends State<ActionsSetupScreen>
         Row(
           children: [
             Text(
-              '行動 ${_selectedTaskIndex + 1}',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: _actionColors[_selectedTaskIndex],
-                fontFamily: 'Hiragino Sans',
-              ),
-            ),
+  'Action ${_selectedTaskIndex + 1}',
+  style: const TextStyle( // 🔄 TextStyle を const に
+    fontSize: 16,
+    fontWeight: FontWeight.w600,
+    color: Color(0xFF1DB954), // 🔄 _actionColors[index] → 緑色
+    fontFamily: 'Hiragino Sans',
+  ),
+),
             if (_selectedTaskIndex >= 1) ...[
               const SizedBox(width: 8),
               Container(
@@ -357,7 +355,7 @@ class _ActionsSetupScreenState extends State<ActionsSetupScreen>
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Text(
-                  '任意',
+                  'Optional',
                   style: TextStyle(
                     fontSize: 10,
                     color: Colors.white,
@@ -402,13 +400,7 @@ class _ActionsSetupScreenState extends State<ActionsSetupScreen>
                 borderRadius: BorderRadius.circular(16),
                 borderSide: BorderSide.none,
               ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide(
-                  color: _actionColors[_selectedTaskIndex],
-                  width: 3,
-                ),
-              ),
+              
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 24,
                 vertical: 20,
@@ -442,7 +434,7 @@ class _ActionsSetupScreenState extends State<ActionsSetupScreen>
             ),
           ),
           child: const Text(
-            'アルバムをリリースする',
+            'Release Your Album',
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w600,

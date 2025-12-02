@@ -73,35 +73,34 @@ class _OnboardingWrapperState extends State<OnboardingWrapper> {
   }
 
   Future<void> _nextStep() async {
-    if (_currentStep < _totalSteps - 1) {
-      setState(() {
-        _currentStep++;
-      });
-      
-      await _pageController.nextPage(
-        duration: const Duration(milliseconds: 500),
-        curve: Curves.easeInOutCubic,
-      );
-      
-      print('次のステップに進みました: Step ${_currentStep + 1}');
-    }
+  if (_currentStep < _totalSteps - 1) {
+    setState(() {
+      _currentStep++;
+    });
+    
+    await _pageController.nextPage( // 🔄 animateToPage → nextPage に戻す
+      duration: const Duration(milliseconds: 500),
+      curve: Curves.easeInOutCubic,
+    );
+    
+    print('次のステップに進みました: Step ${_currentStep + 1}');
   }
+}
 
-  Future<void> _previousStep() async {
-    if (_currentStep > 0) {
-      setState(() {
-        _currentStep--;
-      });
-      
-      await _pageController.previousPage(
-        duration: const Duration(milliseconds: 500),
-        curve: Curves.easeInOutCubic,
-      );
-      
-      print('前のステップに戻りました: Step ${_currentStep + 1}');
-    }
+Future<void> _previousStep() async {
+  if (_currentStep > 0) {
+    setState(() {
+      _currentStep--;
+    });
+    
+    await _pageController.previousPage( // 🔄 animateToPage → previousPage に戻す
+      duration: const Duration(milliseconds: 500),
+      curve: Curves.easeInOutCubic,
+    );
+    
+    print('前のステップに戻りました: Step ${_currentStep + 1}');
   }
-
+}
   void _showError(String message) {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -219,10 +218,10 @@ class _OnboardingWrapperState extends State<OnboardingWrapper> {
       
       // ユーザーデータを保存
       final data = {
-        'idealSelf': _dreamTitle ?? '理想の自分',
-        'artistName': _artistName ?? 'あなた',
-        'todayLyrics': '今日という日を大切に生きよう\n一歩ずつ理想の自分に近づいていく\n昨日の自分を超えていこう\n今この瞬間を輝かせよう',
-        'aboutArtist': '${_artistName ?? "あなた"}の人生という音楽の主人公。毎日新しい楽曲を作り続ける唯一無二のアーティスト。時には激しく、時には優しく、常に成長を続けている。今日もまた新しいメロディーを奏でている。',
+        'idealSelf': _dreamTitle ?? 'Your Ideal Self',
+        'artistName': _artistName ?? 'You',
+        'todayLyrics': 'Live today to the fullest\nStep by step toward your ideal self\nSurpass who you were yesterday\nMake this moment shine',
+        'aboutArtist': '${_artistName ?? "あなた"}, the protagonist of life\'s music. A unique artist creating new songs every day. Sometimes intense, sometimes gentle, always growing. Creating new melodies again today.',
         'albumImagePath': '',
         'tasks': taskItems.map((task) => task.toJson()).toList(),
         'onboardingCompleted': true,
@@ -243,10 +242,10 @@ class _OnboardingWrapperState extends State<OnboardingWrapper> {
   Future<void> _completeOnboardingWithDefaults() async {
     try {
       final data = {
-        'idealSelf': '毎日成長する理想の自分',
-        'artistName': 'あなた',
-        'todayLyrics': '今日という日を大切に生きよう\n一歩ずつ理想の自分に近づいていく\n昨日の自分を超えていこう\n今この瞬間を輝かせよう',
-        'aboutArtist': 'あなたの人生という音楽の主人公。毎日新しい楽曲を作り続ける唯一無二のアーティスト。時には激しく、時には優しく、常に成長を続けている。今日もまた新しいメロディーを奏でている。',
+        'idealSelf': 'My ideal self growing every day',
+        'artistName': 'You',
+        'todayLyrics': 'Live today to the fullest\nStep by step toward your ideal self\nSurpass who you were yesterday\nMake this moment shine',
+        'aboutArtist': 'あなた, the protagonist of life\'s music. A unique artist creating new songs every day. Sometimes intense, sometimes gentle, always growing. Creating new melodies again today.',
         'albumImagePath': '',
         'tasks': _dataService.getDefaultTasks().map((task) => task.toJson()).toList(),
         'onboardingCompleted': true,
@@ -272,14 +271,14 @@ class _OnboardingWrapperState extends State<OnboardingWrapper> {
           borderRadius: BorderRadius.circular(16),
         ),
         title: const Text(
-          'オンボーディングをスキップ',
+          'Skip Onboarding',
           style: TextStyle(
             color: Colors.white,
             fontFamily: 'Hiragino Sans',
           ),
         ),
         content: const Text(
-          'セットアップをスキップして、デフォルト設定でアプリを開始しますか？\n\n後からいつでも設定を変更できます。',
+          'Skip setup and start with default settings?\n\nYou can change settings anytime later.',
           style: TextStyle(
             color: Colors.white70,
             fontFamily: 'Hiragino Sans',
@@ -296,7 +295,7 @@ class _OnboardingWrapperState extends State<OnboardingWrapper> {
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
             child: const Text(
-              'スキップ',
+              'Skip',
               style: TextStyle(color: Color(0xFF1DB954)),
             ),
           ),
@@ -320,6 +319,7 @@ class _OnboardingWrapperState extends State<OnboardingWrapper> {
         controller: _pageController,
         reverse: true, // 下から上へのアニメーション
         scrollDirection: Axis.vertical,
+        physics: const NeverScrollableScrollPhysics(),
         children: [
           // Step 0: ウェルカム画面
           WelcomeScreen(
@@ -358,8 +358,8 @@ class _OnboardingWrapperState extends State<OnboardingWrapper> {
           
           // Step 5: 完了画面（理想像画像データを直接渡す）
           CompletionScreen(
-            dreamTitle: _dreamTitle ?? '理想の自分',
-            artistName: _artistName ?? 'あなた',
+            dreamTitle: _dreamTitle ?? 'Your Ideal Self',
+            artistName: _artistName ?? 'You',
             imageBytes: _idealImageBytes, // 理想像画像データを渡す
             onComplete: _onCompletionFinish,
             onBack: _previousStep,
@@ -421,7 +421,7 @@ class _OnboardingWrapperState extends State<OnboardingWrapper> {
                   ),
                   const SizedBox(height: 24),
                   const Text(
-                    'エラーが発生しました',
+                    'An error occurred',
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 20,
@@ -454,7 +454,7 @@ class _OnboardingWrapperState extends State<OnboardingWrapper> {
                         ),
                       ),
                       child: const Text(
-                        '再試行',
+                        'Retry',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,

@@ -537,6 +537,29 @@ class DataService {
     }
   }
 
+  // 🆕 アプリ情報取得メソッド群（Phase 1）
+  
+  /// アプリバージョンを取得
+  Future<String> getAppVersion() async {
+    // 後でpackage_info_plusで実装予定
+    return 'v1.0.0';  // 暫定値
+  }
+  
+  /// プライバシーポリシーURLを取得
+  String getPrivacyPolicyUrl() {
+    return 'https://example.com/privacy';  // プレースホルダー
+  }
+  
+  /// 利用規約URLを取得
+  String getTermsOfServiceUrl() {
+    return 'https://example.com/terms';  // プレースホルダー
+  }
+  
+  /// フィードバックURLを取得
+  String getFeedbackUrl() {
+    return 'https://example.com/feedback';  // プレースホルダー
+  }
+
   // 🔔 新機能: 今日の達成サマリーを取得
   Future<Map<String, dynamic>> getTodayAchievementSummary() async {
     try {

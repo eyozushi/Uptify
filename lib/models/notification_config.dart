@@ -82,15 +82,27 @@ class NotificationConfig {
     );
   }
 
-  // copyWith メソッド
+  // copyWith メソッド（修正版）
   NotificationConfig copyWith({
     bool? isHabitBreakerEnabled,
     int? habitBreakerInterval,
     List<String>? habitBreakerMessages,
   }) {
+    // 🆕 追加: 間隔のバリデーション（15/30/60以外は最も近い値に丸める）
+    int validatedInterval = habitBreakerInterval ?? this.habitBreakerInterval;
+    if (habitBreakerInterval != null) {
+      if (habitBreakerInterval <= 15) {
+        validatedInterval = 15;
+      } else if (habitBreakerInterval <= 30) {
+        validatedInterval = 30;
+      } else {
+        validatedInterval = 60;
+      }
+    }
+    
     return NotificationConfig(
       isHabitBreakerEnabled: isHabitBreakerEnabled ?? this.isHabitBreakerEnabled,
-      habitBreakerInterval: habitBreakerInterval ?? this.habitBreakerInterval,
+      habitBreakerInterval: validatedInterval,  // 🔧 修正: バリデーション済みの値を使用
       habitBreakerMessages: habitBreakerMessages ?? this.habitBreakerMessages,
     );
   }

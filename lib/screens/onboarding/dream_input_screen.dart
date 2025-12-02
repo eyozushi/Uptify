@@ -32,10 +32,10 @@ class _DreamInputScreenState extends State<DreamInputScreen>
   
   // 励ましメッセージのリスト
   final List<String> _inspirationalMessages = [
-    'あなたの心の中にある夢を\n音楽にして表現してみませんか？',
-    'どんな未来の自分に\n出会いたいですか？',
-    'あなたの人生という楽曲は\nどんな物語を奏でたいですか？',
-    '理想の自分という\nメロディーを聞かせてください',
+    'What dream lives in your heart?\nLet\'s express it through music',
+    'What future version of yourself\ndo you want to meet?',
+    'What story will the song\nof your life tell?',
+    'Let me hear the melody\nof your ideal self',
   ];
   
   int _currentMessageIndex = 0;
@@ -129,7 +129,7 @@ class _DreamInputScreenState extends State<DreamInputScreen>
             Icon(Icons.info_outline, color: Colors.white),
             SizedBox(width: 12),
             Text(
-              'あなたの夢・理想像を入力してください',
+              'Please describe your dream or ideal self',
               style: TextStyle(fontFamily: 'Hiragino Sans'),
             ),
           ],
@@ -237,7 +237,7 @@ class _DreamInputScreenState extends State<DreamInputScreen>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const Text(
-                    'あなたの夢は？',
+                    'What\'s your dream?',
                     style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
@@ -251,7 +251,7 @@ class _DreamInputScreenState extends State<DreamInputScreen>
                   const SizedBox(height: 8),
                   
                   const Text(
-                    '理想像は？',
+                    'Your ideal self?',
                     style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
@@ -279,7 +279,7 @@ class _DreamInputScreenState extends State<DreamInputScreen>
                   
                   // 補足テキスト
                   Text(
-                    'これがアルバムのタイトルになるよ',
+                    'This will be your album title',
                     style: TextStyle(
                       fontSize: 12,
                       color: Colors.white.withOpacity(0.4),
@@ -310,7 +310,7 @@ class _DreamInputScreenState extends State<DreamInputScreen>
       ),
       child: TextField(
         controller: _dreamController,
-        maxLines: 2,
+        maxLines: 1,
         textAlign: TextAlign.center,
         style: const TextStyle(
           fontSize: 18,
@@ -320,7 +320,7 @@ class _DreamInputScreenState extends State<DreamInputScreen>
           height: 1.4,
         ),
         decoration: InputDecoration(
-          hintText: 'あなたの理想像',
+          hintText: 'Your ideal self',
           hintStyle: TextStyle(
             color: Colors.white.withOpacity(0.4),
             fontSize: 16,
@@ -335,10 +335,7 @@ class _DreamInputScreenState extends State<DreamInputScreen>
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(
-              color: Color(0xFF1DB954),
-              width: 3,
-            ),
+            
           ),
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 24,
@@ -374,7 +371,7 @@ class _DreamInputScreenState extends State<DreamInputScreen>
             ),
           ),
           child: const Text(
-            '次へ',
+            'Next',
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w600,
