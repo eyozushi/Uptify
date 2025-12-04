@@ -49,10 +49,11 @@ class CompletionDialog extends StatelessWidget {
             
             // タイトル
             const Text(
-              'タスク完了！',
+              'Task Complete!',
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 24,
+            letterSpacing: -0.3,
                 fontWeight: FontWeight.bold,
                 fontFamily: 'Hiragino Sans',
               ),
@@ -67,6 +68,7 @@ class CompletionDialog extends StatelessWidget {
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 18,
+            letterSpacing: -0.2,
                 fontWeight: FontWeight.w600,
                 fontFamily: 'Hiragino Sans',
               ),
@@ -77,7 +79,7 @@ class CompletionDialog extends StatelessWidget {
             
             // 経過時間
             Text(
-              '実行時間: $timeText',
+              'Execution Time: $timeText',
               style: TextStyle(
                 color: Colors.white.withOpacity(0.7),
                 fontSize: 14,
@@ -90,7 +92,7 @@ class CompletionDialog extends StatelessWidget {
             
             // 質問
             const Text(
-              'このタスクはできましたか？',
+              'Did you complete this task?',
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 16,
@@ -106,7 +108,7 @@ class CompletionDialog extends StatelessWidget {
               children: [
                 Expanded(
                   child: _buildButton(
-                    text: 'できなかった',
+                    text: 'Not Done',
                     color: Colors.grey, // 🔧 修正: 灰色単色
                     textColor: Colors.white,
                     onPressed: onNo,
@@ -115,7 +117,7 @@ class CompletionDialog extends StatelessWidget {
                 const SizedBox(width: 12),
                 Expanded(
                   child: _buildButton(
-                    text: 'できた！',
+                    text: 'Done!',
                     color: const Color(0xFF1DB954), // 🔧 修正: 緑色単色
                     textColor: Colors.white,
                     onPressed: onYes,

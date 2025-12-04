@@ -60,7 +60,7 @@ class WeeklyReportWidget extends StatelessWidget {
         ),
         const SizedBox(width: 12),
         Text(
-          'Weekly Hits：$totalTasks タスクを再生',
+          'Weekly Hits：$totalTasks Plays',
           style: const TextStyle(
             color: Colors.white,
             fontSize: 16,
@@ -74,7 +74,7 @@ class WeeklyReportWidget extends StatelessWidget {
 
   /// 【修正】週間棒グラフを構築
 Widget _buildWeeklyChart(Map<int, int> dailyCounts) {
-  final weekdays = ['日', '月', '火', '水', '木', '金', '土'];
+  final weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   final maxCount = dailyCounts.values.isEmpty 
       ? 1 
       : dailyCounts.values.reduce(math.max);
@@ -156,7 +156,7 @@ Widget _buildTopTasks(List<Map<String, dynamic>> topTasks) {
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       const Text(
-        '今週のトップヒット曲',
+        'Top Tracks This Week',
         style: TextStyle(
           color: Colors.white,
           fontSize: 16,
@@ -168,7 +168,7 @@ Widget _buildTopTasks(List<Map<String, dynamic>> topTasks) {
       ...topTasks.take(3).toList().asMap().entries.map((entry) {
         final rank = entry.key + 1;
         final task = entry.value;
-        final title = task['taskTitle'] as String? ?? '不明';
+        final title = task['taskTitle'] as String? ?? 'Unknown';
         final count = task['count'] as int? ?? 0;
         
         return Padding(
@@ -215,7 +215,7 @@ Widget _buildTopTasks(List<Map<String, dynamic>> topTasks) {
               const SizedBox(width: 8),
               // 再生回数
               Text(
-                '$count回',
+                '$count',
                 style: TextStyle(
                   color: Colors.white.withOpacity(0.6),
                   fontSize: 13,

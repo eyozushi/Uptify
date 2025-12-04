@@ -1378,6 +1378,7 @@ Padding(
               fontSize: 14,
               fontWeight: FontWeight.w900,
               fontFamily: 'Hiragino Sans',
+              letterSpacing: -0.5
             ),
             textAlign: TextAlign.center,
             maxLines: 1,
@@ -1487,7 +1488,7 @@ void _showDeleteAllConfirmation() {
           borderRadius: BorderRadius.circular(16),
         ),
         title: const Text(
-          'すべてのメモを削除',
+          'Delete All Notes',
           style: TextStyle(
             color: Colors.white,
             fontSize: 18,
@@ -1495,7 +1496,7 @@ void _showDeleteAllConfirmation() {
           ),
         ),
         content: const Text(
-          'このタスクのメモをすべて削除しますか？\nこの操作は取り消せません。',
+          'Are you sure you want to delete all notes for this task?\nThis action cannot be undone.',
           style: TextStyle(
             color: Colors.white70,
             fontSize: 16,
@@ -1507,7 +1508,7 @@ void _showDeleteAllConfirmation() {
               Navigator.of(context).pop(); // ダイアログを閉じる
             },
             child: const Text(
-              'キャンセル',
+              'Cancel',
               style: TextStyle(
                 color: Colors.white70,
                 fontSize: 16,
@@ -1520,7 +1521,7 @@ void _showDeleteAllConfirmation() {
               _deleteAllNotes(); // 全削除を実行
             },
             child: const Text(
-              'はい',
+              'Yes',
               style: TextStyle(
                 color: Color(0xFFEF4444),
                 fontSize: 16,

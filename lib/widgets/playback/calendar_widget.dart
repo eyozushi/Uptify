@@ -46,15 +46,22 @@ Widget build(BuildContext context) {
   );
 }
 
-  /// 【修正】月ラベルを構築（年を削除）
+  /// 【修正】月ラベルを構築（月名で表示）
 Widget _buildMonthLabel() {
+  // 月名のリスト
+  const monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+  
   return Padding(
     padding: const EdgeInsets.only(left: 4, bottom: 8),
     child: Text(
-      '${month}月',
+      monthNames[month - 1], // monthは1-12なので-1してインデックス化
       style: const TextStyle(
         color: Colors.white,
         fontSize: 18,
+            letterSpacing: -0.2,
         fontWeight: FontWeight.w600,
         fontFamily: 'Hiragino Sans',
       ),
@@ -64,7 +71,7 @@ Widget _buildMonthLabel() {
 
   /// 【修正】曜日ヘッダーを構築（間隔を詰める）
 Widget _buildWeekdayHeader() {
-  const weekdays = ['日', '月', '火', '水', '木', '金', '土'];
+  const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   
   return Padding(
     padding: const EdgeInsets.symmetric(horizontal: 4),

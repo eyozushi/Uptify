@@ -72,7 +72,7 @@ class MonthlyReportWidget extends StatelessWidget {
         ),
         const SizedBox(width: 12),
         Text(
-          'Monthly Hits：$totalTasks タスクを再生',
+          'Monthly Hits：$totalTasks Plays',
           style: const TextStyle(
             color: Colors.white,
             fontSize: 16,
@@ -90,7 +90,7 @@ class MonthlyReportWidget extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          '今月の努力のリズム',
+          'Your Monthly Rhythm',
           style: TextStyle(
             color: Colors.white,
             fontSize: 16,
@@ -100,7 +100,7 @@ class MonthlyReportWidget extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Text(
-          '週ごとの1日平均タスク数',
+          'Daily average tasks per week',
           style: TextStyle(
             color: Colors.white.withOpacity(0.6),
             fontSize: 12,
@@ -118,7 +118,7 @@ class MonthlyReportWidget extends StatelessWidget {
         height: 200,
         child: Center(
           child: Text(
-            'データがありません',
+            'No data available',
             style: TextStyle(
               color: Colors.white54,
               fontSize: 14,
@@ -137,44 +137,47 @@ class MonthlyReportWidget extends StatelessWidget {
             alignment: BarChartAlignment.spaceAround,
             maxY: _getMaxValue() * 1.2,
             barTouchData: BarTouchData(
-              enabled: true,
-              touchTooltipData: BarTouchTooltipData(
-                getTooltipColor: (group) => const Color(0xFF1DB954),
-                getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                  return BarTooltipItem(
-                    '${report.weekLabels[group.x.toInt()]}\n平均 ${rod.toY.toStringAsFixed(1)}回',
-                    const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                    ),
-                  );
-                },
-              ),
-            ),
+  enabled: true,
+  touchTooltipData: BarTouchTooltipData(
+    getTooltipColor: (group) => const Color(0xFF1DB954),
+    getTooltipItem: (group, groupIndex, rod, rodIndex) {
+      // 🔧 修正：週表示を英語化
+      final weekLabel = _getWeekLabel(group.x.toInt());
+      return BarTooltipItem(
+        '$weekLabel\nAvg ${rod.toY.toStringAsFixed(1)} times',
+        const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.bold,
+          fontSize: 12,
+        ),
+      );
+    },
+  ),
+),
             titlesData: FlTitlesData(
               show: true,
               bottomTitles: AxisTitles(
-                sideTitles: SideTitles(
-                  showTitles: true,
-                  getTitlesWidget: (value, meta) {
-                    final index = value.toInt();
-                    if (index >= 0 && index < report.weekLabels.length) {
-                      return Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: Text(
-                          report.weekLabels[index],
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 11,
-                          ),
-                        ),
-                      );
-                    }
-                    return const SizedBox.shrink();
-                  },
-                ),
-              ),
+  sideTitles: SideTitles(
+    showTitles: true,
+    getTitlesWidget: (value, meta) {
+      final index = value.toInt();
+      if (index >= 0 && index < report.weekLabels.length) {
+        // 🔧 修正：「第1週」→「W1」に短縮表示
+        return Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Text(
+            'W${index + 1}',
+            style: const TextStyle(
+              color: Colors.white70,
+              fontSize: 11,
+            ),
+          ),
+        );
+      }
+      return const SizedBox.shrink();
+    },
+  ),
+),
               leftTitles: AxisTitles(
                 sideTitles: SideTitles(
                   showTitles: true,
@@ -216,6 +219,17 @@ class MonthlyReportWidget extends StatelessWidget {
     );
   }
 
+  /// 【新規追加】週ラベルを英語で取得
+String _getWeekLabel(int index) {
+  if (index >= 0 && index < report.weekLabels.length) {
+    final originalLabel = report.weekLabels[index];
+    // 「第1週」→「Week 1」に変換
+    final weekNumber = originalLabel.replaceAll(RegExp(r'[^0-9]'), '');
+    return 'Week $weekNumber';
+  }
+  return 'Week ${index + 1}';
+}
+
   /// グラフの最大値を取得
   double _getMaxValue() {
     if (report.weeklyAverage.isEmpty) return 5.0;
@@ -256,7 +270,7 @@ class MonthlyReportWidget extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          '今月のトップヒット曲',
+          'Top Tracks This Month',
           style: TextStyle(
             color: Colors.white,
             fontSize: 16,
@@ -268,7 +282,7 @@ class MonthlyReportWidget extends StatelessWidget {
         ...topTasks.take(3).toList().asMap().entries.map((entry) {
           final rank = entry.key + 1;
           final task = entry.value;
-          final title = task['taskTitle'] as String? ?? '不明';
+          final title = task['taskTitle'] as String? ?? 'Unknown';
           final count = task['count'] as int? ?? 0;
           
           return Padding(
@@ -315,7 +329,7 @@ class MonthlyReportWidget extends StatelessWidget {
                 const SizedBox(width: 8),
                 // 再生回数
                 Text(
-                  '$count回',
+                  '$count',
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.6),
                     fontSize: 13,
@@ -341,7 +355,7 @@ class MonthlyReportWidget extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          '今月のトップアルバム',
+          'Top Albums This Month',
           style: TextStyle(
             color: Colors.white,
             fontSize: 16,
@@ -353,7 +367,7 @@ class MonthlyReportWidget extends StatelessWidget {
         ...topAlbums.take(3).toList().asMap().entries.map((entry) {
           final rank = entry.key + 1;
           final album = entry.value;
-          final name = album['albumName'] as String? ?? '不明';
+          final name = album['albumName'] as String? ?? 'Unknown';
           final count = album['count'] as int? ?? 0;
           
           return Padding(
@@ -400,7 +414,7 @@ class MonthlyReportWidget extends StatelessWidget {
                 const SizedBox(width: 8),
                 // 再生回数
                 Text(
-                  '$count回',
+                  '$count',
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.6),
                     fontSize: 13,

@@ -107,7 +107,7 @@ Widget build(BuildContext context) {
         ),
         const SizedBox(width: 12),
         Text(
-          'Daily Take：$totalTasks タスクを再生',
+          'Daily Take：$totalTasks Plays',
           style: const TextStyle(
             color: Colors.white,
             fontSize: 16,
@@ -126,7 +126,7 @@ Widget _buildTaskHistoryList(List<TaskCompletion> taskHistory) {
       child: Padding(
         padding: const EdgeInsets.all(32),
         child: Text(
-          'この日はタスクを再生していません',
+          'No tasks played on this day',
           style: TextStyle(
             color: Colors.white.withOpacity(0.4),
             fontSize: 14,

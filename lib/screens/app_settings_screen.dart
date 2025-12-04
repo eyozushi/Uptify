@@ -120,7 +120,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       await _habitBreakerService.updateSettings(newConfig);
       
       if (mounted) {
-        _showMessage('設定を保存しました', isSuccess: true);
+        _showMessage('Settings saved', isSuccess: true);
         
         // 画面を閉じる
         if (widget.onClose != null) {
@@ -132,7 +132,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
     } catch (e) {
       print('❌ 設定保存エラー: $e');
       if (mounted) {
-        _showMessage('保存に失敗しました', isSuccess: false);
+        _showMessage('Failed to save', isSuccess: false);
       }
     } finally {
       if (mounted) {
@@ -163,10 +163,10 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
           _artistImageBytes = bytes;
           _hasImageChanged = true;
         });
-        _showMessage('写真を選択しました', isSuccess: true);
+        _showMessage('Photo selected', isSuccess: true);
       }
     } catch (e) {
-      _showMessage('写真の選択に失敗しました', isSuccess: false);
+      _showMessage('Failed to select photo', isSuccess: false);
     }
   }
 
@@ -175,20 +175,20 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          backgroundColor: const Color(0xFF1A1A2E),
+          backgroundColor: const Color(0xFF282828),
           title: const Text(
-            '写真を選択',
+            'Select Photo',
             style: TextStyle(color: Colors.white, fontFamily: kFontFamily),
           ),
           content: const Text(
-            '写真の取得方法を選択してください',
+            'Choose how to get photo',
             style: TextStyle(color: Colors.white70, fontFamily: kFontFamily),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
               child: const Text(
-                'キャンセル',
+                'Cancel',
                 style: TextStyle(color: Colors.white54),
               ),
             ),
@@ -199,7 +199,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
                 children: [
                   Icon(Icons.camera_alt, color: kAccentColor, size: 20),
                   SizedBox(width: 8),
-                  Text('カメラ', style: TextStyle(color: kAccentColor)),
+                  Text('Camera', style: TextStyle(color: kAccentColor)),
                 ],
               ),
             ),
@@ -210,7 +210,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
                 children: [
                   Icon(Icons.photo_library, color: kAccentColor, size: 20),
                   SizedBox(width: 8),
-                  Text('ギャラリー', style: TextStyle(color: kAccentColor)),
+                  Text('Gallery', style: TextStyle(color: kAccentColor)),
                 ],
               ),
             ),
@@ -285,6 +285,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 20,
+            letterSpacing: -0.3,
                 fontWeight: FontWeight.w700,
                 fontFamily: kFontFamily,
               ),
@@ -327,7 +328,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
                         ),
                       )
                     : const Text(
-                        '保存',
+                        'Save',
                         style: TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.w600,
@@ -354,25 +355,25 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
           const SizedBox(height: 20),
           _buildLinkSection(
             icon: Icons.help_outline,
-            title: 'ヘルプとフィードバック',
+            title: 'Help & Feedback',
             onTap: () {
-              _showMessage('準備中です', isSuccess: false);
+              _showMessage('Coming soon', isSuccess: false);
             },
           ),
           const SizedBox(height: 12),
           _buildLinkSection(
             icon: Icons.privacy_tip_outlined,
-            title: 'プライバシーポリシー',
+            title: 'Privacy Policy',
             onTap: () {
-              _showMessage('準備中です', isSuccess: false);
+              _showMessage('Coming soon', isSuccess: false);
             },
           ),
           const SizedBox(height: 12),
           _buildLinkSection(
             icon: Icons.description_outlined,
-            title: '利用規約',
+            title: 'Terms of Service',
             onTap: () {
-              _showMessage('準備中です', isSuccess: false);
+              _showMessage('Coming soon', isSuccess: false);
             },
           ),
           const SizedBox(height: 20),
@@ -395,10 +396,11 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'プロフィール設定',
+            'Profile Settings',
             style: TextStyle(
               color: Colors.white,
               fontSize: 18,
+            letterSpacing: -0.2,
               fontWeight: FontWeight.w600,
               fontFamily: kFontFamily,
             ),
@@ -458,7 +460,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
                 size: 18,
               ),
               label: const Text(
-                '写真を変更',
+                'Change Photo',
                 style: TextStyle(
                   color: kAccentColor,
                   fontSize: 14,
@@ -473,7 +475,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
           
           // アーティスト名
           const Text(
-            'アーティスト名',
+            'Artist Name',
             style: TextStyle(
               color: Colors.white,
               fontSize: 14,
@@ -490,7 +492,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
               fontFamily: kFontFamily,
             ),
             decoration: InputDecoration(
-              hintText: 'あなたの名前を入力',
+              hintText: 'Enter your name',
               hintStyle: TextStyle(
                 color: Colors.white.withOpacity(0.3),
                 fontFamily: kFontFamily,
@@ -535,17 +537,18 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            '通知設定',
+            'Notifications',
             style: TextStyle(
               color: Colors.white,
               fontSize: 18,
+            letterSpacing: -0.2,
               fontWeight: FontWeight.w600,
               fontFamily: kFontFamily,
             ),
           ),
           const SizedBox(height: 8),
           Text(
-            '定期的に行動を意識させる通知を送信します',
+            'Send periodic reminders \nto stay mindful of your actions',
             style: TextStyle(
               color: Colors.white.withOpacity(0.7),
               fontSize: 14,
@@ -559,7 +562,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text(
-                '通知を有効にする',
+                'Enable notifications',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 16,
@@ -585,7 +588,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
             
             // 通知間隔選択
             const Text(
-              '通知間隔',
+              'Notification interval',
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 16,
@@ -702,7 +705,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
           const SizedBox(width: 16),
           const Expanded(
             child: Text(
-              'バージョン情報',
+              'Version',
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 16,

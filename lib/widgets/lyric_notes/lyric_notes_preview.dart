@@ -121,7 +121,7 @@ List<TextSpan> _buildPreviewTextSpans() {
   if (previewLines.isEmpty) {
     return [
       TextSpan(
-        text: 'タップして\nリリックを追加...',
+        text: 'Tap to\nAdd Lyrics...',
         style: GoogleFonts.inter(
           color: Colors.white.withOpacity(0.5),
           fontSize: 20,

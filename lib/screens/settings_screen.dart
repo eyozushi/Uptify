@@ -170,9 +170,9 @@ void dispose() {
           _albumImage = null;
           _hasImageChanged = true;
         });
-        _showMessage('写真を選択しました', isSuccess: true);
+        _showMessage('Photo selected', isSuccess: true);
       } else {
-        _showMessage('写真の選択がキャンセルされました', isSuccess: false);
+        _showMessage('Photo selection cancelled', isSuccess: false);
       }
     } catch (e) {
       _showMessage('写真の選択に失敗しました: $e', isSuccess: false);
@@ -186,18 +186,18 @@ void dispose() {
         return AlertDialog(
           backgroundColor: const Color(0xFF1A1A2E),
           title: const Text(
-            '写真を選択',
+            'Select Photo',
             style: TextStyle(color: Colors.white, fontFamily: 'Hiragino Sans'),
           ),
           content: const Text(
-            '写真の取得方法を選択してください',
+            'Choose how to get photo',
             style: TextStyle(color: Colors.white70, fontFamily: 'Hiragino Sans'),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
               child: const Text(
-                'キャンセル',
+                'Cancel',
                 style: TextStyle(color: Colors.white54),
               ),
             ),
@@ -209,7 +209,7 @@ void dispose() {
                   Icon(Icons.camera_alt, color: Color(0xFF1DB954), size: 20),
                   SizedBox(width: 8),
                   Text(
-                    'カメラ',
+                    'Camera',
                     style: TextStyle(color: Color(0xFF1DB954)),
                   ),
                 ],
@@ -223,7 +223,7 @@ void dispose() {
                   Icon(Icons.photo_library, color: Color(0xFF1DB954), size: 20),
                   SizedBox(width: 8),
                   Text(
-                    'ギャラリー',
+                    'Gallery',
                     style: TextStyle(color: Color(0xFF1DB954)),
                   ),
                 ],
@@ -241,7 +241,7 @@ void dispose() {
       _imageBytes = null;
       _hasImageChanged = true;
     });
-    _showMessage('画像を削除しました', isSuccess: true);
+    _showMessage('Image deleted', isSuccess: true);
   }
 
   void _showMessage(String message, {required bool isSuccess}) {
@@ -280,7 +280,7 @@ void dispose() {
       _tasks[i] = TaskItem(
         id: _tasks[i].id, // 🔧 追加：既存のIDを保持
         title: _taskTitleControllers[i].text.trim().isEmpty 
-            ? 'タスク${i + 1}' 
+            ? 'Task ${i + 1}' 
             : _taskTitleControllers[i].text,
         description: '',
         color: const Color(0xFF1DB954),
@@ -337,7 +337,7 @@ void dispose() {
       await _dataService.saveUserData(data);
       
       if (mounted) {
-        _showMessage('設定を保存しました', isSuccess: true);
+        _showMessage('Settings saved', isSuccess: true);
         
         final result = {
           'idealSelf': _idealSelfController.text,
@@ -358,7 +358,7 @@ void dispose() {
     }
   } catch (e) {
     if (mounted) {
-      _showMessage('保存に失敗しました', isSuccess: false);
+      _showMessage('Failed to save', isSuccess: false);
     }
     print('❌ 設定保存エラー: $e');
   } finally {
@@ -439,10 +439,11 @@ Widget build(BuildContext context) {
           // 中央のタイトル
           const Center(
             child: Text(
-              'アルバム設定',
+              'Album Settings',
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 18,
+            letterSpacing: -0.2,
                 fontWeight: FontWeight.w600,
                 fontFamily: 'Hiragino Sans',
               ),
@@ -494,7 +495,7 @@ Widget build(BuildContext context) {
                         ),
                       )
                     : const Text(
-                        '保存',
+                        'Save',
                         style: TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.w600,
@@ -529,10 +530,11 @@ Widget build(BuildContext context) {
           ),
           const SizedBox(width: 12),
           Text(
-            widget.isEditingLifeDream ? '理想像の画像' : 'アルバムカバー',
+            widget.isEditingLifeDream ? 'Ideal Self Image' : 'Album Cover',
             style: const TextStyle(
               color: Colors.white,
               fontSize: 18,
+            letterSpacing: -0.2,
               fontWeight: FontWeight.w600,
               fontFamily: 'Hiragino Sans',
             ),
@@ -564,7 +566,7 @@ Widget build(BuildContext context) {
         child: _buildImageButton(
           onTap: _selectImageFromGallery,
           icon: Icons.photo_library,
-          label: '写真を選択',
+          label: 'Select Photo',
           color: _dominantColor,
         ),
       ),
@@ -614,7 +616,7 @@ Widget build(BuildContext context) {
               ),
               SizedBox(height: 12),
               Text(
-                '画像なし',
+                'No Image',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 14,
@@ -682,10 +684,11 @@ Widget build(BuildContext context) {
               ),
               const SizedBox(width: 12),
               const Text(
-                'タスク設定',
+                'Task Settings',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 18,
+            letterSpacing: -0.2,
                   fontWeight: FontWeight.w600,
                   fontFamily: 'Hiragino Sans',
                 ),
@@ -713,7 +716,7 @@ Widget build(BuildContext context) {
                     ),
                     const SizedBox(width: 4),
                     const Text(
-                      'タスク追加',
+                      'Add Task',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 14,
@@ -764,7 +767,7 @@ Widget build(BuildContext context) {
             // 🔧 修正：タスク番号削除、タイトルを緑色に
             Expanded(
               child: Text(
-                'タスク ${index + 1}',
+                'Task ${index + 1}',
                 style: const TextStyle(
                   color: Color(0xFF1DB954),  // 🔧 修正：緑色
                   fontSize: 16,
@@ -791,9 +794,9 @@ Widget build(BuildContext context) {
         
         // 🔧 修正：タイトル（統一スタイル）
         _buildSimpleTaskField(
-          label: 'タイトル',
+          label: 'Title',
           controller: _taskTitleControllers[index],
-          hint: 'タスクのタイトルを入力',
+          hint: 'Enter task title',
         ),
         
         const SizedBox(height: 16),
@@ -933,7 +936,7 @@ Widget _buildSimpleTaskUrlField({
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      'クリア',
+                      'Clear',
                       style: TextStyle(
                         color: Colors.red.withOpacity(0.8),
                         fontSize: 10,
@@ -999,7 +1002,7 @@ Widget _buildSimpleTimeSelection(int index) {
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       const Text(
-        '再生時間',
+        'Duration',
         style: TextStyle(
           color: Colors.white,
           fontSize: 14,
@@ -1049,7 +1052,7 @@ Widget _buildSimpleTimeSelection(int index) {
           borderRadius: BorderRadius.circular(8),
         ),
         child: Text(
-          '${duration}分',
+          '${duration}min',
           textAlign: TextAlign.center,
           style: TextStyle(
             color: isSelected ? Colors.white : Colors.white.withOpacity(0.7),
@@ -1136,10 +1139,11 @@ Widget _buildSimpleTimeSelection(int index) {
           ),
           const SizedBox(width: 12),
           const Text(
-            '危険な操作',
+            'Danger Zone',
             style: TextStyle(
               color: Colors.white,
               fontSize: 18,
+            letterSpacing: -0.2,
               fontWeight: FontWeight.w600,
               fontFamily: 'Hiragino Sans',
             ),
@@ -1150,7 +1154,7 @@ Widget _buildSimpleTimeSelection(int index) {
       const SizedBox(height: 20),
       
       Text(
-        'このアルバムを削除すると、すべてのデータが完全に削除され、元に戻すことはできません。',
+        'Deleting this album cannot be undone.',
         style: TextStyle(
           color: Colors.white.withOpacity(0.8),
           fontSize: 14,
@@ -1180,7 +1184,7 @@ Widget _buildSimpleTimeSelection(int index) {
                 ),
                 SizedBox(width: 12),
                 Text(
-                  'このアルバムを削除',
+                  'Delete This Album',
                   style: TextStyle(
                     color: Colors.red,
                     fontSize: 16,
@@ -1217,7 +1221,7 @@ void _onReorderTasks(int oldIndex, int newIndex) {
 
 void _addNewTask() {
   if (_tasks.length >= 10) {
-    _showMessage('タスクは最大10個までです', isSuccess: false);
+    _showMessage('Maximum 10 tasks allowed', isSuccess: false);
     return;
   }
   
@@ -1227,7 +1231,7 @@ void _addNewTask() {
     
     _tasks.add(TaskItem(
       id: newTaskId, // 🔧 追加：一意のIDを設定
-      title: 'タスク${_tasks.length + 1}',
+      title: 'Task ${_tasks.length + 1}',
       description: '',
       color: const Color(0xFF1DB954),
       duration: 3,
@@ -1235,17 +1239,17 @@ void _addNewTask() {
       lyricNotes: null, // 🔧 追加：初期値null
     ));
     
-    _taskTitleControllers.add(TextEditingController(text: 'タスク${_tasks.length}'));
+    _taskTitleControllers.add(TextEditingController(text: 'Task ${_tasks.length}'));
     _taskUrlControllers.add(TextEditingController(text: ''));
   });
   
-  _showMessage('タスクを追加しました', isSuccess: true);
+  _showMessage('Task added', isSuccess: true);
 }
 
 // 🆕 新規追加メソッド：タスクを削除
 void _removeTask(int index) {
   if (_tasks.length <= 1) {
-    _showMessage('タスクは最低1つ必要です', isSuccess: false);
+    _showMessage('At least one task is required', isSuccess: false);
     return;
   }
   
@@ -1257,7 +1261,7 @@ void _removeTask(int index) {
     _taskUrlControllers.removeAt(index);
   });
   
-  _showMessage('タスクを削除しました', isSuccess: true);
+  _showMessage('Task deleted', isSuccess: true);
 }
 
 // 🆕 新規追加メソッド：削除確認ダイアログ
@@ -1267,7 +1271,7 @@ void _showDeleteConfirmDialog() {
     barrierDismissible: false,
     builder: (BuildContext context) {
       return AlertDialog(
-        backgroundColor: const Color(0xFF1A1A2E),
+        backgroundColor: const Color(0xFF282828),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
         ),
@@ -1288,10 +1292,11 @@ void _showDeleteConfirmDialog() {
             const SizedBox(width: 12),
             const Expanded(
               child: Text(
-                'アルバムを削除',
+                'Delete Album',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 20,
+            letterSpacing: -0.3,
                   fontWeight: FontWeight.w600,
                   fontFamily: 'Hiragino Sans',
                 ),
@@ -1304,7 +1309,7 @@ void _showDeleteConfirmDialog() {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '「${_idealSelfController.text}」を削除してもよろしいですか？',
+              'Are you sure you want to delete "${_idealSelfController.text}"?',
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 16,
@@ -1324,7 +1329,7 @@ void _showDeleteConfirmDialog() {
                 ),
               ),
               child: const Text(
-                '⚠️ この操作は取り消せません\n\n・アルバムの全データが削除されます\n・タスク履歴も削除されます\n・ホーム画面から消えます',
+  '⚠️ This action cannot be undone.\n\n''• All album data will be deleted\n''• Task history will be removed',
                 style: TextStyle(
                   color: Colors.white70,
                   fontSize: 14,
@@ -1339,7 +1344,7 @@ void _showDeleteConfirmDialog() {
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
             child: const Text(
-              'キャンセル',
+              'Cancel',
               style: TextStyle(
                 color: Colors.white70,
                 fontSize: 16,
@@ -1361,7 +1366,7 @@ void _showDeleteConfirmDialog() {
               ),
             ),
             child: const Text(
-              '削除する',
+              'Delete',
               style: TextStyle(
                 color: Colors.red,
                 fontSize: 16,
@@ -1576,10 +1581,11 @@ Widget _buildAlbumInfoSection() {
           ),
           const SizedBox(width: 12),
           const Text(
-            'アルバム名',
+            'Album Name',
             style: TextStyle(
               color: Colors.white,
               fontSize: 18,
+            letterSpacing: -0.2,
               fontWeight: FontWeight.w600,
               fontFamily: 'Hiragino Sans',
             ),
@@ -1598,7 +1604,7 @@ Widget _buildAlbumInfoSection() {
           fontFamily: 'Hiragino Sans',
         ),
         decoration: InputDecoration(
-          hintText: 'アルバム名を入力',
+          hintText: 'Enter album name',
           hintStyle: TextStyle(
             color: Colors.white.withOpacity(0.4),
             fontFamily: 'Hiragino Sans',

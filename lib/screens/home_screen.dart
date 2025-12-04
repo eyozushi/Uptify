@@ -205,11 +205,11 @@ void didUpdateWidget(covariant HomeScreen oldWidget) {
     final hour = now.hour;
     
     if (hour >= 5 && hour < 10) {
-      return 'おはよう';
+      return 'Good morning';
     } else if (hour >= 10 && hour < 17) {
-      return 'こんにちは';
+      return 'Good afternoon';
     } else {
-      return 'こんばんは';
+      return 'Good evening';
     }
   }
 
@@ -512,7 +512,7 @@ void didUpdateWidget(covariant HomeScreen oldWidget) {
         
         if (snapshot.hasError) {
           return RecordGaugeErrorWidget(
-            errorMessage: 'データの読み込みに失敗しました',
+            errorMessage: 'Failed to load data',
           );
         }
         
@@ -534,7 +534,7 @@ void didUpdateWidget(covariant HomeScreen oldWidget) {
       child: Column(
         children: [
           const Text(
-            '連続タスク実行',
+            'Task Streak',
             style: TextStyle(
               color: Colors.white70,
               fontSize: 14,
@@ -559,7 +559,7 @@ void didUpdateWidget(covariant HomeScreen oldWidget) {
               ),
               const SizedBox(width: 8),
               const Text(
-                '日目',
+                'days',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 24,
@@ -640,8 +640,9 @@ void didUpdateWidget(covariant HomeScreen oldWidget) {
         style: const TextStyle(
           color: Colors.white,
           fontSize: 32,
-          fontWeight: FontWeight.bold,
+          fontWeight: FontWeight.w900,
           fontFamily: 'Hiragino Sans',
+          letterSpacing: -1.0,
         ),
       ),
       GestureDetector(  // 🔧 修正: 不要なRowを削除
@@ -688,6 +689,7 @@ void didUpdateWidget(covariant HomeScreen oldWidget) {
                       fontSize: 24,
                       fontWeight: FontWeight.w900,
                       fontFamily: 'Hiragino Sans',
+                      letterSpacing: -0.5,
                     ),
                   ),
                 ),
@@ -799,6 +801,7 @@ void didUpdateWidget(covariant HomeScreen oldWidget) {
                               fontSize: 22,
                               fontWeight: FontWeight.w900,
                               fontFamily: 'Hiragino Sans',
+                              letterSpacing: -1.0, 
                             ),
                             maxLines: 1,
                             minFontSize: 14,
@@ -854,12 +857,13 @@ void didUpdateWidget(covariant HomeScreen oldWidget) {
 Align(
   alignment: Alignment.centerLeft,
   child: const Text(
-    'あなたのアルバム',
+    'Your Albums',
     style: TextStyle(
       color: Colors.white,
       fontSize: 22,
       fontWeight: FontWeight.w900,
       fontFamily: 'Hiragino Sans',
+      letterSpacing: -1.0, // 🆕 追加：文字間隔を詰める
     ),
   ),
 ),
@@ -894,8 +898,9 @@ Align(
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 16,
-                              fontWeight: FontWeight.w700,
+                              fontWeight: FontWeight.w800,
                               fontFamily: 'Hiragino Sans',
+                              letterSpacing: -1.0,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -912,7 +917,7 @@ Align(
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            '${_tasks.length} タスク',
+                            '${_tasks.length} Tasks',
                             style: TextStyle(
                               color: Colors.white.withOpacity(0.5),
                               fontSize: 12,
@@ -962,8 +967,10 @@ Align(
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 16,
-                                fontWeight: FontWeight.w700,
+                                fontWeight: FontWeight.w800,
                                 fontFamily: 'Hiragino Sans',
+                                letterSpacing: -1.0,
+
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -974,13 +981,14 @@ Align(
                               style: TextStyle(
                                 color: Colors.white.withOpacity(0.7),
                                 fontSize: 14,
-                                fontWeight: FontWeight.w400,
+                                fontWeight: FontWeight.w600,
                                 fontFamily: 'Hiragino Sans',
+                                
                               ),
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              '${album.tasks.length} タスク',
+                              '${album.tasks.length} Tasks',
                               style: TextStyle(
                                 color: Colors.white.withOpacity(0.5),
                                 fontSize: 12,

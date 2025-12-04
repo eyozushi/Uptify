@@ -324,11 +324,12 @@ Widget build(BuildContext context) {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           const Text(
-            'プレイバック',
+            'Playback',
             style: TextStyle(
               color: Colors.white,
               fontSize: 32,
-              fontWeight: FontWeight.bold,
+            letterSpacing: -0.5,
+              fontWeight: FontWeight.w900,
               fontFamily: 'Hiragino Sans',
             ),
           ),
@@ -337,6 +338,7 @@ Widget build(BuildContext context) {
             style: const TextStyle(
               color: Colors.white,
               fontSize: 20,
+            letterSpacing: -0.3,
               fontWeight: FontWeight.w700,
               fontFamily: 'SF Pro Text',
             ),
@@ -366,18 +368,18 @@ Widget build(BuildContext context) {
                 children: [
                   _dailyReport != null
                       ? DailyReportWidget(report: _dailyReport!)
-                      : _buildEmptyReport('デイリーレポート'),
+                      : _buildEmptyReport('Daily Report'),
                   _weeklyReport != null
                       ? WeeklyReportWidget(report: _weeklyReport!)
-                      : _buildEmptyReport('ウィークリーレポート'),
+                      : _buildEmptyReport('Weekly Report'),
                   _monthlyReport != null
                       ? MonthlyReportWidget(report: _monthlyReport!)
-                      : _buildEmptyReport('マンスリーレポート'),
+                      : _buildEmptyReport('Monthly Report'),
                   // 🔧 変更：アニュアルレポートは未読み込み時もローディング表示
                   _annualReport != null
                       ? AnnualReportWidget(report: _annualReport!)
                       : _hasLoadedAnnual
-                          ? _buildEmptyReport('アニュアルレポート')
+                          ? _buildEmptyReport('Annual Report')
                           : Center(
                               child: CircularProgressIndicator(
                                 valueColor: AlwaysStoppedAnimation<Color>(
@@ -394,7 +396,7 @@ Widget build(BuildContext context) {
 
   /// 【修正】レポート切り替えインジケーターを構築
 Widget _buildReportIndicator() {
-  final labels = ['日', '週', '月', '年'];
+  final labels = ['Day', 'Week', 'Month', 'Year'];
   
   return Row(
     mainAxisAlignment: MainAxisAlignment.center,

@@ -4256,10 +4256,10 @@ void _closePlayerWithAnimation() {
   }
   
   final pages = [
-    {'icon': Icons.home, 'label': 'ホーム'},
-    {'icon': Icons.music_note, 'label': 'コンサート'},
-    {'icon': Icons.leaderboard, 'label': 'プレイバック'},
-    {'icon': Icons.add_circle_outline, 'label': 'リリース'},
+    {'icon': Icons.home, 'label': 'Home'},
+    {'icon': Icons.music_note, 'label': 'Concert'},
+    {'icon': Icons.leaderboard, 'label': 'Playback'},
+    {'icon': Icons.add_circle_outline, 'label': 'Release'},
   ];
 
   return Container(

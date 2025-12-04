@@ -1269,9 +1269,9 @@ Widget build(BuildContext context) {
         _idealSelf, // 🔧 変更：'Uptify' → _idealSelf
         style: const TextStyle(
           color: Colors.white,
-          fontSize: 16,
+          fontSize: 14,
           fontWeight: FontWeight.bold,
-          letterSpacing: 1.0,
+          letterSpacing: -0.5,
           fontFamily: 'SF Pro Text',
         ),
       ),
@@ -1429,7 +1429,7 @@ Widget _buildDefaultAlbumCover(double size, {required bool isSingle}) {
           ),
           const SizedBox(height: 16),
           Text(
-            isSingle ? 'アルバム' : '理想像',
+            isSingle ? 'アルバム' : 'Ideal Self',
             style: const TextStyle(
               color: Colors.white,
               fontSize: 16,
@@ -1483,18 +1483,23 @@ Widget _buildDefaultAlbumCover(double size, {required bool isSingle}) {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            GestureDetector(
-              onTap: _navigateToAlbumDetail,
-              child: Text(
-                _getCurrentTitle(),
+            // 🔧 修正：Transform.translateで少し上に移動
+            Transform.translate(
+              offset: const Offset(0, -1), // 🆕 追加：2ピクセル上に移動
+              child: AutoScrollText(
+                text: _getCurrentTitle(),
                 style: const TextStyle(
                   color: Colors.white,
-                  fontSize: 24,
+                  fontSize: 22,
+                  letterSpacing: -0.8,
                   fontWeight: FontWeight.w800,
                   fontFamily: 'Hiragino Sans',
+                  height: 1.5, // 🆕 追加：行の高さを調整
                 ),
+                onTap: _navigateToAlbumDetail,
               ),
             ),
+            const SizedBox(height: 4), // 🔧 修正：4 → 2に縮小
             GestureDetector(
               onTap: _navigateToAlbumDetail,
               child: Text(
@@ -1505,6 +1510,8 @@ Widget _buildDefaultAlbumCover(double size, {required bool isSingle}) {
                   fontWeight: FontWeight.w300,
                   fontFamily: 'Hiragino Sans',
                 ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],
@@ -1512,7 +1519,7 @@ Widget _buildDefaultAlbumCover(double size, {required bool isSingle}) {
       ),
       
       if (showCompletionButton) ...[
-        const SizedBox(width: 8), // 🔧 修正: 16 → 8（間隔を狭める）
+        const SizedBox(width: 8),
         Column(
           children: [
             const SizedBox(height: 16),
@@ -1558,7 +1565,7 @@ Widget _buildDefaultAlbumCover(double size, {required bool isSingle}) {
             ),
           ],
         ),
-        const SizedBox(width: 10), // 🆕 追加: 右側に余白を追加してジャケットの右端より内側に
+        const SizedBox(width: 10),
       ],
     ],
   );
@@ -1784,7 +1791,7 @@ GestureDetector(
                 const SizedBox(width: 12),
                 const Expanded(
                   child: Text(
-                    'URL起動時にエラーが発生しました',
+                    'Error occurred while opening URL',
                     style: TextStyle(fontFamily: 'Hiragino Sans'),
                   ),
                 ),
@@ -1992,4 +1999,167 @@ IconData _getPlayPauseIcon() {
   // ライフドリームアルバムのタスク（index≥1）：_isPlayingの値で判定
   return _isPlaying ? Icons.pause : Icons.play_arrow;
 }
+}
+// 🆕 完全修正：自動スクロールテキストウィジェット
+class AutoScrollText extends StatefulWidget {
+  final String text;
+  final TextStyle style;
+  final VoidCallback? onTap;
+  
+  const AutoScrollText({
+    super.key,
+    required this.text,
+    required this.style,
+    this.onTap,
+  });
+
+  @override
+  State<AutoScrollText> createState() => _AutoScrollTextState();
+}
+
+class _AutoScrollTextState extends State<AutoScrollText> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  bool _isOverflowing = false;
+  double _textWidth = 0;
+  double _containerWidth = 0; // 🆕 追加
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(seconds: 10),
+      vsync: this,
+    );
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _calculateTextWidth();
+    });
+  }
+
+  @override
+  void didUpdateWidget(AutoScrollText oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.text != widget.text) {
+      _controller.reset();
+      setState(() {
+        _isOverflowing = false;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _calculateTextWidth();
+      });
+    }
+  }
+
+  void _calculateTextWidth() {
+    final textPainter = TextPainter(
+      text: TextSpan(text: widget.text, style: widget.style),
+      maxLines: 1,
+      textDirection: TextDirection.ltr,
+    )..layout();
+
+    setState(() {
+      _textWidth = textPainter.width;
+    });
+  }
+
+  void _checkOverflow(double containerWidth) {
+    _containerWidth = containerWidth; // 🆕 保存
+    final shouldOverflow = _textWidth > containerWidth;
+
+    if (shouldOverflow != _isOverflowing) {
+      setState(() {
+        _isOverflowing = shouldOverflow;
+      });
+
+      if (_isOverflowing) {
+        Future.delayed(const Duration(seconds: 2), () {
+          if (mounted) {
+            _controller.repeat();
+          }
+        });
+      } else {
+        _controller.stop();
+        _controller.reset();
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: widget.onTap,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _checkOverflow(constraints.maxWidth);
+          });
+
+          return SizedBox(
+            width: constraints.maxWidth,
+            height: widget.style.fontSize != null 
+                ? widget.style.fontSize! * 1.5
+                : 26.4,
+            child: _isOverflowing
+                ? ClipRect(
+                    child: OverflowBox(
+                      alignment: Alignment.centerLeft,
+                      maxWidth: double.infinity,
+                      child: AnimatedBuilder(
+                        animation: _controller,
+                        builder: (context, child) {
+                          final offset = _controller.value * (_textWidth + 40);
+                          return Transform.translate(
+                            offset: Offset(-offset, 0),
+                            child: SizedBox(
+                              width: _textWidth * 2 + 40, // 🔧 修正：明示的に幅を指定
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min, // 🔧 追加
+                                children: [
+                                  SizedBox(
+                                    width: _textWidth,
+                                    child: Text(
+                                      widget.text,
+                                      style: widget.style,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.visible,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 40),
+                                  SizedBox(
+                                    width: _textWidth,
+                                    child: Text(
+                                      widget.text,
+                                      style: widget.style,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.visible,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  )
+                : Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      widget.text,
+                      style: widget.style,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+          );
+        },
+      ),
+    );
+  }
 }

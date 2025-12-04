@@ -156,7 +156,7 @@ Future<void> _loadUserImage() async {
   } catch (e) {
     if (mounted) {
       setState(() {
-        _errorMessage = 'データの読み込みに失敗しました';
+        _errorMessage = 'Failed to load data';
         _isLoading = false;
       });
     }
@@ -210,11 +210,12 @@ Future<void> _handleFanEntrance() async {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text(
-                    'あなたのコンサート',
+                    'Your Concert',
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 32,
-                      fontWeight: FontWeight.bold,
+            letterSpacing: -0.5,
+                      fontWeight: FontWeight.w900,
                       fontFamily: 'Hiragino Sans',
                     ),
                   ),
@@ -267,7 +268,7 @@ Future<void> _handleFanEntrance() async {
                   // 新規ファン数
                   _buildCompactInfo(
                     icon: Icons.group_add,
-                    label: '新規',
+                    label: 'New',
                     value: '${_fanData?.stockedFans ?? 0}',
                     color: const Color(0xFF1DB954),
                   ),
@@ -284,7 +285,7 @@ Future<void> _handleFanEntrance() async {
                   // 会場の人数
                   _buildCompactInfo(
                     icon: Icons.people,
-                    label: '会場',
+                    label: 'Venue',
                     value: _isLoading 
                       ? '...' 
                       : '${_fanData?.currentAudience ?? 0}',
@@ -466,8 +467,8 @@ Future<void> _handleFanEntrance() async {
             children: [
               _isEntering
                 ? const SizedBox(
-                    width: 16,
-                    height: 16,
+                    width: 20,
+                    height: 20,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
                       valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
@@ -481,10 +482,10 @@ Future<void> _handleFanEntrance() async {
               const SizedBox(width: 6),
               Text(
                 _isEntering 
-                  ? '入場中...'
+                  ? 'Entering...'
                   : hasStockedFans 
-                    ? 'ファン入場！'
-                    : 'タスク完了で入場可能',
+                    ? 'Fans Enter'
+                    : 'Play your tasks\nand be your own fan.',
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 12,

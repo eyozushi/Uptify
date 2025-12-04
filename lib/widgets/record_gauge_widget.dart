@@ -57,6 +57,7 @@ decoration: BoxDecoration(
         fontSize: 22,
         fontWeight: FontWeight.w900,
         fontFamily: 'Hiragino Sans',
+        letterSpacing: -1.0,
       ),
     );
   }
@@ -141,7 +142,7 @@ decoration: BoxDecoration(
   /// 進捗テキスト
   Widget _buildProgressText() {
     return Text(
-      '${state.completedCount}/4 タスク完了',
+      '${state.completedCount}/4 Tasks Completed',
       style: TextStyle(
         color: Colors.white.withOpacity(0.7),
         fontSize: 14,

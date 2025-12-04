@@ -262,7 +262,7 @@ Future<void> _extractColorsFromImage() async {
                           ),
                           SizedBox(height: 16),
                           Text(
-                            '理想像',
+                            'Ideal Self',
                             style: TextStyle(
                               color: Colors.white,
                               fontSize: 16,
@@ -361,9 +361,11 @@ Widget build(BuildContext context) {
                             widget.idealSelf,
                             style: const TextStyle(
                               color: Colors.white,
-                              fontSize: 28,
-                              fontWeight: FontWeight.bold,
+                              fontSize: 22,
+            letterSpacing: -1.0,
+                              fontWeight: FontWeight.w800,
                               fontFamily: 'Hiragino Sans',
+
                             ),
                           ),
                           const SizedBox(height: 4),
@@ -472,30 +474,18 @@ Widget build(BuildContext context) {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  task.title.isEmpty ? 'タスク${index + 1}' : task.title,
+                  task.title.isEmpty ? 'Task ${index + 1}' : task.title,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
                     fontFamily: 'Hiragino Sans',
+                    letterSpacing: -0.5
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                if (task.description.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    task.description,
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.7),
-                      fontSize: 14,
-                      fontWeight: FontWeight.w300,
-                      fontFamily: 'Hiragino Sans',
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
+                
               ],
             ),
           ),
@@ -551,7 +541,7 @@ void _openLyricNotesEditor(TaskItem task, int index) async {
             curve: Curves.easeInOut,
           )),
           child: LyricNotesEditorScreen(
-            taskTitle: task.title.isEmpty ? 'タスク${index + 1}' : task.title,
+            taskTitle: task.title.isEmpty ? 'Task ${index + 1}' : task.title,
             initialNotes: task.lyricNotes ?? [],
             backgroundColor: Colors.black,
             onSave: (notes) async {
@@ -651,7 +641,7 @@ Future<void> _saveLyricNotes(String taskId, List<LyricNoteItem> notes) async {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          task.title.isEmpty ? 'タスク${index + 1}' : task.title,
+                          task.title.isEmpty ? 'Task ${index + 1}' : task.title,
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 16,

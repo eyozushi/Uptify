@@ -225,10 +225,11 @@ void initState() {
       const Padding(
         padding: EdgeInsets.only(left: 20, bottom: 12),
         child: Text(
-          'トップタスク',
+          'Top Tasks',
           style: TextStyle(
             color: Colors.white,
             fontSize: 20,
+            letterSpacing: -0.3,
             fontWeight: FontWeight.w900, // 🔧 修正：w600 → w900
             fontFamily: 'Hiragino Sans',
           ),
@@ -402,10 +403,11 @@ Widget _getAlbumCoverForTask(TaskItem task) {
       const Padding(
         padding: EdgeInsets.only(left: 20, bottom: 12),
         child: Text(
-          'アルバム',
+          'Albums',
           style: TextStyle(
             color: Colors.white,
             fontSize: 20,
+            letterSpacing: -0.3,
             fontWeight: FontWeight.w900,
             fontFamily: 'Hiragino Sans',
           ),
@@ -466,7 +468,7 @@ Widget _getAlbumCoverForTask(TaskItem task) {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'ライフドリームアルバム',
+                      'Life Dream Album',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 15,
@@ -476,7 +478,7 @@ Widget _getAlbumCoverForTask(TaskItem task) {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '${widget.tasks.length} タスク',
+                      '${widget.tasks.length} Tasks',
                       style: TextStyle(
                         color: Colors.white.withOpacity(0.6),
                         fontSize: 13,
@@ -563,7 +565,7 @@ Widget _getAlbumCoverForTask(TaskItem task) {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        '${album.tasks.length} タスク',
+                        '${album.tasks.length} Tasks',
                         style: TextStyle(
                           color: Colors.white.withOpacity(0.6),
                           fontSize: 13,
@@ -648,7 +650,7 @@ Widget _getAlbumCoverForTask(TaskItem task) {
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: Text(
-                      '総タスク完了数: $_totalTasksCompleted',
+                      'Total Tasks Completed: $_totalTasksCompleted',
                       style: TextStyle(
                         color: Colors.white.withOpacity(0.6),
                         fontSize: 14,

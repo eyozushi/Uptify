@@ -365,6 +365,7 @@ Widget build(BuildContext context) {
                           fontSize: 14,
                           fontWeight: FontWeight.w900,
                           fontFamily: 'Hiragino Sans',
+                          letterSpacing: -0.5
                         ),
                         textAlign: TextAlign.center,
                         maxLines: 2,
@@ -408,7 +409,7 @@ Widget build(BuildContext context) {
                     child: Align(
                       alignment: Alignment.topLeft,
                       child: Text(
-                        '右上のボタンから\nノートを編集して',
+                        'Edit Notes\nfrom the top-right',
                         style: GoogleFonts.inter(
                           color: Colors.white.withOpacity(0.5),
                           fontSize: 20,

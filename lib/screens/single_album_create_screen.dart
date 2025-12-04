@@ -67,7 +67,7 @@ class _SingleAlbumCreateScreenState extends State<SingleAlbumCreateScreen> {
       _addNewTask();
     });
     
-    _showMessage('フォームをリセットしました', isSuccess: true);
+    _showMessage('Form reset', isSuccess: true);
   }
 
   Future<void> _pickImage() async {
@@ -92,7 +92,7 @@ class _SingleAlbumCreateScreenState extends State<SingleAlbumCreateScreen> {
       // 色を抽出
       _extractColorsFromImage();
       
-      _showMessage('写真を選択しました', isSuccess: true);
+      _showMessage('Photo selected', isSuccess: true);
     }
   }
 
@@ -101,20 +101,20 @@ class _SingleAlbumCreateScreenState extends State<SingleAlbumCreateScreen> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          backgroundColor: const Color(0xFF1A1A2E),
+          backgroundColor: const Color(0xFF282828),
           title: const Text(
-            '写真を選択',
+            'Select Photo',
             style: TextStyle(color: Colors.white, fontFamily: 'Hiragino Sans'),
           ),
           content: const Text(
-            '写真の取得方法を選択してください',
+            'Choose how to get photo',
             style: TextStyle(color: Colors.white70, fontFamily: 'Hiragino Sans'),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
               child: const Text(
-                'キャンセル',
+                'Cancel',
                 style: TextStyle(color: Colors.white54),
               ),
             ),
@@ -126,7 +126,7 @@ class _SingleAlbumCreateScreenState extends State<SingleAlbumCreateScreen> {
                   Icon(Icons.camera_alt, color: Color(0xFF1DB954), size: 20),
                   SizedBox(width: 8),
                   Text(
-                    'カメラ',
+                    'Camera',
                     style: TextStyle(color: Color(0xFF1DB954)),
                   ),
                 ],
@@ -140,7 +140,7 @@ class _SingleAlbumCreateScreenState extends State<SingleAlbumCreateScreen> {
                   Icon(Icons.photo_library, color: Color(0xFF1DB954), size: 20),
                   SizedBox(width: 8),
                   Text(
-                    'ギャラリー',
+                    'Gallery',
                     style: TextStyle(color: Color(0xFF1DB954)),
                   ),
                 ],
@@ -276,7 +276,7 @@ class _SingleAlbumCreateScreenState extends State<SingleAlbumCreateScreen> {
 
   void _saveAlbum() async {
     if (_albumNameController.text.trim().isEmpty) {
-      _showMessage('アルバム名を入力してください', isSuccess: false);
+      _showMessage('Please enter the album name', isSuccess: false);
       return;
     }
 
@@ -326,7 +326,7 @@ class _SingleAlbumCreateScreenState extends State<SingleAlbumCreateScreen> {
         widget.onSave!(albumData);
       }
     } catch (e) {
-      _showMessage('保存に失敗しました', isSuccess: false);
+      _showMessage('Failed to save', isSuccess: false);
     } finally {
       setState(() {
         _isLoading = false;
@@ -383,30 +383,40 @@ Widget build(BuildContext context) {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 🔧 修正：ヘッダー（タップ判定を拡大）
+            // 🔧 修正：ヘッダー（オーバーフロー対策）
             Container(
               height: 60,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    'アルバム作成',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 32,
-                      fontWeight: FontWeight.bold,
-                      fontFamily: 'Hiragino Sans',
+                  // 🔧 修正：Expandedでラップしてスペースを確保
+                  Expanded(
+                    child: Text(
+                      'Release',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 32,
+            letterSpacing: -0.5,
+                        fontWeight: FontWeight.w900,
+                        fontFamily: 'Hiragino Sans',
+                      ),
+                      maxLines: 1,  // 🔧 追加：1行に制限
+                      overflow: TextOverflow.ellipsis,  // 🔧 追加：はみ出し対策
                     ),
                   ),
+                  
+                  const SizedBox(width: 12),  // 🔧 追加：余白を確保
+                  
                   Row(
+                    mainAxisSize: MainAxisSize.min,  // 🔧 追加：必要最小限のサイズ
                     children: [
-                      // 🔧 修正：リセットボタン（タップ領域拡大）
+                      // リセットボタン
                       GestureDetector(
                         onTap: () {
                           _resetForm();
                         },
                         child: Container(
-                          padding: const EdgeInsets.all(12), // 🔧 タップ領域拡大
+                          padding: const EdgeInsets.all(12),
                           child: const Icon(
                             Icons.refresh,
                             color: Colors.white,
@@ -415,13 +425,14 @@ Widget build(BuildContext context) {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      // 🔧 修正：リリースボタン（タップ領域拡大）
+                      
+                      // リリースボタン
                       GestureDetector(
                         onTap: _isLoading ? null : _saveAlbum,
                         child: Container(
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 20, // 🔧 パディング拡大
-                            vertical: 12,   // 🔧 パディング拡大
+                            horizontal: 20,
+                            vertical: 12,
                           ),
                           decoration: BoxDecoration(
                             color: _isLoading 
@@ -439,7 +450,7 @@ Widget build(BuildContext context) {
                                   ),
                                 )
                               : const Text(
-                                  'リリース',
+                                  'Release',
                                   style: TextStyle(
                                     color: Colors.white,
                                     fontSize: 14,
@@ -447,8 +458,8 @@ Widget build(BuildContext context) {
                                     fontFamily: 'Hiragino Sans',
                                   ),
                                 ),
-                        ),
-                      ),
+  ),
+),
                     ],
                   ),
                 ],
@@ -494,10 +505,11 @@ Widget _buildImageSection() {
           ),
           const SizedBox(width: 12),
           const Text(
-            'アルバムカバー',
+            'Album Cover',
             style: TextStyle(
               color: Colors.white,
               fontSize: 18,
+            letterSpacing: -0.2,
               fontWeight: FontWeight.w600,
               fontFamily: 'Hiragino Sans',
             ),
@@ -527,7 +539,7 @@ Widget _buildImageSection() {
         child: _buildImageButton(
           onTap: _pickImage,
           icon: Icons.photo_library,
-          label: '写真を選択',
+          label: 'Select Photo',
           // 🔧 修正：グレーに変更
           color: const Color(0xFF282828),
         ),
@@ -613,10 +625,11 @@ Widget _buildAlbumInfoSection() {
           ),
           const SizedBox(width: 12),
           const Text(
-            'アルバム名',
+            'Album Name',
             style: TextStyle(
               color: Colors.white,
               fontSize: 18,
+            letterSpacing: -0.2,
               fontWeight: FontWeight.w600,
               fontFamily: 'Hiragino Sans',
             ),
@@ -634,7 +647,7 @@ Widget _buildAlbumInfoSection() {
           fontFamily: 'Hiragino Sans',
         ),
         decoration: InputDecoration(
-          hintText: 'アルバム名を入力',
+          hintText: 'Enter album name',
           hintStyle: TextStyle(
             color: Colors.white.withOpacity(0.4),
             fontFamily: 'Hiragino Sans',
@@ -688,10 +701,11 @@ Widget _buildTasksSection() {
               ),
               const SizedBox(width: 12),
               const Text(
-                'タスク設定',
+                'Task Settings',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 18,
+            letterSpacing: -0.2,
                   fontWeight: FontWeight.w600,
                   fontFamily: 'Hiragino Sans',
                 ),
@@ -718,7 +732,7 @@ Widget _buildTasksSection() {
                   ),
                   const SizedBox(width: 4),
                   const Text(
-                    'タスク追加',
+                    'Add Task',
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 14,
@@ -767,7 +781,7 @@ Widget _buildTasksSection() {
               
               Expanded(
                 child: Text(
-                  'タスク ${index + 1}',
+                  'Task ${index + 1}',
                   style: const TextStyle(
                     color: Color(0xFF1DB954),
                     fontSize: 16,
@@ -792,9 +806,9 @@ Widget _buildTasksSection() {
           const SizedBox(height: 16),
           
           _buildSimpleTaskField(
-            label: 'タイトル',
+            label: 'Title',
             controller: _taskControllers[index],
-            hint: 'タスクのタイトルを入力',
+            hint: 'Enter task title',
             onChanged: (value) {
               _updateTask(index, _tasks[index].copyWith(title: value));
             },
@@ -885,7 +899,7 @@ Widget _buildTasksSection() {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          '再生時間',
+          'Duration',
           style: TextStyle(
             color: Colors.white,
             fontSize: 14,
@@ -928,7 +942,7 @@ Widget _buildTasksSection() {
             borderRadius: BorderRadius.circular(8),
           ),
           child: Text(
-            '${duration}分',
+            '${duration}min',
             textAlign: TextAlign.center,
             style: TextStyle(
               color: isSelected ? Colors.white : Colors.white.withOpacity(0.7),

@@ -19,7 +19,7 @@ class AnnualReportWidget extends StatelessWidget {
     final topAlbums = report.data['topAlbums'] as List<Map<String, dynamic>>? ?? [];
     final topTasks = report.data['topTasks'] as List<Map<String, dynamic>>? ?? [];
     final maxStreakDays = report.data['maxStreakDays'] as int? ?? 0;
-    final peakMonth = report.data['peakMonth'] as String? ?? '不明';
+    final peakMonth = report.data['peakMonth'] as String? ?? 'Unknown';
     
     return SingleChildScrollView(
       child: Container(
@@ -60,7 +60,7 @@ class AnnualReportWidget extends StatelessWidget {
         ),
         const SizedBox(width: 12),
         Text(
-          'Annual Legacy：$totalTasks タスクを再生',
+          'Annual Legacy：$totalTasks Plays',
           style: const TextStyle(
             color: Colors.white,
             fontSize: 16,
@@ -92,7 +92,7 @@ class AnnualReportWidget extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           Text(
-            '総再生時間：${hours}時間${minutes}分',
+            'Total Play Time: ${hours}h ${minutes}m',
             style: const TextStyle(
               color: Colors.white,
               fontSize: 15,
@@ -114,7 +114,7 @@ class AnnualReportWidget extends StatelessWidget {
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       const Text(
-        '年間トップアルバム',
+        'Top Albums of the Year',
         style: TextStyle(
           color: Colors.white,
           fontSize: 16,
@@ -126,7 +126,7 @@ class AnnualReportWidget extends StatelessWidget {
       ...topAlbums.take(3).toList().asMap().entries.map((entry) {
         final rank = entry.key + 1;
         final album = entry.value;
-        final name = album['albumName'] as String? ?? '不明';
+        final name = album['albumName'] as String? ?? 'Unknown';
         final count = album['count'] as int? ?? 0;
         
         return Padding(
@@ -173,7 +173,7 @@ class AnnualReportWidget extends StatelessWidget {
               const SizedBox(width: 8),
               // 再生回数
               Text(
-                '$count回',
+                '$count',
                 style: TextStyle(
                   color: Colors.white.withOpacity(0.6),
                   fontSize: 13,
@@ -198,7 +198,7 @@ class AnnualReportWidget extends StatelessWidget {
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       const Text(
-        '年間トップヒット曲',
+        'Top Tracks of the Year',
         style: TextStyle(
           color: Colors.white,
           fontSize: 16,
@@ -210,7 +210,7 @@ class AnnualReportWidget extends StatelessWidget {
       ...topTasks.take(3).toList().asMap().entries.map((entry) {
         final rank = entry.key + 1;
         final task = entry.value;
-        final title = task['taskTitle'] as String? ?? '不明';
+        final title = task['taskTitle'] as String? ?? 'Unknown';
         final count = task['count'] as int? ?? 0;
         
         return Padding(
@@ -257,7 +257,7 @@ class AnnualReportWidget extends StatelessWidget {
               const SizedBox(width: 8),
               // 再生回数
               Text(
-                '$count回',
+                '$count',
                 style: TextStyle(
                   color: Colors.white.withOpacity(0.6),
                   fontSize: 13,
@@ -274,99 +274,121 @@ class AnnualReportWidget extends StatelessWidget {
 }
 
   Widget _buildStreakInfo(int maxStreakDays, String peakMonth) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          '継続性の記録',
-          style: TextStyle(
-            color: Colors.white.withOpacity(0.8),
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            fontFamily: 'Hiragino Sans',
-          ),
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.05),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Column(
-                  children: [
-                    const Icon(
-                      Icons.local_fire_department,
-                      color: Color(0xFFFF6B35),
-                      size: 24,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      '${maxStreakDays}日',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                        fontFamily: 'SF Pro Text',
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '連続達成',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.6),
-                        fontSize: 11,
-                        fontFamily: 'Hiragino Sans',
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.05),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Column(
-                  children: [
-                    const Icon(
-                      Icons.trending_up,
-                      color: Color(0xFF1DB954),
-                      size: 24,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      peakMonth,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                        fontFamily: 'SF Pro Text',
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'ピーク月',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.6),
-                        fontSize: 11,
-                        fontFamily: 'Hiragino Sans',
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
+  // 🆕 追加：月名変換関数
+  String _convertMonthName(String monthStr) {
+    // 「12月」のような形式から数字を抽出
+    final monthNumber = int.tryParse(monthStr.replaceAll(RegExp(r'[^0-9]'), ''));
+    
+    if (monthNumber == null || monthNumber < 1 || monthNumber > 12) {
+      return monthStr; // 変換失敗時はそのまま返す
+    }
+    
+    // 月名の省略版リスト
+    const monthNames = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    
+    return monthNames[monthNumber - 1];
   }
+  
+  final displayMonth = _convertMonthName(peakMonth); // 🔧 追加：変換された月名を使用
+  
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        'Consistency Record',
+        style: TextStyle(
+          color: Colors.white.withOpacity(0.8),
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+          fontFamily: 'Hiragino Sans',
+        ),
+      ),
+      const SizedBox(height: 12),
+      Row(
+        children: [
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                children: [
+                  const Icon(
+                    Icons.local_fire_department,
+                    color: Color(0xFFFF6B35),
+                    size: 24,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '$maxStreakDays days',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+            letterSpacing: -0.2,
+                      fontWeight: FontWeight.w700,
+                      fontFamily: 'SF Pro Text',
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Streak',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.6),
+                      fontSize: 11,
+                      fontFamily: 'Hiragino Sans',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                children: [
+                  const Icon(
+                    Icons.trending_up,
+                    color: Color(0xFF1DB954),
+                    size: 24,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    displayMonth, // 🔧 修正：変換された月名を使用
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+            letterSpacing: -0.2,
+                      fontWeight: FontWeight.w700,
+                      fontFamily: 'SF Pro Text',
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Peak Month',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.6),
+                      fontSize: 11,
+                      fontFamily: 'Hiragino Sans',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    ],
+  );
+}
 }
