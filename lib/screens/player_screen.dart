@@ -947,7 +947,7 @@ void _toggleAutoPlay() {
       });
       print('🔔 即座にカウント更新: ${task.title} ${oldCount} → ${oldCount + 1}');
       
-      // 新規追加：新しく完了したタスクをSharedPreferencesに記録
+      // 🆕 追加: 新しく完了したタスクをSharedPreferencesに記録
       await _recordNewTaskCompletion();
     }
 
@@ -955,7 +955,9 @@ void _toggleAutoPlay() {
       await widget.onTaskCompleted!(task, wasSuccessful);
       
       if (wasSuccessful) {
+        // 🔧 修正: 最新のカウントを通知
         widget.onCompletionCountsChanged?.call(_todayTaskCompletions);
+        print('🔔 MainWrapperに最新カウントを通知: ${_todayTaskCompletions[task.id]}');
       }
     } else {
       await _taskCompletionService.recordTaskCompletion(
@@ -976,18 +978,6 @@ void _toggleAutoPlay() {
     }
     
     widget.onDataChanged?.call();
-    
-    /*
-    if (wasSuccessful) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('✅ 「${task.title}」の達成を記録しました！'),
-          backgroundColor: const Color(0xFF1DB954),
-          duration: const Duration(seconds: 2),
-        ),
-      );
-    }
-    */
 
   } catch (e) {
     if (wasSuccessful) {

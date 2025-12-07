@@ -5,6 +5,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz;
 import 'dart:io';
+import 'dart:math';
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -22,6 +23,10 @@ class NotificationService {
   static const int albumCompletionBaseId = 6000;
   static const int progressUpdateBaseId = 7000;
   static const int motivationalBaseId = 8000;
+
+  // 🆕 睡眠スケジュール通知のID
+static const int bedtimeNotificationId = 9000;
+static const int wakeUpNotificationId = 9001;
 
   // 初期化
 Future<bool> initialize() async {
@@ -574,81 +579,88 @@ Future<NotificationAppLaunchDetails?> getNotificationAppLaunchDetails() async {
   }
 
   // タスク完了通知
-  Future<void> showTaskCompletionNotification({
-    required int id,
-    required String taskTitle,
-    required String albumName,
-    String? payload,
-  }) async {
-    if (!_isInitialized) {
-      print('❌ NotificationServiceが初期化されていません');
-      return;
-    }
-
-    try {
-      final title = 'タスク再生完了！';
-      final body = '「$taskTitle」を再生しました。このタスクはできましたか？';
-      
-      // 🔧 修正: アクションを動的に作成
-      final taskActions = <AndroidNotificationAction>[
-        AndroidNotificationAction(
-          'task_completion_yes',
-          '✅ 達成しました',
-          showsUserInterface: true,
-        ),
-        AndroidNotificationAction(
-          'task_completion_no',
-          '❌ 未達成',
-          showsUserInterface: true,
-        ),
-        AndroidNotificationAction(
-          'task_completion_open',
-          '📱 アプリを開く',
-          showsUserInterface: true,
-        ),
-      ];
-      
-      final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-        'task_completion_channel',
-        'タスク完了通知',
-        channelDescription: 'タスク完了時の達成確認通知',
-        importance: Importance.max,
-        priority: Priority.high,
-        showWhen: true,
-        enableVibration: true,
-        playSound: true,
-        ongoing: false,
-        autoCancel: true,
-        actions: taskActions,
-      );
-
-      const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
-        presentAlert: true,
-        presentBadge: true,
-        presentSound: true,
-        interruptionLevel: InterruptionLevel.active,
-      );
-
-      final NotificationDetails notificationDetails = NotificationDetails(
-        android: androidDetails,
-        iOS: iosDetails,
-      );
-
-      await _notifications.show(
-        id,
-        title,
-        body,
-        notificationDetails,
-        payload: payload,
-      );
-      
-      print('✅ タスク完了通知表示成功: $taskTitle (ID: $id)');
-      
-    } catch (e) {
-      print('❌ タスク完了通知表示エラー: $e');
-      rethrow;
-    }
+Future<void> showTaskCompletionNotification({
+  required int id,
+  required String taskTitle,
+  required String albumName,
+  String? payload,
+}) async {
+  if (!_isInitialized) {
+    print('❌ NotificationServiceが初期化されていません');
+    return;
   }
+
+  try {
+    // 🆕 既存の同じIDの通知をキャンセル（重複防止）
+    await cancelNotification(id);
+    
+    // 🆕 少し待機してからキャンセルが完了するのを確保
+    await Future.delayed(const Duration(milliseconds: 100));
+    
+    final title = 'タスク再生完了！';
+    final body = '「$taskTitle」を再生しました。このタスクはできましたか？';
+    
+    final taskActions = <AndroidNotificationAction>[
+      AndroidNotificationAction(
+        'task_completion_yes',
+        '✅ 達成しました',
+        showsUserInterface: true,
+      ),
+      AndroidNotificationAction(
+        'task_completion_no',
+        '❌ 未達成',
+        showsUserInterface: true,
+      ),
+      AndroidNotificationAction(
+        'task_completion_open',
+        '📱 アプリを開く',
+        showsUserInterface: true,
+      ),
+    ];
+    
+    final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      'task_completion_channel',
+      'タスク完了通知',
+      channelDescription: 'タスク完了時の達成確認通知',
+      importance: Importance.max,
+      priority: Priority.high,
+      showWhen: true,
+      enableVibration: true,
+      playSound: true,
+      ongoing: false,
+      autoCancel: true,
+      actions: taskActions,
+      // 🆕 追加: タグを設定して同じタスクの通知を置き換える
+      tag: 'task_completion_$taskTitle',
+    );
+
+    const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+      interruptionLevel: InterruptionLevel.active,
+    );
+
+    final NotificationDetails notificationDetails = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+    );
+
+    await _notifications.show(
+      id,
+      title,
+      body,
+      notificationDetails,
+      payload: payload,
+    );
+    
+    print('✅ タスク完了通知表示成功: $taskTitle (ID: $id)');
+    
+  } catch (e) {
+    print('❌ タスク完了通知表示エラー: $e');
+    rethrow;
+  }
+}
 
   // 遅延通知をスケジュール
   Future<void> scheduleDelayedNotification({
@@ -736,35 +748,79 @@ Future<NotificationAppLaunchDetails?> getNotificationAppLaunchDetails() async {
 
   // すべての通知をキャンセル
   Future<void> cancelAllNotifications() async {
-    try {
-      await _notifications.cancelAll();
-      print('✅ すべての通知をキャンセルしました');
-    } catch (e) {
-      print('❌ 通知一括キャンセルエラー: $e');
-    }
+  try {
+    await _notifications.cancelAll();
+    print('✅ すべての通知をキャンセルしました');
+  } catch (e) {
+    print('❌ 通知一括キャンセルエラー: $e');
   }
+}
+
+
 
   // 🆕 自動再生関連の通知をすべてキャンセル
   Future<void> cancelAutoPlayNotifications() async {
-    try {
-      // タスク切り替え通知をキャンセル
-      for (int i = 0; i < 20; i++) {
-        await cancelNotification(taskTransitionBaseId + i);
-      }
-      
-      // アルバム完了通知をキャンセル
-      await cancelNotification(albumCompletionBaseId);
-      
-      // 進捗更新通知をキャンセル
-      for (int i = 0; i < 20; i++) {
-        await cancelNotification(progressUpdateBaseId + i);
-      }
-      
-      print('✅ 自動再生関連通知をすべてキャンセルしました');
-    } catch (e) {
-      print('❌ 自動再生通知キャンセルエラー: $e');
+  try {
+    // タスク切り替え通知をキャンセル
+    for (int i = 0; i < 20; i++) {
+      await cancelNotification(taskTransitionBaseId + i);
     }
+    
+    // アルバム完了通知をキャンセル
+    await cancelNotification(albumCompletionBaseId);
+    
+    // 進捗更新通知をキャンセル
+    for (int i = 0; i < 20; i++) {
+      await cancelNotification(progressUpdateBaseId + i);
+    }
+    
+    // 🆕 睡眠スケジュール通知もキャンセル
+    await cancelNotification(bedtimeNotificationId);
+    await cancelNotification(wakeUpNotificationId);
+    
+    print('✅ 自動再生関連通知をすべてキャンセルしました');
+  } catch (e) {
+    print('❌ 自動再生通知キャンセルエラー: $e');
   }
+}
+
+/// 睡眠スケジュール通知をキャンセル
+Future<void> cancelSleepScheduleNotifications() async {
+  try {
+    await cancelNotification(bedtimeNotificationId);
+    await cancelNotification(wakeUpNotificationId);
+    print('✅ 睡眠スケジュール通知をキャンセルしました');
+  } catch (e) {
+    print('❌ 睡眠スケジュール通知キャンセルエラー: $e');
+  }
+}
+
+/// 睡眠スケジュール通知のテスト
+Future<void> testSleepScheduleNotifications() async {
+  try {
+    print('🧪 睡眠スケジュール通知テスト開始');
+    
+    // 就寝通知をテスト
+    await showBedtimeNotification(
+      message: getRandomBedtimeMessage(),
+      payload: 'test_bedtime',
+    );
+    
+    await Future.delayed(const Duration(seconds: 3));
+    
+    // 起床通知をテスト
+    await showWakeUpNotification(
+      message: getRandomWakeUpMessage(),
+      payload: 'test_wakeup',
+    );
+    
+    print('✅ 睡眠スケジュール通知テスト完了');
+  } catch (e) {
+    print('❌ 睡眠スケジュール通知テストエラー: $e');
+  }
+}
+
+
 
   // アクティブな通知一覧を取得
   Future<List<ActiveNotification>> getActiveNotifications() async {
@@ -779,81 +835,104 @@ Future<NotificationAppLaunchDetails?> getNotificationAppLaunchDetails() async {
 
   // 通知チャンネルを作成（Android用）
   Future<void> createNotificationChannels() async {
-    if (!Platform.isAndroid) return;
+  if (!Platform.isAndroid) return;
 
-    try {
-      // 習慣改善通知チャンネル
-      const AndroidNotificationChannel habitChannel = AndroidNotificationChannel(
-        'habit_breaker_channel',
-        '習慣改善通知',
-        description: 'SNS中毒抑制のための定期通知',
-        importance: Importance.high,
-      );
+  try {
+    // 習慣改善通知チャンネル
+    const AndroidNotificationChannel habitChannel = AndroidNotificationChannel(
+      'habit_breaker_channel',
+      '習慣改善通知',
+      description: 'SNS中毒抑制のための定期通知',
+      importance: Importance.high,
+    );
 
-      // タスク完了通知チャンネル
-      const AndroidNotificationChannel taskChannel = AndroidNotificationChannel(
-        'task_completion_channel',
-        'タスク完了通知',
-        description: 'タスク完了時の達成確認通知',
-        importance: Importance.high,
-      );
+    // タスク完了通知チャンネル
+    const AndroidNotificationChannel taskChannel = AndroidNotificationChannel(
+      'task_completion_channel',
+      'タスク完了通知',
+      description: 'タスク完了時の達成確認通知',
+      importance: Importance.high,
+    );
 
-      // 🆕 自動再生切り替え通知チャンネル
-      const AndroidNotificationChannel autoPlayTransitionChannel = AndroidNotificationChannel(
-        'auto_play_transition_channel',
-        '自動再生切り替え通知',
-        description: '自動再生時のタスク切り替え通知',
-        importance: Importance.high,
-        enableVibration: true,
-        playSound: true,
-      );
+    // 自動再生切り替え通知チャンネル
+    const AndroidNotificationChannel autoPlayTransitionChannel = AndroidNotificationChannel(
+      'auto_play_transition_channel',
+      '自動再生切り替え通知',
+      description: '自動再生時のタスク切り替え通知',
+      importance: Importance.high,
+      enableVibration: true,
+      playSound: true,
+    );
 
-      // 🆕 自動再生完了通知チャンネル
-      const AndroidNotificationChannel autoPlayCompletionChannel = AndroidNotificationChannel(
-        'auto_play_completion_channel',
-        '自動再生完了通知',
-        description: 'アルバム自動再生完了時の通知',
-        importance: Importance.max,
-        enableVibration: true,
-        playSound: true,
-      );
+    // 自動再生完了通知チャンネル
+    const AndroidNotificationChannel autoPlayCompletionChannel = AndroidNotificationChannel(
+      'auto_play_completion_channel',
+      '自動再生完了通知',
+      description: 'アルバム自動再生完了時の通知',
+      importance: Importance.max,
+      enableVibration: true,
+      playSound: true,
+    );
 
-      // 🆕 自動再生進捗通知チャンネル
-      const AndroidNotificationChannel autoPlayProgressChannel = AndroidNotificationChannel(
-        'auto_play_progress_channel',
-        '自動再生進捗通知',
-        description: '自動再生中の進捗更新通知',
-        importance: Importance.low,
-        enableVibration: false,
-        playSound: false,
-      );
+    // 自動再生進捗通知チャンネル
+    const AndroidNotificationChannel autoPlayProgressChannel = AndroidNotificationChannel(
+      'auto_play_progress_channel',
+      '自動再生進捗通知',
+      description: '自動再生中の進捗更新通知',
+      importance: Importance.low,
+      enableVibration: false,
+      playSound: false,
+    );
 
-      // 🆕 自動再生励まし通知チャンネル
-      const AndroidNotificationChannel autoPlayMotivationChannel = AndroidNotificationChannel(
-        'auto_play_motivation_channel',
-        '自動再生励まし通知',
-        description: '自動再生中の励まし・モチベーション通知',
-        importance: Importance.defaultImportance,
-        enableVibration: true,
-        playSound: true,
-      );
+    // 自動再生励まし通知チャンネル
+    const AndroidNotificationChannel autoPlayMotivationChannel = AndroidNotificationChannel(
+      'auto_play_motivation_channel',
+      '自動再生励まし通知',
+      description: '自動再生中の励まし・モチベーション通知',
+      importance: Importance.defaultImportance,
+      enableVibration: true,
+      playSound: true,
+    );
 
-      final androidImplementation = _notifications
-          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    // 🆕 就寝通知チャンネル
+    const AndroidNotificationChannel bedtimeChannel = AndroidNotificationChannel(
+      'bedtime_channel',
+      'Bedtime Reminders',
+      description: 'Notifications to remind you to rest',
+      importance: Importance.high,
+      enableVibration: true,
+      playSound: true,
+    );
 
-      if (androidImplementation != null) {
-        await androidImplementation.createNotificationChannel(habitChannel);
-        await androidImplementation.createNotificationChannel(taskChannel);
-        await androidImplementation.createNotificationChannel(autoPlayTransitionChannel);
-        await androidImplementation.createNotificationChannel(autoPlayCompletionChannel);
-        await androidImplementation.createNotificationChannel(autoPlayProgressChannel);
-        await androidImplementation.createNotificationChannel(autoPlayMotivationChannel);
-        print('✅ 通知チャンネルを作成しました（自動再生対応）');
-      }
-    } catch (e) {
-      print('❌ 通知チャンネル作成エラー: $e');
+    // 🆕 起床通知チャンネル
+    const AndroidNotificationChannel wakeUpChannel = AndroidNotificationChannel(
+      'wakeup_channel',
+      'Wake Up Messages',
+      description: 'Morning motivational messages',
+      importance: Importance.max,
+      enableVibration: true,
+      playSound: true,
+    );
+
+    final androidImplementation = _notifications
+        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+
+    if (androidImplementation != null) {
+      await androidImplementation.createNotificationChannel(habitChannel);
+      await androidImplementation.createNotificationChannel(taskChannel);
+      await androidImplementation.createNotificationChannel(autoPlayTransitionChannel);
+      await androidImplementation.createNotificationChannel(autoPlayCompletionChannel);
+      await androidImplementation.createNotificationChannel(autoPlayProgressChannel);
+      await androidImplementation.createNotificationChannel(autoPlayMotivationChannel);
+      // 🆕 睡眠スケジュール通知チャンネルを作成
+      await androidImplementation.createNotificationChannel(bedtimeChannel);
+      await androidImplementation.createNotificationChannel(wakeUpChannel);
+      print('✅ 通知チャンネルを作成しました（睡眠スケジュール対応）');
     }
+  } catch (e) {
+    print('❌ 通知チャンネル作成エラー: $e');
   }
+}
 
   // 🆕 自動再生用のテスト通知シーケンス
   Future<void> testAutoPlayNotificationSequence() async {
@@ -908,4 +987,149 @@ Future<NotificationAppLaunchDetails?> getNotificationAppLaunchDetails() async {
       print('❌ 自動再生通知シーケンステストエラー: $e');
     }
   }
+
+  /// 就寝通知を表示
+Future<void> showBedtimeNotification({
+  required String message,
+  String? payload,
+}) async {
+  if (!_isInitialized) {
+    print('❌ NotificationServiceが初期化されていません');
+    return;
+  }
+
+  try {
+    final title = 'Bedtime Reminder';
+    
+    final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      'bedtime_channel',
+      'Bedtime Reminders',
+      channelDescription: 'Notifications to remind you to rest',
+      importance: Importance.high,
+      priority: Priority.high,
+      showWhen: true,
+      enableVibration: true,
+      playSound: true,
+      ongoing: false,
+      autoCancel: true,
+      largeIcon: const DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
+      styleInformation: BigTextStyleInformation(
+        message,
+        htmlFormatBigText: false,
+        htmlFormatContentTitle: false,
+      ),
+    );
+
+    const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+      interruptionLevel: InterruptionLevel.active,
+    );
+
+    final NotificationDetails notificationDetails = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+    );
+
+    await _notifications.show(
+      bedtimeNotificationId,
+      title,
+      message,
+      notificationDetails,
+      payload: payload ?? 'bedtime_notification',
+    );
+    
+    print('✅ 就寝通知表示成功: $message');
+  } catch (e) {
+    print('❌ 就寝通知表示エラー: $e');
+  }
+}
+
+/// 起床通知を表示
+Future<void> showWakeUpNotification({
+  required String message,
+  String? payload,
+}) async {
+  if (!_isInitialized) {
+    print('❌ NotificationServiceが初期化されていません');
+    return;
+  }
+
+  try {
+    final title = 'Good Morning!';
+    
+    final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      'wakeup_channel',
+      'Wake Up Messages',
+      channelDescription: 'Morning motivational messages',
+      importance: Importance.max,
+      priority: Priority.high,
+      showWhen: true,
+      enableVibration: true,
+      playSound: true,
+      ongoing: false,
+      autoCancel: true,
+      largeIcon: const DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
+      styleInformation: BigTextStyleInformation(
+        message,
+        htmlFormatBigText: false,
+        htmlFormatContentTitle: false,
+      ),
+    );
+
+    const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+      interruptionLevel: InterruptionLevel.timeSensitive,
+    );
+
+    final NotificationDetails notificationDetails = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+    );
+
+    await _notifications.show(
+      wakeUpNotificationId,
+      title,
+      message,
+      notificationDetails,
+      payload: payload ?? 'wakeup_notification',
+    );
+    
+    print('✅ 起床通知表示成功: $message');
+  } catch (e) {
+    print('❌ 起床通知表示エラー: $e');
+  }
+}
+
+/// ランダムな就寝メッセージを取得
+String getRandomBedtimeMessage() {
+  final messages = [
+    'Time to put your phone away and rest',
+    'Good sleep helps you achieve tomorrow\'s goals',
+    'Your ideal self needs quality rest tonight',
+    'Let\'s end the day mindfully',
+    'Sweet dreams! Tomorrow is a new opportunity',
+  ];
+  
+  final random = Random();
+  return messages[random.nextInt(messages.length)];
+}
+
+/// ランダムな起床メッセージを取得
+String getRandomWakeUpMessage() {
+  final messages = [
+    'Good morning! Ready to conquer today?',
+    'A new day to become your ideal self',
+    'Let\'s make today count!',
+    'Wake up and chase your dreams',
+    'Rise and shine! Your goals are waiting!',
+  ];
+  
+  final random = Random();
+  return messages[random.nextInt(messages.length)];
+}
+
 }

@@ -268,20 +268,23 @@ if (note.level == 2) ...[
               const SizedBox(width: (24 + 4) * 2),
             
             // テキスト表示
-            Expanded(
-              child: Text(
-                note.text,
-                style: GoogleFonts.inter(
-                  color: textColor,
-                  fontSize: fontSize,
-                  height: 1.6,
-                  fontWeight: fontWeight,
-                  // 🗑️ 削除: leadingDistribution
-                ).copyWith(
-                  fontFamilyFallback: const ['Hiragino Sans'],
-                ),
-              ),
-            ),
+            // テキスト表示
+SizedBox(
+  width: 1000, // 最大幅を指定（必要に応じて調整可能）
+  child: Text(
+    note.text,
+    style: GoogleFonts.inter(
+      color: textColor,
+      fontSize: fontSize,
+      height: 1.6,
+      fontWeight: fontWeight,
+    ).copyWith(
+      fontFamilyFallback: const ['Hiragino Sans'],
+    ),
+    softWrap: false, // 折り返しを無効化
+    overflow: TextOverflow.visible, // はみ出しを許可
+  ),
+),
           ],
         ),
       ),
@@ -402,38 +405,43 @@ Widget build(BuildContext context) {
           ),
           
           // 表示エリア
-          Expanded(
-            child: _notes.isEmpty
-                ? Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Align(
-                      alignment: Alignment.topLeft,
-                      child: Text(
-                        'Edit Notes\nfrom the top-right',
-                        style: GoogleFonts.inter(
-                          color: Colors.white.withOpacity(0.5),
-                          fontSize: 20,
-                          height: 1.6,
-                          fontWeight: FontWeight.w700,
-                        ).copyWith(
-                          fontFamilyFallback: const ['Hiragino Sans'],
-                        ),
-                      ),
-                    ),
-                  )
-                : SingleChildScrollView(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        for (int i = 0; i < _notes.length; i++)
-                          if (_shouldShowLine(i))
-                            _buildLine(i),
-                      ],
-                    ),
-                  ),
+Expanded(
+  child: _notes.isEmpty
+      ? Padding(
+          padding: const EdgeInsets.all(20),
+          child: Align(
+            alignment: Alignment.topLeft,
+            child: Text(
+              'Edit Notes\nfrom the top-right',
+              style: GoogleFonts.inter(
+                color: Colors.white.withOpacity(0.5),
+                fontSize: 20,
+                height: 1.6,
+                fontWeight: FontWeight.w700,
+              ).copyWith(
+                fontFamilyFallback: const ['Hiragino Sans'],
+              ),
+            ),
           ),
+        )
+      : SingleChildScrollView(
+          controller: _scrollController,
+          padding: const EdgeInsets.all(20),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: IntrinsicWidth(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (int i = 0; i < _notes.length; i++)
+                    if (_shouldShowLine(i))
+                      _buildLine(i),
+                ],
+              ),
+            ),
+          ),
+        ),
+),
         ],
       ),
     ),

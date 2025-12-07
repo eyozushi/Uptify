@@ -1950,14 +1950,15 @@ Future<void> _initializeAudioService() async {
   final latestAlbum = await _dataService.getSingleAlbum(album.id);
   final albumToPlay = latestAlbum ?? album;
   
-  _loadSingleAlbumTaskCompletions(albumToPlay);
+  // 🔧 修正: タスク完了回数を先に読み込む
+  await _loadSingleAlbumTaskCompletions(albumToPlay);
   
   setState(() {
     _playingTasks = List.from(albumToPlay.tasks);
     _isPlayingSingleAlbum = true;
     _playingSingleAlbum = albumToPlay;
     _currentTaskIndex = taskIndex;
-    _isPlaying = false;  // 🔧 修正：falseに変更（デフォルトは停止状態）
+    _isPlaying = false;
     _startNewTask();
     
     _isPlayerScreenVisible = true;
@@ -1969,18 +1970,27 @@ Future<void> _initializeAudioService() async {
   _playerDragController.value = 0.0;
   
   print('🎵 PlayerScreen表示完了: isVisible=$_isPlayerScreenVisible, isPlaying=$_isPlaying');
+  print('📊 読み込まれたタスクカウント: ${_todayTaskCompletions.length}件');
 }
 
 // 🆕 シングルアルバムのタスク完了回数を読み込み
 Future<void> _loadSingleAlbumTaskCompletions(SingleAlbum album) async {
   try {
+    // 🔧 修正: 既存のカウントを保持
+    final existingCounts = Map<String, int>.from(_todayTaskCompletions);
+    
     for (final task in album.tasks) {
       final count = await _taskCompletionService.getTodayTaskSuccesses(task.id);
-      setState(() {
-        _todayTaskCompletions[task.id] = count;
-      });
+      existingCounts[task.id] = count;
+      print('📊 タスクカウント読み込み: ${task.title} (ID: ${task.id}) = $count回');
     }
+    
+    setState(() {
+      _todayTaskCompletions = existingCounts;
+    });
+    
     print('✅ シングルアルバムのタスク完了回数読み込み完了: ${album.albumName}');
+    print('📊 総カウント数: ${_todayTaskCompletions.length}件');
   } catch (e) {
     print('❌ シングルアルバムのタスク完了回数読み込みエラー: $e');
   }
@@ -2907,18 +2917,29 @@ int _getCurrentTaskNumberForNotification() {
   }
 
   Future<void> _sendTaskPlayCompletedNotification(TaskItem task) async {
-    try {
-      final albumName = _isPlayingSingleAlbum && _playingSingleAlbum != null 
-          ? _playingSingleAlbum!.albumName 
-          : _currentIdealSelf;
-      
-      final albumType = _isPlayingSingleAlbum ? 'single' : 'life_dream';
-      final albumId = _isPlayingSingleAlbum && _playingSingleAlbum != null 
-          ? _playingSingleAlbum!.id 
-          : null;
-      
-      await _audioService.playTaskCompletedSound();
-      
+  try {
+    final albumName = _isPlayingSingleAlbum && _playingSingleAlbum != null 
+        ? _playingSingleAlbum!.albumName 
+        : _currentIdealSelf;
+    
+    final albumType = _isPlayingSingleAlbum ? 'single' : 'life_dream';
+    final albumId = _isPlayingSingleAlbum && _playingSingleAlbum != null 
+        ? _playingSingleAlbum!.id 
+        : null;
+    
+    // 🔧 修正: 音声のみ再生（通知は sendTaskPlayCompletedNotification 内で送信される）
+    await _audioService.playTaskCompletedSound();
+    
+    // 🔧 修正: アプリがフォアグラウンドの場合のみダイアログを表示
+    if (mounted && _isPlayerScreenVisible) {
+      // 🔧 重要: 通知は送信せず、ダイアログのみ表示
+      Future.delayed(const Duration(milliseconds: 800), () {
+        if (mounted) {
+          _showTaskCompletionDialogInApp(task, albumName, task.duration * 60);
+        }
+      });
+    } else {
+      // 🔧 修正: バックグラウンドの場合のみ通知を送信
       await _taskCompletionService.sendTaskPlayCompletedNotification(
         task: task,
         albumName: albumName,
@@ -2927,19 +2948,12 @@ int _getCurrentTaskNumberForNotification() {
         elapsedSeconds: task.duration * 60,
       );
       
-      print('🔔 タスク再生完了通知を送信しました: ${task.title}');
-      
-      if (mounted && _isPlayerScreenVisible) {
-        Future.delayed(const Duration(milliseconds: 800), () {
-          if (mounted) {
-            _showTaskCompletionDialogInApp(task, albumName, task.duration * 60);
-          }
-        });
-      }
-    } catch (e) {
-      print('❌ タスク再生完了通知送信エラー: $e');
+      print('🔔 バックグラウンド: タスク再生完了通知を送信しました: ${task.title}');
     }
+  } catch (e) {
+    print('❌ タスク再生完了通知送信エラー: $e');
   }
+}
 
   void _showTaskCompletionDialogInApp(TaskItem task, String albumName, int elapsedSeconds) {
     Future.delayed(const Duration(milliseconds: 300), () {
@@ -3004,23 +3018,42 @@ int _getCurrentTaskNumberForNotification() {
     
     if (wasSuccessful) {
       await _audioService.playAchievementSound();
+      
+      // 🔧 修正: カウントを即座に更新
       setState(() {
         _todayTaskCompletions[task.id] = (_todayTaskCompletions[task.id] ?? 0) + 1;
       });
       
-      // 🔧 修正：PlayerScreenに直接通知する必要はない（MainWrapperが管理）
+      print('✅ タスク完了カウント更新: ${task.title} → ${_todayTaskCompletions[task.id]}');
+      
+      // 🆕 追加: PlayerScreenに即座に通知
+      if (mounted) {
+        // PlayerScreenの状態を強制更新
+        setState(() {});
+      }
       
       await _notifyNewTaskCompletion();
     } else {
       await _audioService.playNotificationSound();
     }
     
+    // 🔧 修正: データ再読み込み後も最新のカウントを保持
+    final currentCounts = Map<String, int>.from(_todayTaskCompletions);
     await _loadUserData();
+    
+    // 🔧 重要: 再読み込み後に最新のカウントをマージ
+    setState(() {
+      _todayTaskCompletions = {
+        ..._todayTaskCompletions,
+        ...currentCounts,
+      };
+    });
+    
+    print('✅ タスク完了記録完了: ${task.title} (成功: $wasSuccessful)');
   } catch (e) {
     print('❌ アプリ内タスク完了記録エラー: $e');
   }
 }
-
   // main_wrapper.dart の _buildCurrentScreen メソッド
 
 Widget _buildCurrentScreen() {
@@ -3547,6 +3580,9 @@ void _showCompletionResultDialog(bool allCompleted) {
   print('  - isPlayingSingleAlbum: $_isPlayingSingleAlbum');
   print('  - 現在のカウント: ${_todayTaskCompletions[task.id] ?? 0}');
   
+  // 🔧 修正: 完了前のカウントを保存
+  final previousCount = _todayTaskCompletions[task.id] ?? 0;
+  
   await _recordTaskCompletionInApp(
     task, 
     _isPlayingSingleAlbum && _playingSingleAlbum != null 
@@ -3556,8 +3592,17 @@ void _showCompletionResultDialog(bool allCompleted) {
     wasSuccessful,
   );
   
+  // 🔧 修正: カウントが更新されたことを確認
+  final newCount = _todayTaskCompletions[task.id] ?? 0;
   print('✅ MainWrapper._onTaskCompletedFromPlayer 完了');
-  print('  - 更新後カウント: ${_todayTaskCompletions[task.id]}');
+  print('  - 更新前カウント: $previousCount');
+  print('  - 更新後カウント: $newCount');
+  
+  // 🆕 追加: PlayerScreenに最新のカウントを通知
+  if (mounted && _isPlayerScreenVisible) {
+    // 強制的に再描画
+    setState(() {});
+  }
 }
 
   void _onCompletionCountsChanged(Map<String, int> newCounts) {
@@ -3565,11 +3610,20 @@ void _showCompletionResultDialog(bool allCompleted) {
   print('  - 受信したカウント: $newCounts');
   
   setState(() {
-    _todayTaskCompletions = Map.from(newCounts);
+    // 🔧 修正: 既存のカウントとマージ
+    _todayTaskCompletions = {
+      ..._todayTaskCompletions,
+      ...newCounts,
+    };
   });
   
   print('✅ MainWrapper._onCompletionCountsChanged 完了');
   print('  - 更新後の_todayTaskCompletions: $_todayTaskCompletions');
+  
+  // 🆕 追加: PlayerScreenに即座に反映
+  if (mounted && _isPlayerScreenVisible) {
+    setState(() {});
+  }
 }
 
   Widget _buildSettingsScreen() {

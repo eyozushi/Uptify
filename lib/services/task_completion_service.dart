@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/notification_service.dart';
 import '../services/data_service.dart';
 import '../services/achievement_service.dart';
+import '../services/habit_breaker_service.dart';
 import '../models/task_completion.dart';
 import '../models/task_item.dart';
 import 'dart:math' as math;
@@ -18,13 +19,21 @@ class TaskCompletionService {
   final NotificationService _notificationService = NotificationService();
   final DataService _dataService = DataService();
   final AchievementService _achievementService = AchievementService(); 
+
+  final HabitBreakerService _habitBreakerService = HabitBreakerService();
   
   static const int _taskCompletionNotificationBaseId = 200;
   int _nextNotificationId = _taskCompletionNotificationBaseId;
+
+  // 🆕 送信済み通知を追跡（重複防止）
+final Set<String> _sentNotificationIds = {};
+
+
   
   // 観客数管理用のキー（追加）
   static const String _currentAudienceKey = 'current_audience_count';
   static const String _isInitializedKey = 'audience_system_initialized';
+  
 
 
   // 🆕 Record Gaugeキャッシュクリア用メソッドを追加
@@ -580,106 +589,134 @@ class TaskCompletionService {
   }
 
   Future<void> sendTaskPlayCompletedNotification({
-    required TaskItem task,
-    required String albumName,
-    required String albumType,
-    String? albumId,
-    required int elapsedSeconds,
-  }) async {
-    try {
-      final title = 'タスク再生完了！';
-      final body = '「${task.title}」を再生しました。このタスクはできましたか？';
-      
-      await _notificationService.showTaskCompletionNotification(
-        id: _nextNotificationId++,
+  required TaskItem task,
+  required String albumName,
+  required String albumType,
+  String? albumId,
+  required int elapsedSeconds,
+}) async {
+  try {
+    // 🆕 重複チェック: 同じタスクの通知が既に送信済みか確認
+    final notificationKey = '${task.id}_${DateTime.now().millisecondsSinceEpoch ~/ 5000}'; // 5秒以内の重複を防ぐ
+    
+    if (_sentNotificationIds.contains(notificationKey)) {
+      print('⚠️ タスク完了通知の重複送信を防止: ${task.title}');
+      return;
+    }
+    
+    final title = 'タスク再生完了！';
+    final body = '「${task.title}」を再生しました。このタスクはできましたか？';
+    
+    // 🔧 修正: 固定IDを使用して通知の重複を防ぐ
+    final notificationId = _taskCompletionNotificationBaseId + (task.id.hashCode % 100);
+    
+    await _notificationService.showTaskCompletionNotification(
+      id: notificationId,
+      taskTitle: task.title,
+      albumName: albumName,
+      payload: createNotificationPayload(
+        taskId: task.id,
         taskTitle: task.title,
         albumName: albumName,
-        payload: createNotificationPayload(
-          taskId: task.id,
-          taskTitle: task.title,
-          albumName: albumName,
-          albumType: albumType,
-          albumId: albumId,
-          elapsedSeconds: elapsedSeconds,
-          notificationType: 'task_play_completed',
-        ),
-      );
-      
-      print('タスク再生完了通知を送信しました: ${task.title}');
-      
-      if (_nextNotificationId > _taskCompletionNotificationBaseId + 100) {
-        _nextNotificationId = _taskCompletionNotificationBaseId;
-      }
-    } catch (e) {
-      print('タスク再生完了通知送信エラー: $e');
+        albumType: albumType,
+        albumId: albumId,
+        elapsedSeconds: elapsedSeconds,
+        notificationType: 'task_play_completed',
+      ),
+    );
+    
+    // 🆕 送信済みとしてマーク
+    _sentNotificationIds.add(notificationKey);
+    
+    // 🆕 古い記録をクリーンアップ（メモリリーク防止）
+    if (_sentNotificationIds.length > 100) {
+      _sentNotificationIds.clear();
     }
+    
+    print('✅ タスク再生完了通知を送信しました: ${task.title} (ID: $notificationId)');
+  } catch (e) {
+    print('❌ タスク再生完了通知送信エラー: $e');
   }
+}
+
+/// 送信済み通知の記録をクリア（デバッグ用）
+void clearSentNotifications() {
+  _sentNotificationIds.clear();
+  print('✅ 送信済み通知記録をクリアしました');
+}
 
   Future<void> recordTaskCompletion({
-    required String taskId,
-    required String taskTitle,
-    required bool wasSuccessful,
-    required int elapsedSeconds,
-    required String albumType,
-    required String albumName,
-    String? albumId,
-    DateTime? startedAt,
-    DateTime? completedAt,
-  }) async {
-    try {
-      final completion = TaskCompletion(
-        id: _dataService.generateCompletionId(),
-        taskId: taskId,
-        taskTitle: taskTitle,
-        startedAt: startedAt ?? DateTime.now().subtract(Duration(seconds: elapsedSeconds)),
-        completedAt: completedAt ?? DateTime.now(),
-        wasSuccessful: wasSuccessful,
-        elapsedSeconds: elapsedSeconds,
-        albumType: albumType,
-        albumId: albumId,
-        albumName: albumName,
-      );
-      
-      await _dataService.saveTaskCompletion(completion);
-      await _dataService.addTaskCompletionToUserData(taskId, completion.completedAt);
-      
-      // 🆕 ライフドリームアルバムのタスク完了時はキャッシュをクリア
-      if (wasSuccessful && albumType == 'life_dream') {
-        await _clearRecordGaugeCache();
-      }
-      
-      print('タスク完了記録を保存しました: $taskTitle (成功: $wasSuccessful)');
-    } catch (e) {
-      print('タスク完了記録保存エラー: $e');
-      rethrow;
+  required String taskId,
+  required String taskTitle,
+  required bool wasSuccessful,
+  required int elapsedSeconds,
+  required String albumType,
+  required String albumName,
+  String? albumId,
+  DateTime? startedAt,
+  DateTime? completedAt,
+}) async {
+  try {
+    final completion = TaskCompletion(
+      id: _dataService.generateCompletionId(),
+      taskId: taskId,
+      taskTitle: taskTitle,
+      startedAt: startedAt ?? DateTime.now().subtract(Duration(seconds: elapsedSeconds)),
+      completedAt: completedAt ?? DateTime.now(),
+      wasSuccessful: wasSuccessful,
+      elapsedSeconds: elapsedSeconds,
+      albumType: albumType,
+      albumId: albumId,
+      albumName: albumName,
+    );
+    
+    await _dataService.saveTaskCompletion(completion);
+    await _dataService.addTaskCompletionToUserData(taskId, completion.completedAt);
+    
+    // ライフドリームアルバムのタスク完了時はキャッシュをクリア
+    if (wasSuccessful && albumType == 'life_dream') {
+      await _clearRecordGaugeCache();
     }
+    
+    // 🆕 追加: タスク完了後にhabit_breaker通知を再開
+    await _habitBreakerService.resumeAfterTaskCompletion();
+    
+    print('タスク完了記録を保存しました: $taskTitle (成功: $wasSuccessful)');
+  } catch (e) {
+    print('タスク完了記録保存エラー: $e');
+    rethrow;
   }
+}
 
   Future<void> recordTaskCompletionFromNotification({
-    required String taskId,
-    required String taskTitle,
-    required String albumName,
-    required String albumType,
-    String? albumId,
-    required int elapsedSeconds,
-    required bool wasSuccessful,
-  }) async {
-    try {
-      await recordTaskCompletion(
-        taskId: taskId,
-        taskTitle: taskTitle,
-        wasSuccessful: wasSuccessful,
-        elapsedSeconds: elapsedSeconds,
-        albumType: albumType,
-        albumName: albumName,
-        albumId: albumId,
-      );
-      
-      print('通知からのタスク完了記録が完了しました: $taskTitle (成功: $wasSuccessful)');
-    } catch (e) {
-      print('通知からのタスク完了記録エラー: $e');
-    }
+  required String taskId,
+  required String taskTitle,
+  required String albumName,
+  required String albumType,
+  String? albumId,
+  required int elapsedSeconds,
+  required bool wasSuccessful,
+}) async {
+  try {
+    await recordTaskCompletion(
+      taskId: taskId,
+      taskTitle: taskTitle,
+      wasSuccessful: wasSuccessful,
+      elapsedSeconds: elapsedSeconds,
+      albumType: albumType,
+      albumName: albumName,
+      albumId: albumId,
+    );
+    
+    // 🆕 追加: 通知からの完了記録後もhabit_breaker通知を再開
+    // （recordTaskCompletion内で既に呼ばれているが、念のため明示的に呼び出し）
+    await _habitBreakerService.resumeAfterTaskCompletion();
+    
+    print('通知からのタスク完了記録が完了しました: $taskTitle (成功: $wasSuccessful)');
+  } catch (e) {
+    print('通知からのタスク完了記録エラー: $e');
   }
+}
 
   Future<int> getTodayTaskSuccesses(String taskId) async {
     try {

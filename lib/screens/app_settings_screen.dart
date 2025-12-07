@@ -36,6 +36,21 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
   // 通知設定
   bool _isNotificationEnabled = false;
   int _selectedInterval = 15;  // 15, 30, 60のいずれか
+
+  // 🆕 睡眠スケジュール設定
+bool _isSleepScheduleEnabled = true;
+int _bedtimeHour = 10;
+int _bedtimeMinute = 0;
+String _bedtimePeriod = 'PM';
+int _wakeUpHour = 6;
+int _wakeUpMinute = 0;
+String _wakeUpPeriod = 'AM';
+
+// 🆕 曜日別スケジュール設定（1=Sunday, 7=Saturday）
+Set<int> _enabledDays = {1, 2, 3, 4, 5, 6, 7};
+
+// 🆕 バリデーションエラー
+String? _timeValidationError;
   
   // UI状態
   bool _isLoading = true;
@@ -56,92 +71,148 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
   }
 
   Future<void> _loadCurrentSettings() async {
-    setState(() {
-      _isLoading = true;
-    });
+  setState(() {
+    _isLoading = true;
+  });
 
-    try {
-      // アーティスト名を取得
-      final userData = await _dataService.loadUserData();
-      _artistNameController.text = userData['artistName'] ?? 'You';
-      
-      // アーティスト画像を取得
-      _artistImageBytes = await _dataService.loadIdealImageBytes();
-      
-      // 通知設定を取得
-      final notifConfig = await _habitBreakerService.getCurrentConfig();
-      _isNotificationEnabled = notifConfig.isHabitBreakerEnabled;
-      _selectedInterval = _normalizeInterval(notifConfig.habitBreakerInterval);
-      
-      // アプリバージョンを取得
-      _appVersion = await _dataService.getAppVersion();
-      
-      setState(() {
-        _isLoading = false;
-      });
-    } catch (e) {
-      print('❌ 設定読み込みエラー: $e');
-      setState(() {
-        _isLoading = false;
-      });
-    }
+  try {
+    // アーティスト名を取得
+    final userData = await _dataService.loadUserData();
+    _artistNameController.text = userData['artistName'] ?? 'You';
+    
+    // アーティスト画像を取得
+    _artistImageBytes = await _dataService.loadIdealImageBytes();
+    
+    // 通知設定を取得
+    final notifConfig = await _habitBreakerService.getCurrentConfig();
+    _isNotificationEnabled = notifConfig.isHabitBreakerEnabled;
+    _selectedInterval = _normalizeInterval(notifConfig.habitBreakerInterval);
+    
+    // 🆕 睡眠スケジュール設定を取得
+    _isSleepScheduleEnabled = notifConfig.sleepScheduleEnabled;
+    _bedtimeHour = notifConfig.bedtimeHour;
+    _bedtimeMinute = notifConfig.bedtimeMinute;
+    _bedtimePeriod = notifConfig.bedtimePeriod;
+    _wakeUpHour = notifConfig.wakeUpHour;
+    _wakeUpMinute = notifConfig.wakeUpMinute;
+    _wakeUpPeriod = notifConfig.wakeUpPeriod;
+    
+    // 🆕 曜日別スケジュール設定を取得
+    _enabledDays = Set<int>.from(notifConfig.enabledDays);
+    
+    // アプリバージョンを取得
+    _appVersion = await _dataService.getAppVersion();
+    
+    setState(() {
+      _isLoading = false;
+    });
+  } catch (e) {
+    print('❌ 設定読み込みエラー: $e');
+    setState(() {
+      _isLoading = false;
+    });
   }
+}
 
   int _normalizeInterval(int interval) {
-    if (interval <= 15) return 15;
-    if (interval <= 30) return 30;
-    return 60;
-  }
-
+  if (interval <= 1) return 1;  // 🆕 1分を追加
+  if (interval <= 15) return 15;
+  if (interval <= 30) return 30;
+  return 60;
+}
   Future<void> _saveAllSettings() async {
+  // 🆕 バリデーションチェック
+  if (_isSleepScheduleEnabled && _isSameTime()) {
     setState(() {
-      _isSaving = true;
+      _timeValidationError = 'Bedtime and wake-up time cannot be the same';
     });
+    _showMessage('Invalid time settings', isSuccess: false);
+    return;
+  }
+  
+  // 🆕 全曜日無効チェック
+  if (_enabledDays.isEmpty) {
+    _showMessage('Please enable at least one day', isSuccess: false);
+    return;
+  }
+  
+  setState(() {
+    _isSaving = true;
+    _timeValidationError = null;
+  });
 
-    try {
-      // 1. アーティスト名を保存
-      final userData = await _dataService.loadUserData();
-      userData['artistName'] = _artistNameController.text.trim().isEmpty 
-          ? 'You' 
-          : _artistNameController.text.trim();
-      await _dataService.saveUserData(userData);
+  try {
+    // 1. アーティスト名を保存
+    final userData = await _dataService.loadUserData();
+    userData['artistName'] = _artistNameController.text.trim().isEmpty 
+        ? 'You' 
+        : _artistNameController.text.trim();
+    await _dataService.saveUserData(userData);
+    
+    // 2. アーティスト画像を保存（変更があれば）
+    if (_hasImageChanged && _artistImageBytes != null) {
+      await _dataService.saveIdealImageBytes(_artistImageBytes!);
+    }
+    
+    // 3. 通知設定を保存
+    final currentConfig = await _habitBreakerService.getCurrentConfig();
+    final newConfig = currentConfig.copyWith(
+      isHabitBreakerEnabled: _isNotificationEnabled,
+      habitBreakerInterval: _selectedInterval,
+      // 🆕 睡眠スケジュール設定を追加
+      sleepScheduleEnabled: _isSleepScheduleEnabled,
+      bedtimeHour: _bedtimeHour,
+      bedtimeMinute: _bedtimeMinute,
+      bedtimePeriod: _bedtimePeriod,
+      wakeUpHour: _wakeUpHour,
+      wakeUpMinute: _wakeUpMinute,
+      wakeUpPeriod: _wakeUpPeriod,
+      // 🆕 曜日別スケジュール設定を追加
+      enabledDays: _enabledDays,
+    );
+    await _habitBreakerService.updateSettings(newConfig);
+    
+    if (mounted) {
+      _showMessage('Settings saved', isSuccess: true);
       
-      // 2. アーティスト画像を保存（変更があれば）
-      if (_hasImageChanged && _artistImageBytes != null) {
-        await _dataService.saveIdealImageBytes(_artistImageBytes!);
-      }
-      
-      // 3. 通知設定を保存
-      final currentConfig = await _habitBreakerService.getCurrentConfig();
-      final newConfig = currentConfig.copyWith(
-        isHabitBreakerEnabled: _isNotificationEnabled,
-        habitBreakerInterval: _selectedInterval,
-      );
-      await _habitBreakerService.updateSettings(newConfig);
-      
-      if (mounted) {
-        _showMessage('Settings saved', isSuccess: true);
-        
-        // 画面を閉じる
-        if (widget.onClose != null) {
-          widget.onClose!();
-        } else {
-          Navigator.pop(context);
-        }
-      }
-    } catch (e) {
-      print('❌ 設定保存エラー: $e');
-      if (mounted) {
-        _showMessage('Failed to save', isSuccess: false);
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSaving = false;
-        });
+      // 画面を閉じる
+      if (widget.onClose != null) {
+        widget.onClose!();
+      } else {
+        Navigator.pop(context);
       }
     }
+  } catch (e) {
+    print('❌ 設定保存エラー: $e');
+    if (mounted) {
+      _showMessage('Failed to save', isSuccess: false);
+    }
+  } finally {
+    if (mounted) {
+      setState(() {
+        _isSaving = false;
+      });
+    }
   }
+}
+
+/// 就寝時刻と起床時刻が同じかチェック
+bool _isSameTime() {
+  final bedtime24 = _convertTo24Hour(_bedtimeHour, _bedtimePeriod);
+  final wakeUp24 = _convertTo24Hour(_wakeUpHour, _wakeUpPeriod);
+  return bedtime24 == wakeUp24 && _bedtimeMinute == _wakeUpMinute;
+}
+
+/// 12時間形式を24時間形式に変換
+int _convertTo24Hour(int hour, String period) {
+  if (period == 'AM') {
+    return hour == 12 ? 0 : hour;
+  } else {
+    return hour == 12 ? 12 : hour + 12;
+  }
+}
+
+
 
   Future<void> _selectImageFromGallery() async {
     try {
@@ -345,44 +416,31 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
   }
 
   Widget _buildSettingsContent() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        children: [
-          _buildProfileSection(),
-          const SizedBox(height: 20),
-          _buildNotificationSection(),
-          const SizedBox(height: 20),
-          _buildLinkSection(
-            icon: Icons.help_outline,
-            title: 'Help & Feedback',
-            onTap: () {
-              _showMessage('Coming soon', isSuccess: false);
-            },
-          ),
-          const SizedBox(height: 12),
-          _buildLinkSection(
-            icon: Icons.privacy_tip_outlined,
-            title: 'Privacy Policy',
-            onTap: () {
-              _showMessage('Coming soon', isSuccess: false);
-            },
-          ),
-          const SizedBox(height: 12),
-          _buildLinkSection(
-            icon: Icons.description_outlined,
-            title: 'Terms of Service',
-            onTap: () {
-              _showMessage('Coming soon', isSuccess: false);
-            },
-          ),
-          const SizedBox(height: 20),
-          _buildVersionSection(),
-          const SizedBox(height: 20),
-        ],
-      ),
-    );
-  }
+  return SingleChildScrollView(
+    padding: const EdgeInsets.all(20),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 20),
+        
+        // Profile Settings（元のまま保持）
+        _buildProfileSection(),
+        
+        const SizedBox(height: 30),
+        
+        // Notifications（統合版）
+        _buildUnifiedNotificationSection(),
+        
+        const SizedBox(height: 30),
+        
+        // Version（元のまま保持）
+        _buildVersionSection(),
+        
+        const SizedBox(height: 100),
+      ],
+    ),
+  );
+}
 
   Widget _buildProfileSection() {
     return Container(
@@ -525,123 +583,582 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
     );
   }
 
-  Widget _buildNotificationSection() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: kSectionBackgroundColor,
-        borderRadius: BorderRadius.circular(kSectionBorderRadius),
+  Widget _buildUnifiedNotificationSection() {
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      // セクションタイトル
+      const Text(
+        'Notifications',
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 18,
+          letterSpacing: -0.2,
+          fontWeight: FontWeight.w600,
+          fontFamily: kFontFamily,
+        ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Notifications',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-            letterSpacing: -0.2,
-              fontWeight: FontWeight.w600,
-              fontFamily: kFontFamily,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Send periodic reminders \nto stay mindful of your actions',
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.7),
-              fontSize: 14,
-              fontFamily: kFontFamily,
-            ),
-          ),
-          const SizedBox(height: 20),
-          
-          // ON/OFFスイッチ
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Enable notifications',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                  fontFamily: kFontFamily,
-                ),
-              ),
-              Switch(
-                value: _isNotificationEnabled,
-                onChanged: (value) {
-                  setState(() {
-                    _isNotificationEnabled = value;
-                  });
-                },
-                activeColor: kAccentColor,
-                activeTrackColor: kAccentColor.withOpacity(0.3),
-              ),
-            ],
-          ),
-          
-          if (_isNotificationEnabled) ...[
-            const SizedBox(height: 20),
+      
+      const SizedBox(height: 16),
+      
+      // 統合コンテナ
+      Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: kSectionBackgroundColor,
+          borderRadius: BorderRadius.circular(kSectionBorderRadius),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 1. Notification Interval
+            _buildNotificationIntervalSettings(),
             
-            // 通知間隔選択
-            const Text(
-              'Notification interval',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-                fontFamily: kFontFamily,
-              ),
+            const SizedBox(height: 24),
+            
+            Divider(
+              color: Colors.white.withOpacity(0.1),
+              height: 1,
             ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                _buildIntervalButton(15),
-                const SizedBox(width: 12),
-                _buildIntervalButton(30),
-                const SizedBox(width: 12),
-                _buildIntervalButton(60),
-              ],
+            
+            const SizedBox(height: 24),
+            
+            // 2. Sleep Schedule
+            _buildSleepScheduleInline(),
+            
+            const SizedBox(height: 24),
+            
+            Divider(
+              color: Colors.white.withOpacity(0.1),
+              height: 1,
             ),
+            
+            const SizedBox(height: 24),
+            
+            // 3. Active Days
+            _buildActiveDaysInline(),
           ],
+        ),
+      ),
+    ],
+  );
+}
+
+
+
+
+Widget _buildNotificationIntervalSettings() {
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const Text(
+        'Notification Interval',
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+          fontFamily: kFontFamily,
+        ),
+      ),
+      
+      const SizedBox(height: 12),
+      
+      Text(
+        'How often should we remind you?',
+        style: TextStyle(
+          color: Colors.white.withOpacity(0.6),
+          fontSize: 14,
+          fontFamily: kFontFamily,
+        ),
+      ),
+      
+      const SizedBox(height: 16),
+      
+      // Interval buttons
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          _buildIntervalButton(label: '1 min', minutes: 1),
+          _buildIntervalButton(label: '15 min', minutes: 15),
+          _buildIntervalButton(label: '30 min', minutes: 30),
+          _buildIntervalButton(label: '1 hour', minutes: 60),
         ],
       ),
-    );
-  }
-
-  Widget _buildIntervalButton(int minutes) {
-    final isSelected = _selectedInterval == minutes;
-    
-    return Expanded(
-      child: GestureDetector(
-        onTap: () {
-          setState(() {
-            _selectedInterval = minutes;
-          });
-        },
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12),
+      
+      // Warning for 1 min
+      if (_selectedInterval == 1) ...[
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: isSelected ? kAccentColor : Colors.black.withOpacity(0.3),
+            color: Colors.orange.withOpacity(0.1),
             borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: Colors.orange.withOpacity(0.3),
+              width: 1,
+            ),
           ),
           child: Text(
-            '${minutes}分',
-            textAlign: TextAlign.center,
+            '1 minute interval is for testing only',
             style: TextStyle(
-              color: isSelected ? Colors.white : Colors.white.withOpacity(0.7),
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
+              color: Colors.orange.shade300,
+              fontSize: 12,
               fontFamily: kFontFamily,
             ),
           ),
         ),
+      ],
+    ],
+  );
+}
+
+Widget _buildSleepScheduleInline() {
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      // Header with switch
+      Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          const Text(
+            'Sleep Schedule',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              fontFamily: kFontFamily,
+            ),
+          ),
+          Switch(
+            value: _isSleepScheduleEnabled,
+            activeColor: kAccentColor,
+            onChanged: (value) {
+              setState(() {
+                _isSleepScheduleEnabled = value;
+              });
+            },
+          ),
+        ],
       ),
-    );
-  }
+      
+      const SizedBox(height: 8),
+      
+      Text(
+        'Pause notifications during sleep hours',
+        style: TextStyle(
+          color: Colors.white.withOpacity(0.6),
+          fontSize: 14,
+          fontFamily: kFontFamily,
+        ),
+      ),
+      
+      if (_isSleepScheduleEnabled) ...[
+        const SizedBox(height: 16),
+        
+        // Bedtime
+        _buildTimePickerRow(
+          label: 'Bedtime',
+          icon: Icons.bedtime,
+          hour: _bedtimeHour,
+          minute: _bedtimeMinute,
+          period: _bedtimePeriod,
+          onHourChanged: (value) => setState(() => _bedtimeHour = value),
+          onMinuteChanged: (value) => setState(() => _bedtimeMinute = value),
+          onPeriodChanged: (value) => setState(() => _bedtimePeriod = value),
+        ),
+        
+        const SizedBox(height: 12),
+        
+        // Wake Up
+        _buildTimePickerRow(
+          label: 'Wake Up',
+          icon: Icons.wb_sunny,
+          hour: _wakeUpHour,
+          minute: _wakeUpMinute,
+          period: _wakeUpPeriod,
+          onHourChanged: (value) => setState(() => _wakeUpHour = value),
+          onMinuteChanged: (value) => setState(() => _wakeUpMinute = value),
+          onPeriodChanged: (value) => setState(() => _wakeUpPeriod = value),
+        ),
+        
+        // Validation error
+        if (_timeValidationError != null) ...[
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.red.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              _timeValidationError!,
+              style: const TextStyle(
+                color: Colors.red,
+                fontSize: 12,
+                fontFamily: kFontFamily,
+              ),
+            ),
+          ),
+        ],
+      ],
+    ],
+  );
+}
+
+Widget _buildActiveDaysInline() {
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const Text(
+        'Active Days',
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+          fontFamily: kFontFamily,
+        ),
+      ),
+      
+      const SizedBox(height: 8),
+      
+      Text(
+        'Select days to receive notifications',
+        style: TextStyle(
+          color: Colors.white.withOpacity(0.6),
+          fontSize: 14,
+          fontFamily: kFontFamily,
+        ),
+      ),
+      
+      const SizedBox(height: 16),
+      
+      // Day buttons
+      Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          _buildDayButton(label: 'S', dayIndex: 1),
+          _buildDayButton(label: 'M', dayIndex: 2),
+          _buildDayButton(label: 'T', dayIndex: 3),
+          _buildDayButton(label: 'W', dayIndex: 4),
+          _buildDayButton(label: 'T', dayIndex: 5),
+          _buildDayButton(label: 'F', dayIndex: 6),
+          _buildDayButton(label: 'S', dayIndex: 7),
+        ],
+      ),
+      
+      // Warning if all days disabled
+      if (_enabledDays.isEmpty) ...[
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: Colors.orange.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: const Text(
+            'All days are disabled. Notifications will not be sent.',
+            style: TextStyle(
+              color: Colors.orange,
+              fontSize: 12,
+              fontFamily: kFontFamily,
+            ),
+          ),
+        ),
+      ],
+    ],
+  );
+}
+
+
+
+  Widget _buildIntervalButton({required String label, required int minutes}) {
+  final isSelected = _selectedInterval == minutes;
+  
+  return GestureDetector(
+    onTap: () {
+      setState(() {
+        _selectedInterval = minutes;
+      });
+    },
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      decoration: BoxDecoration(
+        color: isSelected 
+            ? const Color(0xFF1DB954) 
+            : const Color(0xFF2A2A2A),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isSelected 
+              ? const Color(0xFF1DB954) 
+              : Colors.white.withOpacity(0.2),
+          width: 1.5,
+        ),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 14,
+          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+          fontFamily: 'Hiragino Sans',
+        ),
+      ),
+    ),
+  );
+}
+
+
+
+/// 時刻ピッカー行
+Widget _buildTimePickerRow({
+  required String label,
+  required IconData icon,
+  required int hour,
+  required int minute,
+  required String period,
+  required ValueChanged<int> onHourChanged,
+  required ValueChanged<int> onMinuteChanged,
+  required ValueChanged<String> onPeriodChanged,
+}) {
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      // Label with icon
+      Row(
+        children: [
+          Icon(
+            icon,
+            color: const Color(0xFF1DB954),
+            size: 16,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.8),
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              fontFamily: 'Hiragino Sans',
+            ),
+          ),
+        ],
+      ),
+      
+      const SizedBox(height: 8),
+      
+      // Time picker controls
+      Row(
+        children: [
+          // Hour dropdown
+          Expanded(
+            flex: 2,
+            child: _buildTimeDropdown(
+              value: hour,
+              items: List.generate(12, (i) => i + 1),
+              onChanged: onHourChanged,
+            ),
+          ),
+          
+          const SizedBox(width: 4),
+          
+          // Colon
+          const Text(
+            ':',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          
+          const SizedBox(width: 4),
+          
+          // Minute dropdown
+          Expanded(
+            flex: 2,
+            child: _buildTimeDropdown(
+              value: minute,
+              items: [0, 15, 30, 45],
+              onChanged: onMinuteChanged,
+            ),
+          ),
+          
+          const SizedBox(width: 8),
+          
+          // AM/PM toggle
+          Expanded(
+            flex: 2,
+            child: _buildPeriodToggle(
+              period: period,
+              onChanged: onPeriodChanged,
+            ),
+          ),
+        ],
+      ),
+    ],
+  );
+}
+/// 時刻ドロップダウン
+Widget _buildTimeDropdown({
+  required int value,
+  required List<int> items,
+  required ValueChanged<int> onChanged,
+}) {
+  return Container(
+    height: 44,
+    padding: const EdgeInsets.symmetric(horizontal: 8),
+    decoration: BoxDecoration(
+      color: const Color(0xFF2A2A2A),
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(
+        color: Colors.white.withOpacity(0.1),
+        width: 1,
+      ),
+    ),
+    child: DropdownButtonHideUnderline(
+      child: DropdownButton<int>(
+        value: value,
+        isExpanded: true,
+        dropdownColor: const Color(0xFF2A2A2A),
+        icon: Icon(
+          Icons.arrow_drop_down,
+          color: Colors.white.withOpacity(0.6),
+        ),
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 16,
+          fontFamily: 'SF Pro Text',
+        ),
+        items: items.map((int item) {
+          return DropdownMenuItem<int>(
+            value: item,
+            child: Center(
+              child: Text(
+                item.toString().padLeft(2, '0'),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontFamily: 'SF Pro Text',
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+        onChanged: (int? newValue) {
+          if (newValue != null) {
+            onChanged(newValue);
+          }
+        },
+      ),
+    ),
+  );
+}
+
+/// AM/PMトグル
+Widget _buildPeriodToggle({
+  required String period,
+  required ValueChanged<String> onChanged,
+}) {
+  return Container(
+    height: 44,
+    decoration: BoxDecoration(
+      color: const Color(0xFF2A2A2A),
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(
+        color: Colors.white.withOpacity(0.1),
+        width: 1,
+      ),
+    ),
+    child: Row(
+      children: [
+        Expanded(
+          child: _buildPeriodButton(
+            label: 'AM',
+            isSelected: period == 'AM',
+            onTap: () => onChanged('AM'),
+            isLeft: true,
+          ),
+        ),
+        Expanded(
+          child: _buildPeriodButton(
+            label: 'PM',
+            isSelected: period == 'PM',
+            onTap: () => onChanged('PM'),
+            isLeft: false,
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+/// AM/PMボタン
+Widget _buildPeriodButton({
+  required String label,
+  required bool isSelected,
+  required VoidCallback onTap,
+  bool isLeft = false,  // この引数は使われていないが、呼び出し元から渡されているので残す
+}) {
+  return GestureDetector(
+    onTap: onTap,
+    child: Container(
+      width: 45,
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      decoration: BoxDecoration(
+        color: isSelected ? kAccentColor : Colors.black.withOpacity(0.3),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        label,
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          color: isSelected ? Colors.white : Colors.white.withOpacity(0.5),
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          fontFamily: kFontFamily,
+        ),
+      ),
+    ),
+  );
+}
+
+Widget _buildDayButton({required String label, required int dayIndex}) {
+  final isEnabled = _enabledDays.contains(dayIndex);
+  
+  return GestureDetector(
+    onTap: () {
+      setState(() {
+        if (isEnabled) {
+          _enabledDays.remove(dayIndex);
+        } else {
+          _enabledDays.add(dayIndex);
+        }
+      });
+    },
+    child: Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        color: isEnabled ? const Color(0xFF1DB954) : const Color(0xFF404040),
+        shape: BoxShape.circle,
+      ),
+      child: Center(
+        child: Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            fontFamily: 'SF Pro Text',
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
 
   Widget _buildLinkSection({
     required IconData icon,

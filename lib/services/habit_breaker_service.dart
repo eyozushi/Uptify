@@ -26,100 +26,286 @@ class HabitBreakerService {
   Timer? _resumeTimer;
   NotificationConfig? _cachedConfig;
 
+  // 🆕 特別通知用のタイマー
+Timer? _bedtimeNotificationTimer;
+Timer? _wakeUpNotificationTimer;
+
+// 🆕 特別通知のID
+static const int _bedtimeNotificationId = 9000;
+static const int _wakeUpNotificationId = 9001;
+
   // SNS中毒抑制通知を開始（真の定期通知）
   Future<void> startHabitBreaker() async {
-    try {
-      // 通知設定を読み込み
-      final config = await _dataService.loadNotificationConfig();
-      _cachedConfig = config;
-      
-      if (!config.isHabitBreakerEnabled) {
-        print('📵 SNS中毒抑制通知は無効です');
-        return;
-      }
-
-      // 既存の通知をすべて停止
-      await stopHabitBreaker();
-
-      // 真の定期通知システムを開始
-      await _startPeriodicNotifications(config);
-
-      _isActive = true;
-      print('✅ SNS中毒抑制通知を開始しました（${config.habitBreakerInterval}分間隔）');
-    } catch (e) {
-      print('❌ SNS中毒抑制通知開始エラー: $e');
-    }
-  }
-
-  // 真の定期通知システム
-  Future<void> _startPeriodicNotifications(NotificationConfig config) async {
-    // 最初の通知をすぐにスケジュール（一時停止中でなければ）
-    if (!_isPaused) {
-      await _scheduleNextNotification(config, isFirst: true);
-    }
+  try {
+    // 通知設定を読み込み
+    final config = await _dataService.loadNotificationConfig();
+    _cachedConfig = config;
     
-    // 定期的に次の通知をスケジュールするタイマー
-    _schedulingTimer = Timer.periodic(
-      Duration(minutes: config.habitBreakerInterval), 
-      (timer) async {
-        // 一時停止中はスキップ
-        if (_isPaused) {
-          print('🔧 SNS中毒抑制通知スキップ: 一時停止中');
-          return;
-        }
-
-        // 設定が変更されていないかチェック
-        final currentConfig = await _dataService.loadNotificationConfig();
-        
-        if (!currentConfig.isHabitBreakerEnabled) {
-          await stopHabitBreaker();
-          return;
-        }
-        
-        // 間隔が変更された場合は再起動
-        if (currentConfig.habitBreakerInterval != config.habitBreakerInterval) {
-          await startHabitBreaker();
-          return;
-        }
-        
-        // 次の通知をスケジュール
-        await _scheduleNextNotification(currentConfig);
-      },
-    );
-  }
-
-  // 個別の通知をスケジュール（修正版：scheduleDelayedNotificationを使用）
-  Future<void> _scheduleNextNotification(NotificationConfig config, {bool isFirst = false}) async {
-    // 一時停止中はスケジュールしない
-    if (_isPaused) {
-      print('🔧 通知スケジュールをスキップ: 一時停止中');
+    if (!config.isHabitBreakerEnabled) {
+      print('📵 SNS中毒抑制通知は無効です');
       return;
     }
 
-    try {
-      final message = _getRandomMessage(config.habitBreakerMessages);
-      final delay = Duration(minutes: config.habitBreakerInterval);
-      
-      // 🔧 修正: scheduleDelayedNotificationを使用
-      await _notificationService.scheduleDelayedNotification(
-        id: _nextNotificationId++,
-        title: '今すぐタスクをプレイしよう',
-        body: message,
-        delay: delay,
-        payload: 'habit_breaker_${DateTime.now().millisecondsSinceEpoch}',
-        withActions: false, // アクションボタンなし
-      );
-      
-      print('📅 次の通知を${config.habitBreakerInterval}分後にスケジュールしました');
-      
-      // IDが大きくなりすぎた場合はリセット
-      if (_nextNotificationId > _habitBreakerNotificationBaseId + 100) {
-        _nextNotificationId = _habitBreakerNotificationBaseId;
-      }
-    } catch (e) {
-      print('❌ 通知スケジュールエラー: $e');
+    // 🆕 全曜日無効チェック
+    if (config.allDaysDisabled) {
+      print('📵 全ての曜日が無効です');
+      await stopHabitBreaker();
+      return;
     }
+
+    // 既存の通知をすべて停止
+    await stopHabitBreaker();
+
+    // 真の定期通知システムを開始
+    await _startPeriodicNotifications(config);
+
+    // 🆕 睡眠スケジュール通知を開始
+    if (config.sleepScheduleEnabled) {
+      await _startSleepScheduleNotifications(config);
+    }
+
+    _isActive = true;
+    print('✅ SNS中毒抑制通知を開始しました（${config.habitBreakerInterval}分間隔）');
+  } catch (e) {
+    print('❌ SNS中毒抑制通知開始エラー: $e');
   }
+}
+
+  Future<void> _startPeriodicNotifications(NotificationConfig config) async {
+  // 最初の通知をすぐにスケジュール（一時停止中でなければ）
+  if (!_isPaused) {
+    await _scheduleNextNotification(config, isFirst: true);
+  }
+  
+  // 定期的に次の通知をスケジュールするタイマー
+  _schedulingTimer = Timer.periodic(
+    Duration(minutes: config.habitBreakerInterval), 
+    (timer) async {
+      // 一時停止中はスキップ
+      if (_isPaused) {
+        print('🔧 SNS中毒抑制通知スキップ: 一時停止中');
+        return;
+      }
+
+      // 🆕 睡眠時間中はスキップ
+      final now = DateTime.now();
+      if (config.sleepScheduleEnabled && config.isSleepTime(now)) {
+        print('🔧 SNS中毒抑制通知スキップ: 睡眠時間中');
+        return;
+      }
+
+      // 🆕 曜日チェック
+      final weekday = now.weekday == 7 ? 7 : now.weekday; // DateTime.weekday: 1=Monday, 7=Sunday を変換
+      final convertedWeekday = weekday == 7 ? 1 : weekday + 1; // 1=Sunday, 7=Saturday に変換
+      if (!config.isDayEnabled(convertedWeekday)) {
+        print('🔧 SNS中毒抑制通知スキップ: 無効な曜日');
+        return;
+      }
+
+      // 設定が変更されていないかチェック
+      final currentConfig = await _dataService.loadNotificationConfig();
+      
+      if (!currentConfig.isHabitBreakerEnabled) {
+        await stopHabitBreaker();
+        return;
+      }
+      
+      // 間隔が変更された場合は再起動
+      if (currentConfig.habitBreakerInterval != config.habitBreakerInterval) {
+        await startHabitBreaker();
+        return;
+      }
+      
+      // 次の通知をスケジュール
+      await _scheduleNextNotification(currentConfig);
+    },
+  );
+}
+
+  // 個別の通知をスケジュール（修正版：scheduleDelayedNotificationを使用）
+  Future<void> _scheduleNextNotification(NotificationConfig config, {bool isFirst = false}) async {
+  // 一時停止中はスケジュールしない
+  if (_isPaused) {
+    print('🔧 通知スケジュールをスキップ: 一時停止中');
+    return;
+  }
+
+  // 🆕 睡眠時間中はスケジュールしない
+  final now = DateTime.now();
+  if (config.sleepScheduleEnabled && config.isSleepTime(now)) {
+    print('🔧 通知スケジュールをスキップ: 睡眠時間中');
+    return;
+  }
+
+  // 🆕 曜日チェック
+  final weekday = now.weekday == 7 ? 7 : now.weekday;
+  final convertedWeekday = weekday == 7 ? 1 : weekday + 1;
+  if (!config.isDayEnabled(convertedWeekday)) {
+    print('🔧 通知スケジュールをスキップ: 無効な曜日');
+    return;
+  }
+
+  try {
+    final message = _getRandomMessage(config.habitBreakerMessages);
+    final delay = Duration(minutes: config.habitBreakerInterval);
+    
+    await _notificationService.scheduleDelayedNotification(
+      id: _nextNotificationId++,
+      title: '今すぐタスクをプレイしよう',
+      body: message,
+      delay: delay,
+      payload: 'habit_breaker_${DateTime.now().millisecondsSinceEpoch}',
+      withActions: false,
+    );
+    
+    print('📅 次の通知を${config.habitBreakerInterval}分後にスケジュールしました');
+    
+    // IDが大きくなりすぎた場合はリセット
+    if (_nextNotificationId > _habitBreakerNotificationBaseId + 100) {
+      _nextNotificationId = _habitBreakerNotificationBaseId;
+    }
+  } catch (e) {
+    print('❌ 通知スケジュールエラー: $e');
+  }
+}
+
+/// 睡眠スケジュール通知を開始
+Future<void> _startSleepScheduleNotifications(NotificationConfig config) async {
+  try {
+    // 既存の睡眠通知をキャンセル
+    await _cancelSleepScheduleNotifications();
+    
+    // 就寝通知をスケジュール
+    await _scheduleBedtimeNotification(config);
+    
+    // 起床通知をスケジュール
+    await _scheduleWakeUpNotification(config);
+    
+    print('✅ 睡眠スケジュール通知を開始しました');
+  } catch (e) {
+    print('❌ 睡眠スケジュール通知開始エラー: $e');
+  }
+}
+
+/// 就寝通知をスケジュール（5分前）
+Future<void> _scheduleBedtimeNotification(NotificationConfig config) async {
+  try {
+    final now = DateTime.now();
+    
+    // 就寝時刻の5分前を計算
+    var bedtimeHour = config.bedtime24Hour;
+    var bedtimeMinute = config.bedtimeMinute - 5;
+    
+    if (bedtimeMinute < 0) {
+      bedtimeMinute += 60;
+      bedtimeHour -= 1;
+      if (bedtimeHour < 0) bedtimeHour += 24;
+    }
+    
+    // 次の就寝通知時刻を計算
+    var notificationTime = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      bedtimeHour,
+      bedtimeMinute,
+    );
+    
+    // 過去の時刻なら翌日に設定
+    if (notificationTime.isBefore(now)) {
+      notificationTime = notificationTime.add(const Duration(days: 1));
+    }
+    
+    final delay = notificationTime.difference(now);
+    
+    // 通知をスケジュール
+    await _notificationService.scheduleDelayedNotification(
+      id: _bedtimeNotificationId,
+      title: 'Bedtime Reminder',
+      body: config.bedtimeMessage,
+      delay: delay,
+      payload: 'bedtime_notification',
+      withActions: false,
+    );
+    
+    print('📅 就寝通知を${delay.inMinutes}分後（${notificationTime.hour}:${notificationTime.minute.toString().padLeft(2, '0')}）にスケジュールしました');
+    
+    // 24時間後に再スケジュール
+    _bedtimeNotificationTimer = Timer(delay + const Duration(minutes: 1), () async {
+      final currentConfig = await _dataService.loadNotificationConfig();
+      if (currentConfig.sleepScheduleEnabled) {
+        await _scheduleBedtimeNotification(currentConfig);
+      }
+    });
+  } catch (e) {
+    print('❌ 就寝通知スケジュールエラー: $e');
+  }
+}
+
+/// 起床通知をスケジュール
+Future<void> _scheduleWakeUpNotification(NotificationConfig config) async {
+  try {
+    final now = DateTime.now();
+    
+    // 次の起床通知時刻を計算
+    var notificationTime = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      config.wakeUp24Hour,
+      config.wakeUpMinute,
+    );
+    
+    // 過去の時刻なら翌日に設定
+    if (notificationTime.isBefore(now)) {
+      notificationTime = notificationTime.add(const Duration(days: 1));
+    }
+    
+    final delay = notificationTime.difference(now);
+    
+    // 通知をスケジュール
+    await _notificationService.scheduleDelayedNotification(
+      id: _wakeUpNotificationId,
+      title: 'Good Morning!',
+      body: config.wakeUpMessage,
+      delay: delay,
+      payload: 'wakeup_notification',
+      withActions: false,
+    );
+    
+    print('📅 起床通知を${delay.inMinutes}分後（${notificationTime.hour}:${notificationTime.minute.toString().padLeft(2, '0')}）にスケジュールしました');
+    
+    // 24時間後に再スケジュール
+    _wakeUpNotificationTimer = Timer(delay + const Duration(minutes: 1), () async {
+      final currentConfig = await _dataService.loadNotificationConfig();
+      if (currentConfig.sleepScheduleEnabled) {
+        await _scheduleWakeUpNotification(currentConfig);
+      }
+    });
+  } catch (e) {
+    print('❌ 起床通知スケジュールエラー: $e');
+  }
+}
+
+/// 睡眠スケジュール通知をキャンセル
+Future<void> _cancelSleepScheduleNotifications() async {
+  try {
+    // タイマーをキャンセル
+    _bedtimeNotificationTimer?.cancel();
+    _bedtimeNotificationTimer = null;
+    
+    _wakeUpNotificationTimer?.cancel();
+    _wakeUpNotificationTimer = null;
+    
+    // 通知をキャンセル
+    await _notificationService.cancelNotification(_bedtimeNotificationId);
+    await _notificationService.cancelNotification(_wakeUpNotificationId);
+    
+    print('✅ 睡眠スケジュール通知をキャンセルしました');
+  } catch (e) {
+    print('❌ 睡眠スケジュール通知キャンセルエラー: $e');
+  }
+}
 
   // 🔧 新機能: 通知を一時停止（タスク実行中）
   void pauseNotifications() {
@@ -135,25 +321,102 @@ class HabitBreakerService {
   }
 
   // 🔧 新機能: 通知を再開（タスク完了後）
-  void resumeNotifications() {
-    if (!_isActive || !_isPaused) return;
+void resumeNotifications() {
+  if (!_isActive || !_isPaused) return;
+  
+  _isPaused = false;
+  
+  if (_pauseStartTime != null) {
+    final pauseDuration = DateTime.now().difference(_pauseStartTime!);
+    print('🔧 SNS中毒抑制通知を再開しました（一時停止時間: ${pauseDuration.inMinutes}分）');
+    _pauseStartTime = null;
+  } else {
+    print('🔧 SNS中毒抑制通知を再開しました');
+  }
+  
+  // 🔧 修正: 次の通知を即座にスケジュール
+  if (_cachedConfig != null && _cachedConfig!.isHabitBreakerEnabled) {
+    _scheduleNextNotification(_cachedConfig!, isFirst: false);
     
-    _isPaused = false;
+    // 🔧 追加: 定期タイマーが停止している場合は再起動
+    if (_schedulingTimer == null || !_schedulingTimer!.isActive) {
+      print('🔧 定期タイマーを再起動します');
+      _startPeriodicNotifications(_cachedConfig!);
+    }
+  }
+}
+
+/// タスク完了後に通知を再開（外部から呼び出し用）
+Future<void> resumeAfterTaskCompletion() async {
+  try {
+    print('🎯 タスク完了後の通知再開処理を開始');
     
-    if (_pauseStartTime != null) {
-      final pauseDuration = DateTime.now().difference(_pauseStartTime!);
-      print('🔧 SNS中毒抑制通知を再開しました（一時停止時間: ${pauseDuration.inMinutes}分）');
-      
-      // 次の通知を即座にスケジュール（設定がある場合）
-      if (_cachedConfig != null && _cachedConfig!.isHabitBreakerEnabled) {
-        _scheduleNextNotification(_cachedConfig!);
-      }
-    } else {
-      print('🔧 SNS中毒抑制通知を再開しました');
+    // 一時停止を解除
+    if (_isPaused) {
+      print('🔧 一時停止状態を解除します');
+      resumeNotifications();
     }
     
-    _pauseStartTime = null;
+    // 設定を再読み込み
+    final config = await _dataService.loadNotificationConfig();
+    _cachedConfig = config;
+    
+    // 通知が無効な場合は再開しない
+    if (!config.isHabitBreakerEnabled) {
+      print('📵 通知が無効のため再開しません');
+      return;
+    }
+    
+    // 全曜日無効チェック
+    if (config.allDaysDisabled) {
+      print('📵 全ての曜日が無効のため再開しません');
+      return;
+    }
+    
+    // 現在の状態をチェック
+    final now = DateTime.now();
+    
+    // 睡眠時間チェック
+    if (config.sleepScheduleEnabled && config.isSleepTime(now)) {
+      print('🔧 睡眠時間中のため通知スキップ（起床後に自動再開されます）');
+      return;
+    }
+    
+    // 曜日チェック
+    final weekday = now.weekday == 7 ? 7 : now.weekday;
+    final convertedWeekday = weekday == 7 ? 1 : weekday + 1;
+    if (!config.isDayEnabled(convertedWeekday)) {
+      print('🔧 無効な曜日のため通知スキップ（次の有効日に自動再開されます）');
+      return;
+    }
+    
+    // 🔧 修正: 通知システムの状態に応じた処理
+    if (!_isActive) {
+      // システムが完全停止している場合は再起動
+      print('🔧 通知システムが停止しているため完全再起動を実行');
+      await startHabitBreaker();
+    } else if (_schedulingTimer == null || !_schedulingTimer!.isActive) {
+      // タイマーだけが停止している場合はタイマーのみ再起動
+      print('🔧 定期タイマーが停止しているため再起動');
+      await _startPeriodicNotifications(config);
+    } else {
+      // 既に正常稼働中の場合は次の通知をスケジュール
+      print('🔧 通知システム稼働中 - 次の通知をスケジュール');
+      await _scheduleNextNotification(config, isFirst: false);
+    }
+    
+    print('✅ タスク完了後の通知再開完了');
+  } catch (e) {
+    print('❌ タスク完了後の通知再開エラー: $e');
+    // エラーが発生しても通知システムを再起動
+    try {
+      print('🔄 エラー復旧のため通知システムを再起動');
+      await startHabitBreaker();
+    } catch (retryError) {
+      print('❌ 通知システム再起動も失敗: $retryError');
+    }
   }
+}
 
   // 🔧 新機能: 指定時間後に自動再開（オプション）
   void pauseNotificationsWithAutoResume(Duration pauseDuration) {
@@ -180,50 +443,67 @@ class HabitBreakerService {
     }
   }
 
-  // SNS中毒抑制通知を停止
   Future<void> stopHabitBreaker() async {
-    try {
-      // タイマーを停止
-      _schedulingTimer?.cancel();
-      _schedulingTimer = null;
-      
-      // 自動再開タイマーも停止
-      _resumeTimer?.cancel();
-      _resumeTimer = null;
-      
-      // 予約されたすべての通知をキャンセル
-      await _cancelScheduledNotifications();
-      
-      _isActive = false;
-      _isPaused = false;
-      _pauseStartTime = null;
-      _cachedConfig = null;
-      
-      print('✅ SNS中毒抑制通知をすべて停止しました');
-    } catch (e) {
-      print('❌ SNS中毒抑制通知停止エラー: $e');
-    }
+  try {
+    // タイマーを停止
+    _schedulingTimer?.cancel();
+    _schedulingTimer = null;
+    
+    // 自動再開タイマーも停止
+    _resumeTimer?.cancel();
+    _resumeTimer = null;
+    
+    // 🆕 睡眠スケジュール通知もキャンセル
+    await _cancelSleepScheduleNotifications();
+    
+    // 予約されたすべての通知をキャンセル
+    await _cancelScheduledNotifications();
+    
+    _isActive = false;
+    _isPaused = false;
+    _pauseStartTime = null;
+    _cachedConfig = null;
+    
+    print('✅ SNS中毒抑制通知をすべて停止しました');
+  } catch (e) {
+    print('❌ SNS中毒抑制通知停止エラー: $e');
   }
+}
 
-  // 通知設定の更新（設定変更時に呼び出す）
   Future<void> updateSettings(NotificationConfig config) async {
-    try {
-      // 設定を保存
+  try {
+    // 🆕 バリデーションチェック
+    if (config.sleepScheduleEnabled && config.isSameTime) {
+      print('❌ 就寝時刻と起床時刻が同じです');
+      throw Exception('Bedtime and wake-up time cannot be the same');
+    }
+    
+    // 🆕 全曜日無効チェック
+    if (config.allDaysDisabled) {
+      print('⚠️ 全ての曜日が無効です - 通知を停止します');
+      await stopHabitBreaker();
       await _dataService.saveNotificationConfig(config);
       _cachedConfig = config;
-      
-      // 通知システムを再起動
-      if (config.isHabitBreakerEnabled) {
-        await startHabitBreaker();
-      } else {
-        await stopHabitBreaker();
-      }
-      
-      print('✅ SNS中毒抑制通知設定を更新しました');
-    } catch (e) {
-      print('❌ SNS中毒抑制通知設定更新エラー: $e');
+      return;
     }
+    
+    // 設定を保存
+    await _dataService.saveNotificationConfig(config);
+    _cachedConfig = config;
+    
+    // 通知システムを再起動
+    if (config.isHabitBreakerEnabled) {
+      await startHabitBreaker();
+    } else {
+      await stopHabitBreaker();
+    }
+    
+    print('✅ SNS中毒抑制通知設定を更新しました');
+  } catch (e) {
+    print('❌ SNS中毒抑制通知設定更新エラー: $e');
+    rethrow;
   }
+}
 
   // 即座にテスト通知を送信
   Future<void> sendTestNotification() async {
@@ -260,12 +540,14 @@ class HabitBreakerService {
     }
   }
 
-  // アプリ終了時のクリーンアップ
   Future<void> dispose() async {
-    _schedulingTimer?.cancel();
-    _resumeTimer?.cancel();
-    print('🔄 HabitBreakerService終了');
-  }
+  _schedulingTimer?.cancel();
+  _resumeTimer?.cancel();
+  // 🆕 睡眠スケジュールタイマーもキャンセル
+  _bedtimeNotificationTimer?.cancel();
+  _wakeUpNotificationTimer?.cancel();
+  print('🔄 HabitBreakerService終了');
+}
 
   // 現在の状態を取得
   bool get isActive => _isActive;
@@ -303,24 +585,30 @@ class HabitBreakerService {
 
   // 統計情報を取得
   Future<Map<String, dynamic>> getStatistics() async {
-    try {
-      final config = await _dataService.loadNotificationConfig();
-      
-      return {
-        'isEnabled': config.isHabitBreakerEnabled,
-        'interval': config.habitBreakerInterval,
-        'isActive': _isActive,
-        'isPaused': _isPaused,
-        'pauseStartTime': _pauseStartTime?.toIso8601String(),
-        'messageCount': config.habitBreakerMessages.length,
-        'nextNotification': await getNextNotificationTime(),
-        'hasSchedulingTimer': _schedulingTimer != null,
-        'hasResumeTimer': _resumeTimer != null,
-        'nextNotificationId': _nextNotificationId,
-      };
-    } catch (e) {
-      print('❌ 統計情報取得エラー: $e');
-      return {};
-    }
+  try {
+    final config = await _dataService.loadNotificationConfig();
+    
+    return {
+      'isEnabled': config.isHabitBreakerEnabled,
+      'interval': config.habitBreakerInterval,
+      'isActive': _isActive,
+      'isPaused': _isPaused,
+      'pauseStartTime': _pauseStartTime?.toIso8601String(),
+      'messageCount': config.habitBreakerMessages.length,
+      'nextNotification': await getNextNotificationTime(),
+      'hasSchedulingTimer': _schedulingTimer != null,
+      'hasResumeTimer': _resumeTimer != null,
+      'nextNotificationId': _nextNotificationId,
+      // 🆕 睡眠スケジュール情報を追加
+      'sleepScheduleEnabled': config.sleepScheduleEnabled,
+      'isSleepTime': config.isSleepTime(DateTime.now()),
+      'enabledDaysCount': config.enabledDays.length,
+      'hasBedtimeTimer': _bedtimeNotificationTimer != null,
+      'hasWakeUpTimer': _wakeUpNotificationTimer != null,
+    };
+  } catch (e) {
+    print('❌ 統計情報取得エラー: $e');
+    return {};
   }
+}
 }
