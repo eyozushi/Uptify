@@ -306,7 +306,7 @@ void dispose() {
       await _dataService.saveSingleAlbum(updatedAlbum);
       
       if (mounted) {
-        _showMessage('「${updatedAlbum.albumName}」を更新しました', isSuccess: true);
+        _showMessage('\"${updatedAlbum.albumName}\"を更新しました', isSuccess: true);
         
         final result = {
           'idealSelf': _idealSelfController.text,
@@ -668,72 +668,33 @@ Widget build(BuildContext context) {
   return Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      // 🔧 修正：セクションヘッダー（枠なし）
+      // セクションヘッダー
       Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            children: [
-              Container(
-                width: 4,
-                height: 20,
-                decoration: BoxDecoration(
-                  color: _dominantColor,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(width: 12),
-              const Text(
-                'Task Settings',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-            letterSpacing: -0.2,
-                  fontWeight: FontWeight.w600,
-                  fontFamily: 'Hiragino Sans',
-                ),
-              ),
-            ],
-          ),
-          
-          // 🆕 追加：シングルアルバムの場合のみタスク追加ボタン
-          if (!widget.isEditingLifeDream)
-            GestureDetector(
-              onTap: _addNewTask,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: _dominantColor.withOpacity(0.3),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.add,
-                      color: _dominantColor,
-                      size: 18,
-                    ),
-                    const SizedBox(width: 4),
-                    const Text(
-                      'Add Task',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        fontFamily: 'Hiragino Sans',
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+          Container(
+            width: 4,
+            height: 20,
+            decoration: BoxDecoration(
+              color: _dominantColor,
+              borderRadius: BorderRadius.circular(2),
             ),
+          ),
+          const SizedBox(width: 12),
+          const Text(
+            'Task Settings',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              letterSpacing: -0.2,
+              fontWeight: FontWeight.w600,
+              fontFamily: 'Hiragino Sans',
+            ),
+          ),
         ],
       ),
       
       const SizedBox(height: 24),
       
-      // 🔧 修正：ReorderableListViewでドラッグ対応
       ReorderableListView.builder(
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
@@ -743,6 +704,43 @@ Widget build(BuildContext context) {
           return _buildTaskEditor(index);
         },
       ),
+      
+      if (!widget.isEditingLifeDream) ...[
+        const SizedBox(height: 24),
+        
+        Center(
+          child: GestureDetector(
+            onTap: _addNewTask,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1DB954),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.add,
+                    color: Colors.white,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Add Task',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      fontFamily: 'Hiragino Sans',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
     ],
   );
 }
@@ -1401,7 +1399,7 @@ void _deleteAlbum() async {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      '「${_idealSelfController.text}」を削除しました',
+                      '\"${_idealSelfController.text}\"を削除しました',
                       style: const TextStyle(fontFamily: 'Hiragino Sans'),
                     ),
                   ),

@@ -679,69 +679,29 @@ Widget _buildAlbumInfoSection() {
   );
 }
 
-  // 🆕 新規追加メソッド：タスクセクション
-  // 既存メソッドの変更
-Widget _buildTasksSection() {
+  Widget _buildTasksSection() {
   return Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            children: [
-              Container(
-                width: 4,
-                height: 20,
-                decoration: BoxDecoration(
-                  // 🔧 修正：カラーバーを緑に固定
-                  color: const Color(0xFF1DB954),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(width: 12),
-              const Text(
-                'Task Settings',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-            letterSpacing: -0.2,
-                  fontWeight: FontWeight.w600,
-                  fontFamily: 'Hiragino Sans',
-                ),
-              ),
-            ],
+          Container(
+            width: 4,
+            height: 20,
+            decoration: BoxDecoration(
+              color: const Color(0xFF1DB954),
+              borderRadius: BorderRadius.circular(2),
+            ),
           ),
-          
-          GestureDetector(
-            onTap: _addNewTask,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                // 🔧 修正：背景色を緑単色に変更
-                color: const Color(0xFF1DB954),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(
-                    Icons.add,
-                    color: Colors.white,  // 🔧 修正：アイコン色を白に変更
-                    size: 18,
-                  ),
-                  const SizedBox(width: 4),
-                  const Text(
-                    'Add Task',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      fontFamily: 'Hiragino Sans',
-                    ),
-                  ),
-                ],
-              ),
+          const SizedBox(width: 12),
+          const Text(
+            'Task Settings',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              letterSpacing: -0.2,
+              fontWeight: FontWeight.w600,
+              fontFamily: 'Hiragino Sans',
             ),
           ),
         ],
@@ -757,6 +717,41 @@ Widget _buildTasksSection() {
         itemBuilder: (context, index) {
           return _buildTaskEditor(index);
         },
+      ),
+      
+      const SizedBox(height: 24),
+      
+      Center(
+        child: GestureDetector(
+          onTap: _addNewTask,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1DB954),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.add,
+                  color: Colors.white,
+                  size: 18,
+                ),
+                const SizedBox(width: 8),
+                const Text(
+                  'Add Task',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    fontFamily: 'Hiragino Sans',
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     ],
   );

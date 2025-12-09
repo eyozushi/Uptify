@@ -124,7 +124,7 @@ double _playerDragVelocity = 0.0; // 🆕 追加：ドラッグ速度を記録
   bool _shouldShowOnboarding = false;
   
   // プレイヤー関連の状態
-  String _currentIdealSelf = "理想の自分";
+  String _currentIdealSelf = "Ideal Self";
   String _currentArtistName = "You";
   List<TaskItem> _currentTasks = [];
   String _currentAlbumImagePath = "";
@@ -884,11 +884,11 @@ Future<void> _scheduleAutoPlayTaskCompletions() async {
     
     if (isLastTask) {
       title = '🎉 アルバム完了！';
-      body = 'すべてのタスクが完了しました。達成状況を記録してください。';
+      body = 'All tasks completed. Record your progress.';
     } else {
       final nextTask = _playingTasks[i + 1];
       title = '⏭️ タスク切り替え';
-      body = '「${task.title}」が完了。次は「${nextTask.title}」です。';
+      body = '\"${task.title}\"が完了。次は「${nextTask.title}」です。';
     }
     
     await _notificationService.scheduleDelayedNotification(
@@ -952,8 +952,8 @@ Future<void> _scheduleNormalTaskCompletion() async {
   try {
     await _notificationService.scheduleDelayedNotification(
       id: notificationId,
-      title: 'タスク完了',
-      body: '「${currentTask.title}」の時間が終了しました',
+      title: 'Task Complete',
+      body: '\"${currentTask.title}\"の時間が終了しました',
       delay: Duration(seconds: remainingSeconds),
       payload: payload,
       withActions: true,
@@ -1008,10 +1008,10 @@ Future<void> _scheduleAutoPlayTaskNotifications() async {
     
     await _notificationService.scheduleDelayedNotification(
       id: notificationId,
-      title: isLastTask ? 'アルバム完了！' : 'タスク切り替え',
+      title: isLastTask ? 'Album Complete!' : 'Task Switch',
       body: isLastTask
-          ? '全てのタスクが完了しました。結果を確認してください。'
-          : '「${currentTask.title}」完了→次のタスクを開始',
+          ? 'All tasks complete. Please check results.'
+          : '\"${currentTask.title}\"完了→次のタスクを開始',
       delay: Duration(seconds: remainingSeconds),
       payload: payload,
       withActions: false,
@@ -1091,10 +1091,10 @@ Future<void> _scheduleNextTaskAutoPlayNotifications(int nextTaskIndex, int delay
   
   await _notificationService.scheduleDelayedNotification(
     id: notificationId,
-    title: isLastTask ? 'アルバム完了！' : 'タスク切り替え',
+    title: isLastTask ? 'Album Complete!' : 'Task Switch',
     body: isLastTask
         ? '全てのタスクが完了しました。'
-        : '「${nextTask.title}」を開始します',
+        : '\"${nextTask.title}\"を開始します',
     delay: Duration(seconds: totalDelay),
     payload: payload,
     withActions: false,
@@ -1218,8 +1218,8 @@ Future<void> _scheduleCurrentTaskCompletion() async {
       
       await _notificationService.scheduleDelayedNotification(
         id: 9900 + _currentTaskIndex,
-        title: 'タスク完了！',
-        body: '「${currentTask.title}」の時間が終了しました。このタスクはできましたか？',
+        title: 'Task Complete!',
+        body: '\"${currentTask.title}\"の時間が終了しました。このタスクはできましたか？',
         delay: Duration(seconds: remainingSeconds),
         payload: payload,
         withActions: true,
@@ -1262,7 +1262,7 @@ Future<void> _scheduleAutoPlayNotifications() async {
   await _notificationService.scheduleDelayedNotification(
     id: 99999, // 固定ID
     title: '🎉 すべてのタスク完了！',
-    body: 'お疲れ様でした！タスクの達成状況を記録してください。',
+    body: 'Well done! Record your task completion.',
     delay: Duration(seconds: totalSeconds),
     payload: 'notification_type=AUTO_PLAY_FINAL&$sessionInfo',
     withActions: false,
@@ -1280,8 +1280,8 @@ Future<void> _scheduleNormalTaskNotification() async {
   
   await _notificationService.scheduleDelayedNotification(
     id: 50000 + _currentTaskIndex,
-    title: 'タスク完了',
-    body: '「${currentTask.title}」の時間が終了しました',
+    title: 'Task Complete',
+    body: '\"${currentTask.title}\"の時間が終了しました',
     delay: Duration(seconds: remainingSeconds),
     payload: 'notification_type=NORMAL&taskIndex=$_currentTaskIndex',
     withActions: true,
@@ -1339,10 +1339,10 @@ Future<void> _scheduleAllRemainingTasksCompletion() async {
     
     await _notificationService.scheduleDelayedNotification(
       id: notificationId,
-      title: isLastTask ? 'アルバム完了！' : '「${task.title}」完了',
+      title: isLastTask ? 'Album Complete!' : '\"${task.title}\"完了',
       body: isLastTask 
           ? 'すべてのタスクが完了しました'
-          : '次のタスクに進みます',
+          : 'Moving to next task',
       delay: Duration(seconds: cumulativeSeconds),
       payload: payload,
       withActions: isLastTask,
@@ -1371,7 +1371,7 @@ Future<void> _scheduleAlbumCompletionNotification(int delaySeconds, int finalTas
     await _notificationService.scheduleDelayedNotification(
       id: 8900, // 専用のID
       title: '🎉 アルバム完了！',
-      body: '「${_isPlayingSingleAlbum && _playingSingleAlbum != null ? _playingSingleAlbum!.albumName : _currentIdealSelf}」のすべてのタスクが完了しました。\n\nお疲れ様でした！結果を確認しましょう。',
+      body: '\"${_isPlayingSingleAlbum && _playingSingleAlbum != null ? _playingSingleAlbum!.albumName : _currentIdealSelf}\"のすべてのタスクが完了しました。\n\nお疲れ様でした！結果を確認しましょう。',
       delay: Duration(seconds: delaySeconds),
       payload: payload,
       withActions: true,
@@ -1404,7 +1404,7 @@ Future<void> _scheduleTaskProgressNotification(int delaySeconds, TaskItem task, 
     await _notificationService.scheduleDelayedNotification(
       id: 8800 + taskIndex, // 進行通知専用のID範囲
       title: '🔄 次のタスクを開始',
-      body: '「${task.title}」が完了しました。\n次のタスクに自動で進みます。',
+      body: '\"${task.title}\"が完了しました。\n次のタスクに自動で進みます。',
       delay: Duration(seconds: delaySeconds),
       payload: payload,
       withActions: false,
@@ -1625,7 +1625,7 @@ Future<void> _scheduleAutoPlayProgressNotification(int delaySeconds, TaskItem ta
   await _notificationService.scheduleDelayedNotification(
     id: 9900 + taskIndex,
     title: 'タスク完了（自動再生）',
-    body: '「${task.title}」が完了しました。次のタスクに進みます。',
+    body: '\"${task.title}\"が完了しました。次のタスクに進みます。',
     delay: Duration(seconds: delaySeconds),
     payload: payload,
     withActions: false,
@@ -1754,7 +1754,7 @@ Future<void> _initializeAudioService() async {
   try {
     final data = await _dataService.loadUserData();
     setState(() {
-      _currentIdealSelf = data['idealSelf'] ?? '理想の自分';
+      _currentIdealSelf = data['idealSelf'] ?? 'Ideal Self';
       _currentArtistName = data['artistName'] ?? 'You';
       _currentAlbumImagePath = data['albumImagePath'] ?? '';
       
@@ -2120,7 +2120,7 @@ Widget _buildSingleAlbumSettingsScreen(SingleAlbum album) {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      '「${updatedAlbum.albumName}」を更新しました！',
+                      '\"${updatedAlbum.albumName}\"を更新しました！',
                       style: const TextStyle(fontFamily: 'Hiragino Sans'),
                     ),
                   ),
@@ -2163,7 +2163,7 @@ Widget _buildSingleAlbumSettingsScreen(SingleAlbum album) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('アルバムの更新に失敗しました'),
+              content: Text('Failed to update album'),
               backgroundColor: Colors.red,
             ),
           );
@@ -2215,7 +2215,7 @@ Future<void> _deleteSingleAlbum(SingleAlbum album) async {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  '「${album.albumName}」を削除しました',
+                  '\"${album.albumName}\"を削除しました',
                   style: const TextStyle(fontFamily: 'Hiragino Sans'),
                 ),
               ),
@@ -2245,7 +2245,7 @@ Future<void> _deleteSingleAlbum(SingleAlbum album) async {
               const SizedBox(width: 12),
               const Expanded(
                 child: Text(
-                  'アルバムの削除に失敗しました',
+                  'Failed to delete album',
                   style: TextStyle(fontFamily: 'Hiragino Sans'),
                 ),
               ),
@@ -2294,7 +2294,7 @@ Future<void> _deleteSingleAlbum(SingleAlbum album) async {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  '「${album.albumName}」をリリースしました！',
+                  '\"${album.albumName}\"をリリースしました！',
                   style: const TextStyle(fontFamily: 'Hiragino Sans'),
                 ),
               ),
@@ -2318,7 +2318,7 @@ Future<void> _deleteSingleAlbum(SingleAlbum album) async {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('アルバムの保存に失敗しました'),
+          content: Text('Failed to save album'),
           backgroundColor: Colors.red,
         ),
       );
@@ -2802,7 +2802,7 @@ Future<void> _scheduleAutoPlayTaskTransitionNotification(
   await _notificationService.scheduleDelayedNotification(
     id: notificationId,
     title: '🔄 タスク切り替え',
-    body: '「${currentTask.title}」完了！\n次は「${nextTask.title}」を開始します',
+    body: '\"${currentTask.title}\"完了！\n次は「${nextTask.title}」を開始します',
     delay: Duration(seconds: delaySeconds),
     payload: payload,
     withActions: false,
@@ -2854,8 +2854,8 @@ int _getCurrentTaskNumberForNotification() {
   // 🆕 タスク切り替え通知を送信
   Future<void> _sendTaskTransitionNotification(TaskItem completedTask, TaskItem nextTask) async {
     try {
-      final title = 'タスク切り替え';
-      final body = '「${completedTask.title}」が完了しました。\n「${nextTask.title}」を再生します。';
+      final title = 'Task Switch';
+      final body = '\"${completedTask.title}\"が完了しました。\n「${nextTask.title}」を再生します。';
       
       await _notificationService.showNotification(
         id: 5000 + _currentTaskIndex,
@@ -2880,7 +2880,7 @@ int _getCurrentTaskNumberForNotification() {
           ? _playingSingleAlbum!.albumName 
           : _currentIdealSelf;
       
-      final title = 'アルバム完了！';
+      final title = 'Album Complete!';
       final body = '「$albumName」のすべてのタスクが完了しました。\nタスクを実行できましたか？';
       
       await _notificationService.showNotificationWithActions(
@@ -3463,7 +3463,7 @@ Future<void> _recordAllTasksCompletion(bool allCompleted) async {
     print('❌ アルバム完了記録エラー: $e');
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('記録の保存に失敗しました'),
+        content: Text('Failed to save record'),
         backgroundColor: Colors.red,
       ),
     );
@@ -3827,7 +3827,7 @@ Widget _buildMiniPlayerWithDrag() {
                           ? (_isPlayingSingleAlbum && _playingSingleAlbum != null 
                               ? _playingSingleAlbum!.albumName 
                               : _currentIdealSelf)
-                          : 'タスク',
+                          : 'Task',
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 14,
@@ -3990,7 +3990,7 @@ final clampedOpacity = miniPlayerOpacity.clamp(0.0, 1.0);
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: const Text(
-                          '理想像',
+                          'Ideal Self',
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: 10,
@@ -4088,7 +4088,7 @@ final clampedOpacity = miniPlayerOpacity.clamp(0.0, 1.0);
                             ),
                             SizedBox(width: 2),
                             Text(
-                              '自動',
+                              'Auto',
                               style: TextStyle(
                                 color: Colors.white,
                                 fontSize: 9,
@@ -5392,8 +5392,8 @@ void _handleBackgroundAlbumCompletion() {
   Future.delayed(const Duration(milliseconds: 500), () {
     _notificationService.showNotification(
       id: 8000,
-      title: 'アルバム完了！',
-      body: '「${_isPlayingSingleAlbum && _playingSingleAlbum != null ? _playingSingleAlbum!.albumName : _currentIdealSelf}」のすべてのタスクが完了しました。アプリを開いて結果を確認してください。',
+      title: 'Album Complete!',
+      body: '\"${_isPlayingSingleAlbum && _playingSingleAlbum != null ? _playingSingleAlbum!.albumName : _currentIdealSelf}\"のすべてのタスクが完了しました。アプリを開いて結果を確認してください。',
       payload: 'type=background_album_completed',
     );
   });
@@ -5584,26 +5584,16 @@ Widget build(BuildContext context) {
 }
 
   Widget _buildInitialLoadingScreen() {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: Center(
-        child: Container(
-          width: 140,
-          height: 140,
-          decoration: const BoxDecoration(
-            color: Color(0xFF1DB954),
-            shape: BoxShape.circle,
-          ),
-          child: Transform.rotate(
-            angle: -1.5708,
-            child: const Icon(
-              Icons.play_arrow,
-              size: 90,
-              color: Colors.black,
-            ),
-          ),
-        ),
+  return Scaffold(
+    backgroundColor: Colors.black,
+    body: Center(
+      child: Image.asset(
+        'assets/app_icon.png',
+        width: 140,
+        height: 140,
+        fit: BoxFit.cover,
       ),
-    );
-  }
+    ),
+  );
+}
 }

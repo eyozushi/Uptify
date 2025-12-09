@@ -27,36 +27,36 @@ final String wakeUpMessage;
     this.isHabitBreakerEnabled = false,
     this.habitBreakerInterval = 15,
     this.habitBreakerMessages = const [
-      // 🎯 意識喚起系（5個）- 現在の行動への気づきを促す
-      '今、何をしていますか？',
-      'この5分間で何を達成しましたか？',
-      'スマホを見る時間、タスクに使いませんか？',
-      '今の行動は、本当に必要ですか？',
-      '今この瞬間、何に集中していますか？',
-      
-      // 🚀 目標志向系（4個）- 具体的な目標達成を意識させる
-      '理想の自分に近づいていますか？',
-      '今日のタスク、進んでいますか？',
-      'アルバムの次のトラックを再生しましょう',
-      '夢に近づく行動を始めませんか？',
-      
-      // ⏰ 時間管理系（4個）- 時間の使い方を見直させる
-      'この15分を、どう使いますか？',
-      '限られた時間、大切に使いましょう',
-      '今の時間の使い方、満足ですか？',
-      '時間は戻らない。今を活かしましょう',
-      
-      // 🔄 習慣改善系（4個）- 悪い習慣からの離脱を促す
-      'SNSをやめて、タスクを始めませんか？',
-      'だらだらタイム、終了しませんか？',
-      'スクロールより、成長を選びませんか？',
-      '習慣を変える瞬間は、今です',
-      
-      // ✨ モチベーション系（3個）- 前向きな気持ちを促進
-      '小さな一歩が、大きな変化を生みます',
-      '行動した分だけ、未来が変わります',
-      'あなたならできる。始めてみましょう',
-    ],
+  // 🎯 意識喚起系（5個）- 現在の行動への気づきを促す
+  'What are you doing right now?',
+  'What did you accomplish in the last 5 minutes?',
+  'Use phone time for tasks instead?',
+  'Is this action really necessary?',
+  'What are you focusing on right now?',
+  
+  // 🚀 目標志向系（4個）- 具体的な目標達成を意識させる
+  'Are you moving toward your ideal self?',
+  'Making progress on today\'s tasks?',
+  'Let\'s play the next track',
+  'Start actions toward your dreams?',
+  
+  // ⏰ 時間管理系（4個）- 時間の使い方を見直させる
+  'How will you use these 15 minutes?',
+  'Use your limited time wisely',
+  'Satisfied with how you\'re using time?',
+  'Time won\'t come back. Make the most of now',
+  
+  // 🔄 習慣改善系（4個）- 悪い習慣からの離脱を促す
+  'Stop social media, start tasks?',
+  'End the idle time?',
+  'Choose growth over scrolling?',
+  'Now is the moment to change habits',
+  
+  // ✨ モチベーション系（3個）- 前向きな気持ちを促進
+  'Small steps create big changes',
+  'Your future changes with each action',
+  'You can do it. Let\'s start',
+],
 
     this.sleepScheduleEnabled = true,
   this.bedtimeHour = 10,
@@ -66,8 +66,8 @@ final String wakeUpMessage;
   this.wakeUpMinute = 0,
   this.wakeUpPeriod = 'AM',
   this.enabledDays = const {1, 2, 3, 4, 5, 6, 7},
-  this.bedtimeMessage = 'Time to put your phone away and rest ',
-  this.wakeUpMessage = 'Good morning! Ready to conquer today? ',
+  this.bedtimeMessage = 'Time to put your phone away and rest 🌙',
+  this.wakeUpMessage = 'Good morning! Ready to conquer today? ☀️',
 });
 
 
@@ -96,30 +96,29 @@ final String wakeUpMessage;
       isHabitBreakerEnabled: json['isHabitBreakerEnabled'] ?? false,
       habitBreakerInterval: json['habitBreakerInterval'] ?? 1,
       habitBreakerMessages: json['habitBreakerMessages'] != null
-          ? List<String>.from(json['habitBreakerMessages'])
-          : const [
-              // デフォルトメッセージも新しいリストに更新
-              '今、何をしていますか？',
-              'この5分間で何を達成しましたか？',
-              'スマホを見る時間、タスクに使いませんか？',
-              '今の行動は、本当に必要ですか？',
-              '今この瞬間、何に集中していますか？',
-              '理想の自分に近づいていますか？',
-              '今日のタスク、進んでいますか？',
-              'アルバムの次のトラックを再生しましょう',
-              '夢に近づく行動を始めませんか？',
-              'この15分を、どう使いますか？',
-              '限られた時間、大切に使いましょう',
-              '今の時間の使い方、満足ですか？',
-              '時間は戻らない。今を活かしましょう',
-              'SNSをやめて、タスクを始めませんか？',
-              'だらだらタイム、終了しませんか？',
-              'スクロールより、成長を選びませんか？',
-              '習慣を変える瞬間は、今です',
-              '小さな一歩が、大きな変化を生みます',
-              '行動した分だけ、未来が変わります',
-              'あなたならできる。始めてみましょう',
-            ],
+    ? List<String>.from(json['habitBreakerMessages'])
+    : const [
+        'What are you doing right now?',
+        'What did you accomplish in the last 5 minutes?',
+        'Use phone time for tasks instead?',
+        'Is this action really necessary?',
+        'What are you focusing on right now?',
+        'Are you moving toward your ideal self?',
+        'Making progress on today\'s tasks?',
+        'Let\'s play the next track',
+        'Start actions toward your dreams?',
+        'How will you use these 15 minutes?',
+        'Use your limited time wisely',
+        'Satisfied with how you\'re using time?',
+        'Time won\'t come back. Make the most of now',
+        'Stop social media, start tasks?',
+        'End the idle time?',
+        'Choose growth over scrolling?',
+        'Now is the moment to change habits',
+        'Small steps create big changes',
+        'Your future changes with each action',
+        'You can do it. Let\'s start',
+      ],
             // 🆕 以下を追加
     sleepScheduleEnabled: json['sleepScheduleEnabled'] ?? true,
     bedtimeHour: json['bedtimeHour'] ?? 10,
@@ -131,8 +130,8 @@ final String wakeUpMessage;
     enabledDays: json['enabledDays'] != null
         ? Set<int>.from(json['enabledDays'])
         : const {1, 2, 3, 4, 5, 6, 7},
-    bedtimeMessage: json['bedtimeMessage'] ?? 'Time to put your phone away and rest ',
-    wakeUpMessage: json['wakeUpMessage'] ?? 'Good morning! Ready to conquer today? ',
+    bedtimeMessage: json['bedtimeMessage'] ?? 'Time to put your phone away and rest 🌙',
+    wakeUpMessage: json['wakeUpMessage'] ?? 'Good morning! Ready to conquer today? ☀️',
     );
   }
 

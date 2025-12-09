@@ -4,6 +4,7 @@ import 'task_completion_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';  // 新規追加
 import 'dart:convert';  // 新規追加
 
+
 class ChartsService {
   final TaskCompletionService _taskCompletionService = TaskCompletionService();
   

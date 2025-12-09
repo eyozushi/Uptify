@@ -81,6 +81,10 @@ flutter:
     - assets/sounds/task_completed.mp3
     - assets/sounds/achievement.mp3
     - assets/sounds/notification.mp3
+    - assets/sounds/crowd_cheer.mp3
+
+    - assets/app_icon.png
+
 
     - assets/videos/
 

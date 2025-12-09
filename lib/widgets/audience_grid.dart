@@ -715,14 +715,19 @@ List<_StaticFan> _generateAudienceRowCentered(
       ..strokeWidth = math.max(2.0, size * 0.15)
       ..strokeCap = StrokeCap.round;
 
-    final scale = size / 14;
+    // 頭用の塗りつぶしペイント
+    final fillPaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+
+    final scale = size / 20;
     
-    // 頭
+    // 頭（塗りつぶし）
     final headRadius = 2.2 * scale;
     canvas.drawCircle(
       Offset(x, y - 5 * scale),
       headRadius,
-      paint,
+      fillPaint,  // fillPaintを使用
     );
     
     // 体

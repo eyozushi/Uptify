@@ -170,6 +170,9 @@ bool _isDragging = false;
   int _currentIndex = 0;
   
   late AnimationController _slideController;
+  late AnimationController _progressAnimationController;
+late Animation<double> _progressAnimation;
+double _lastProgressValue = 0.0;
   late Animation<Offset> _slideAnimation;
 
   bool _isAutoPlayEnabled = false;
@@ -338,7 +341,7 @@ void didUpdateWidget(PlayerScreen oldWidget) {
     
     setState(() {
       _currentIndex = newPageIndex;
-      _dragDistance = 0.0; // 🔧 追加
+      _dragDistance = 0.0;
     });
     
     Future.delayed(const Duration(milliseconds: 100), () {
@@ -412,6 +415,20 @@ void didUpdateWidget(PlayerScreen oldWidget) {
         _autoPlayController.reverse();
       }
     }
+
+    // 🔧 修正: 進捗アニメーションの更新（リセット時は即座に0.0）
+    if (widget.initialProgress != null && 
+        widget.initialProgress != oldWidget.initialProgress) {
+      if (widget.initialProgress! == 0.0) {
+        // リセット時は即座に0.0にする（アニメーションなし）
+        _progressAnimationController.stop();
+        _progressAnimation = AlwaysStoppedAnimation<double>(0.0);
+        _lastProgressValue = 0.0;
+      } else {
+        // 通常時はアニメーション
+        _animateProgress(widget.initialProgress!);
+      }
+    }
     
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -420,6 +437,28 @@ void didUpdateWidget(PlayerScreen oldWidget) {
     });
   }
 }
+
+// 🆕 新規追加: 進捗バーをアニメーションさせる
+void _animateProgress(double targetProgress) {
+  if (!mounted) return;
+  
+  final currentValue = _progressAnimation.value;
+  
+  _progressAnimation = Tween<double>(
+    begin: currentValue,
+    end: targetProgress,
+  ).animate(CurvedAnimation(
+    parent: _progressAnimationController,
+    curve: Curves.linear,
+  ));
+  
+  _progressAnimationController.forward(from: 0.0);
+  _lastProgressValue = targetProgress;
+}
+
+
+
+
 
 void _handleSwipeStart(DragStartDetails details) {
   _isDragging = true;
@@ -578,7 +617,6 @@ void _resetPosition() {
     curve: Curves.easeInOut,
   ));
 
-  // 自動再生ボタンのアニメーション設定
   _autoPlayController = AnimationController(
     duration: const Duration(milliseconds: 300),
     vsync: this,
@@ -600,7 +638,6 @@ void _resetPosition() {
     curve: Curves.easeInOut,
   ));
   
-  // 🔧 追加：スワイプアニメーション
   _swipeController = AnimationController(
     duration: const Duration(milliseconds: 300),
     vsync: this,
@@ -615,8 +652,23 @@ void _resetPosition() {
   ))..addListener(() {
     setState(() {});
   });
-}
 
+  // 🆕 追加: 進捗バーアニメーション
+  _progressAnimationController = AnimationController(
+    duration: const Duration(milliseconds: 1000),
+    vsync: this,
+  );
+
+  _progressAnimation = Tween<double>(
+    begin: 0.0,
+    end: 0.0,
+  ).animate(CurvedAnimation(
+    parent: _progressAnimationController,
+    curve: Curves.linear,
+  ))..addListener(() {
+    setState(() {});
+  });
+}
 
 
   Future<void> _loadAdditionalData() async {
@@ -808,6 +860,7 @@ void dispose() {
   _autoPlayController.dispose();
   _swipeController.dispose();
   _contentScrollController.dispose(); // 🔧 追加
+  _progressAnimationController.dispose(); 
   _audioService.dispose();
   super.dispose();
 }
@@ -908,23 +961,29 @@ void _toggleAutoPlay() {
 
   // 🔧 修正: 進捗リセット処理（MainWrapperに通知）
   void _resetProgressOnly() {
+  // 🔧 修正: アニメーションを完全停止
+  _progressAnimationController.stop();
+  _progressAnimationController.value = 0.0;
+  
+  // 🔧 修正: アニメーションを0.0で再構築
+  _progressAnimation = AlwaysStoppedAnimation<double>(0.0);
+  _lastProgressValue = 0.0;
+  
   setState(() {
     _elapsedSeconds = 0;
     _currentProgress = 0.0;
     _isPlaying = false;
-    _isAutoPlayEnabled = false; // 🔧 修正：自動再生もリセット
+    _isAutoPlayEnabled = false;
   });
   
-  // 🔧 修正：自動再生アニメーションもリセット
   _autoPlayController.reverse();
   
-  // MainWrapperに状態リセットを通知
   if (widget.onStateChanged != null) {
     widget.onStateChanged!(
       isPlaying: false,
       progress: 0.0,
       elapsedSeconds: 0,
-      isAutoPlayEnabled: false, // 🔧 修正：自動再生リセットも通知
+      isAutoPlayEnabled: false,
     );
   }
   
@@ -1057,11 +1116,8 @@ Future<void> _recordNewTaskCompletion() async {
     const totalMinutesInDay = 24 * 60;
     return (totalMinutes / totalMinutesInDay).clamp(0.0, 1.0);
   } else {
-    // 🔧 修正: 常に最新値を使用し、ログ出力で確認
-    final progress = widget.initialProgress ?? _currentProgress;
-    final finalProgress = progress.clamp(0.0, 1.0);
-    print('🔧 PlayerScreen進捗計算: widget=${widget.initialProgress}, local=$_currentProgress, final=$finalProgress');
-    return finalProgress;
+    // 🔧 修正: アニメーション値を使用
+    return _progressAnimation.value.clamp(0.0, 1.0);
   }
 }
 
@@ -1123,21 +1179,21 @@ Widget build(BuildContext context) {
       height: MediaQuery.of(context).size.height,
       width: MediaQuery.of(context).size.width,
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Color.lerp(_dominantColor, Colors.black, 0.3)!,
-            Color.lerp(_dominantColor, Colors.black, 0.5)!,
-            Colors.black,
-          ],
-          stops: const [0.0, 0.6, 1.0],
-        ),
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(16),
-          topRight: Radius.circular(16),
-        ),
-      ),
+  gradient: LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [
+      Color.lerp(_dominantColor, Colors.black, 0.4)!,  // 🔧 0.3 → 0.2 に変更
+      Color.lerp(_dominantColor, Colors.black, 0.5)!, // 🔧 0.5 → 0.35 に変更
+      Color.lerp(_dominantColor, Colors.black, 0.7)!,  // 🔧 Colors.black → 0.5 に変更
+    ],
+    stops: const [0.0, 0.5, 1.0],  // 🔧 [0.0, 0.6, 1.0] → [0.0, 0.5, 1.0] に変更
+  ),
+  borderRadius: const BorderRadius.only(
+    topLeft: Radius.circular(16),
+    topRight: Radius.circular(16),
+  ),
+),
       child: Column(
         children: [
           SizedBox(height: MediaQuery.of(context).padding.top + 10),
@@ -1419,7 +1475,7 @@ Widget _buildDefaultAlbumCover(double size, {required bool isSingle}) {
           ),
           const SizedBox(height: 16),
           Text(
-            isSingle ? 'アルバム' : 'Ideal Self',
+            isSingle ? 'Album' : 'Ideal Self',
             style: const TextStyle(
               color: Colors.white,
               fontSize: 16,
@@ -2039,6 +2095,9 @@ class _AutoScrollTextState extends State<AutoScrollText> with SingleTickerProvid
       });
     }
   }
+
+  
+  
 
   void _calculateTextWidth() {
     final textPainter = TextPainter(

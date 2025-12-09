@@ -1,5 +1,6 @@
 // charts_screen.dart - シンプル化版
 import 'package:flutter/material.dart';
+import 'package:audioplayers/audioplayers.dart'; 
 import 'dart:async';
 import 'dart:typed_data';  // 新規追加
 import '../services/charts_service.dart';
@@ -9,6 +10,7 @@ import '../models/concert_data.dart';
 import '../widgets/concert_stage.dart';
 import '../widgets/performer_widget.dart';
 import '../widgets/audience_grid.dart';
+
 
 
 // ファン入場データモデル
@@ -51,6 +53,7 @@ class ChartsScreen extends StatefulWidget {
 class _ChartsScreenState extends State<ChartsScreen> {
   late final ChartsService _chartsService;
   late final TaskCompletionService _taskCompletionService;
+  late final AudioPlayer _audioPlayer;
   FanEntranceData? _fanData;
   bool _isLoading = true;
   String _errorMessage = '';
@@ -58,14 +61,22 @@ class _ChartsScreenState extends State<ChartsScreen> {
   int _lastKnownTaskCount = 0;
   Uint8List? _userImageBytes; 
   int _enteringFansCount = 0;
+  
 
   @override
 void initState() {
   super.initState();
   _chartsService = ChartsService();
   _taskCompletionService = TaskCompletionService();
+  _audioPlayer = AudioPlayer();
   _loadConcertData();
   _startTaskMonitoring();
+}
+
+@override
+void dispose() {
+  _audioPlayer.dispose();
+  super.dispose();
 }
 
 // ユーザーの顔写真を読み込み
@@ -170,15 +181,16 @@ Future<void> _handleFanEntrance() async {
   
   final enteringFans = _fanData!.stockedFans;
   
+  // 効果音を再生（追加）
+  _audioPlayer.play(AssetSource('sounds/crowd_cheer.mp3'));
+  
   setState(() {
     _isEntering = true;
-    _enteringFansCount = enteringFans;  // 入場人数を設定
+    _enteringFansCount = enteringFans;
   });
   
-  // アニメーション完了を待つ（3秒 + バッファ）
   await Future.delayed(const Duration(milliseconds: 3200));
   
-  // アニメーション完了後にデータベースを更新
   await _chartsService.addAudienceMembers(enteringFans);
   
   if (mounted) {
@@ -187,7 +199,7 @@ Future<void> _handleFanEntrance() async {
         currentAudience: _fanData!.currentAudience + enteringFans,
         stockedFans: 0,
       );
-      _enteringFansCount = 0;  // リセット
+      _enteringFansCount = 0;
       _isEntering = false;
     });
   }

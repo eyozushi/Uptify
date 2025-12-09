@@ -64,7 +64,7 @@ class CompletionDialog extends StatelessWidget {
             
             // タスク名
             Text(
-              '「${task.title}」',
+              '\"${task.title}\"',
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 18,

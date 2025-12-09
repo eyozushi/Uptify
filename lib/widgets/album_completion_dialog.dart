@@ -36,7 +36,7 @@ class AlbumCompletionDialog extends StatelessWidget {
             ),
             const SizedBox(height: 20),
             Text(
-              'アルバム完了！',
+              'Album Complete!',
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 24,
