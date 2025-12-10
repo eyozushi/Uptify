@@ -223,10 +223,8 @@ void _initializeStaticPositions() {
       : 0;
   
   for (int i = 0; i < audienceInThisRow; i++) {
-  // 🔧 修正: 中央から順番に左右交互に配置
-  // 0番目=中央、1番目=中央の左隣、2番目=中央の右隣、3番目=さらに左、4番目=さらに右...
-  
-  final stepSize = 5.0;  // 固定間隔
+  // 🔧 修正: 間隔を広げる
+  final stepSize = 8.0;  // 変更: 5.0 → 8.0
   
   double x;
   if (i == 0) {
@@ -234,8 +232,8 @@ void _initializeStaticPositions() {
     x = stageCenter;
   } else {
     // 2人目以降は左右交互
-    final isLeft = i % 2 == 1;  // 奇数番目は左
-    final distanceStep = (i + 1) ~/ 2;  // 中央からの距離
+    final isLeft = i % 2 == 1;
+    final distanceStep = (i + 1) ~/ 2;
     final side = isLeft ? -1 : 1;
     x = stageCenter + (side * distanceStep * stepSize);
   }
@@ -356,8 +354,8 @@ void _initializeStaticPositions() {
 for (int i = 0; i < newInThisRow; i++) {
   final globalIndex = existingInThisRow + i;
   
-  // 🔧 修正: 中央から順番に左右交互に配置
-  final stepSize = 5.0;
+  // 🔧 修正: 間隔を広げる
+  final stepSize = 8.0;  // 変更: 5.0 → 8.0
   
   double x;
   if (globalIndex == 0) {
@@ -471,54 +469,50 @@ class _AudiencePainter extends CustomPainter {
   final List<_StaticFan> confirmedPositions;  // 新規追加
   
   static const List<Color> _audienceColors = [
-    // 淡い色（パステル系）
-    Color(0xFFFFB3BA), // 淡いピンク
-    Color(0xFFFFDFBA), // 淡いオレンジ
-    Color(0xFFFFFFBA), // 淡い黄色
-    Color(0xFFBAFFC9), // 淡い緑
-    Color(0xFFBAE1FF), // 淡い青
-    Color(0xFFE1BAFF), // 淡い紫
-    Color(0xFFFFC9DE), // 淡いローズ
-    Color(0xFFC9E1FF), // 淡い水色
-    
-    // 中間色
-    Color(0xFF87CEEB), // スカイブルー
-    Color(0xFFDDA0DD), // プラム
-    Color(0xFF98FB98), // ライトグリーン
-    Color(0xFFF0E68C), // カーキ
-    Color(0xFFFFB6C1), // ライトピンク
-    Color(0xFFD3D3D3), // ライトグレー
-    Color(0xFFFFA07A), // ライトサーモン
-    Color(0xFF20B2AA), // ライトシーグリーン
-    
-    // 明るい色
-    Color(0xFF00CED1), // ターコイズ
-    Color(0xFFFF69B4), // ホットピンク
-    Color(0xFF32CD32), // ライムグリーン
-    Color(0xFFFFD700), // ゴールド
-    Color(0xFF40E0D0), // ターコイズ
-    Color(0xFFFF6347), // トマト
-    Color(0xFF9370DB), // ミディアムパープル
-    Color(0xFF00FA9A), // ミディアムスプリンググリーン
-    
-    // 濃い色
-    Color(0xFF4169E1), // ロイヤルブルー
-    Color(0xFF8B008B), // ダークマゼンタ
-    Color(0xFF228B22), // フォレストグリーン
-    Color(0xFFB22222), // ファイアブリック
-    Color(0xFF4B0082), // インディゴ
-    Color(0xFF800080), // パープル
-    Color(0xFF008B8B), // ダークシアン
-    Color(0xFFFF8C00), // ダークオレンジ
-    
-    // 白とグレー系
-    Color(0xFFFFFFFF), // 白
-    Color(0xFFF5F5F5), // ホワイトスモーク
-    Color(0xFFDCDCDC), // ガインズボロ
-    Color(0xFFC0C0C0), // シルバー
-    Color(0xFFA9A9A9), // ダークグレー
-    Color(0xFF696969), // ディムグレー
-  ];
+  // 落ち着いた暖色系
+  Color(0xFFEF5350), // ソフトレッド
+  Color(0xFFFF7043), // ソフトオレンジ
+  Color(0xFFFFCA28), // ソフトイエロー
+  Color(0xFFEC407A), // ソフトピンク
+  Color(0xFFFFB74D), // ソフトアンバー
+  
+  // 落ち着いた寒色系
+  Color(0xFF42A5F5), // ソフトブルー
+  Color(0xFF5C6BC0), // ソフトインディゴ
+  Color(0xFF7E57C2), // ソフトパープル
+  Color(0xFFAB47BC), // ソフトマゼンタ
+  Color(0xFF26C6DA), // ソフトシアン
+  
+  // 落ち着いた緑系
+  Color(0xFF66BB6A), // ソフトグリーン
+  Color(0xFF26A69A), // ソフトティール
+  Color(0xFF9CCC65), // ソフトライム
+  Color(0xFF78909C), // ブルーグレー
+  
+  // 中間トーン
+  Color(0xFFEF5350), // コーラル
+  Color(0xFFF06292), // ローズ
+  Color(0xFFBA68C8), // ラベンダー
+  Color(0xFF9575CD), // ライトパープル
+  Color(0xFF64B5F6), // スカイブルー
+  Color(0xFF4DD0E1), // アクア
+  Color(0xFF4DB6AC), // ターコイズ
+  Color(0xFF81C784), // ミントグリーン
+  
+  // 明るめのニュートラル
+  Color(0xFFFFB74D), // ピーチ
+  Color(0xFFFFD54F), // サンシャイン
+  Color(0xFFDCE775), // ライム
+  Color(0xFFAED581), // リーフグリーン
+  Color(0xFFA1887F), // ブラウン
+  Color(0xFF90A4AE), // グレイブルー
+  
+  // 明るい色（控えめ）
+  Color(0xFFFFFFFF), // 白
+  Color(0xFFF5F5F5), // オフホワイト
+  Color(0xFFEEEEEE), // ライトグレー
+  Color(0xFFE0E0E0), // シルバー
+];
   
   _AudiencePainter({
     required this.staticAudienceCount,
@@ -709,62 +703,62 @@ List<_StaticFan> _generateAudienceRowCentered(
   
   
   void _drawStickFigureAudience(Canvas canvas, double x, double y, double size, Color color) {
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = math.max(2.0, size * 0.15)
-      ..strokeCap = StrokeCap.round;
+  final paint = Paint()
+    ..color = color
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = math.max(2.0, size * 0.15)
+    ..strokeCap = StrokeCap.round;
 
-    // 頭用の塗りつぶしペイント
-    final fillPaint = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill;
+  // 頭用の塗りつぶしペイント
+  final fillPaint = Paint()
+    ..color = color
+    ..style = PaintingStyle.fill;
 
-    final scale = size / 20;
-    
-    // 頭（塗りつぶし）
-    final headRadius = 2.2 * scale;
-    canvas.drawCircle(
-      Offset(x, y - 5 * scale),
-      headRadius,
-      fillPaint,  // fillPaintを使用
-    );
-    
-    // 体
-    canvas.drawLine(
-      Offset(x, y - 3 * scale),
-      Offset(x, y + 4 * scale),
-      paint,
-    );
-    
-    // 左腕
-    canvas.drawLine(
-      Offset(x, y - 1 * scale),
-      Offset(x - 2.5 * scale, y + 1.5 * scale),
-      paint,
-    );
-    
-    // 右腕
-    canvas.drawLine(
-      Offset(x, y - 1 * scale),
-      Offset(x + 2.5 * scale, y + 1.5 * scale),
-      paint,
-    );
-    
-    // 左脚
-    canvas.drawLine(
-      Offset(x, y + 4 * scale),
-      Offset(x - 2 * scale, y + 8 * scale),
-      paint,
-    );
-    
-    // 右脚
-    canvas.drawLine(
-      Offset(x, y + 4 * scale),
-      Offset(x + 2 * scale, y + 8 * scale),
-      paint,
-    );
-  }
+  final scale = (size * 1.5) / 20;  // 🔧 修正: size / 20 → (size * 1.15) / 20（全体を15%拡大）
+  
+  // 頭（塗りつぶし）
+  final headRadius = 3 * scale;  // 🔧 修正: 2.2 → 2.8（頭を約27%拡大）
+  canvas.drawCircle(
+    Offset(x, y - 5 * scale),
+    headRadius,
+    fillPaint,
+  );
+  
+  // 体
+  canvas.drawLine(
+    Offset(x, y - 3 * scale),
+    Offset(x, y + 4 * scale),
+    paint,
+  );
+  
+  // 左腕
+  canvas.drawLine(
+    Offset(x, y - 1 * scale),
+    Offset(x - 2.5 * scale, y + 1.5 * scale),
+    paint,
+  );
+  
+  // 右腕
+  canvas.drawLine(
+    Offset(x, y - 1 * scale),
+    Offset(x + 2.5 * scale, y + 1.5 * scale),
+    paint,
+  );
+  
+  // 左脚
+  canvas.drawLine(
+    Offset(x, y + 4 * scale),
+    Offset(x - 2 * scale, y + 8 * scale),
+    paint,
+  );
+  
+  // 右脚
+  canvas.drawLine(
+    Offset(x, y + 4 * scale),
+    Offset(x + 2 * scale, y + 8 * scale),
+    paint,
+  );
+}
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => true;

@@ -65,7 +65,7 @@ Widget build(BuildContext context) {
   final totalHeight = widget.height;
   final totalWidth = widget.width;
   
-  final screenTop = totalHeight * 0.05;
+  final screenTop = totalHeight * 0.15;
   final screenHeight = totalHeight * 0.25;
   final screenWidth = totalWidth * 0.8;
   final screenTopWidth = screenWidth * 1.1;
@@ -110,13 +110,13 @@ Widget _buildCircularUserImage() {
   final totalHeight = widget.height;
   final totalWidth = widget.width;
   
-  final screenTop = totalHeight * 0.05;
+  final screenTop = totalHeight * 0.15;
   final screenHeight = totalHeight * 0.25;
   
   // 円のサイズと位置
   final circleSize = screenHeight * 0.3;
   final circleTop = screenTop + (screenHeight / 2) - (circleSize / 2) - (screenHeight * 0.3);  // 修正: 上に移動
-  final circleLeft = (totalWidth / 2) - (circleSize / 2) - (totalWidth * 0.035);  // 修正: 左に移動
+  final circleLeft = (totalWidth / 2) - (circleSize / 2) - (totalWidth * 0.045);  // 修正: 左に移動
   
   return Positioned(
     top: circleTop,
@@ -168,111 +168,105 @@ class TrapezoidClipper extends CustomClipper<Path> {
 
 class _StagePainter extends CustomPainter {
   @override
-  void paint(Canvas canvas, Size size) {
-    final screenTop = size.height * 0.05;
-    final screenHeight = size.height * 0.25;
-    final stageTop = screenTop + screenHeight;
-    final stageHeight = size.height * 0.04;
-    final baseTop = stageTop + stageHeight;
-    final baseHeight = size.height * 0.03;
-    final baseBottom = baseTop + baseHeight;
-    
-    // 青空の背景
-    final skyThreshold = screenTop + (screenHeight * 2 / 3);
-    final skyPaint = Paint()
-      ..color = const Color(0xFF87CEEB)
-      ..style = PaintingStyle.fill;
-    
-    final skyRect = Rect.fromLTWH(0, 0, size.width, skyThreshold);
-    canvas.drawRect(skyRect, skyPaint);
-    
-    // 芝生背景のグラデーション
-    final grassGradient = LinearGradient(
-      begin: Alignment.topCenter,
-      end: Alignment.bottomCenter,
-      colors: [
-        const Color(0xFF0F4A14),
-        const Color(0xFF1B5E20),
-        const Color(0xFF2E7D32),
-      ],
-      stops: const [0.0, 0.6, 1.0],
-    );
-    
-    final grassRect = Rect.fromLTWH(0, skyThreshold, size.width, baseBottom - skyThreshold);
-    final grassPaint = Paint()
-      ..shader = grassGradient.createShader(grassRect);
-    
-    canvas.drawRect(grassRect, grassPaint);
-    
-    // 一番下の台形より下の部分のグラデーション
-    final bottomGrassGradient = LinearGradient(
-      begin: Alignment.topCenter,
-      end: Alignment.bottomCenter,
-      colors: [
-        const Color(0xFF2E7D32),
-        const Color(0xFF4CAF50),
-      ],
-      stops: const [0.0, 1.0],
-    );
-    
-    final bottomGrassRect = Rect.fromLTWH(0, baseBottom, size.width, size.height - baseBottom);
-    final bottomGrassPaint = Paint()
-      ..shader = bottomGrassGradient.createShader(bottomGrassRect);
-    
-    canvas.drawRect(bottomGrassRect, bottomGrassPaint);
-    
-    // スクリーンの枠のみ描画（中身は動画で埋める）
-    final screenWidth = size.width * 0.8;
-    final screenTopWidth = screenWidth * 1.1;
-    final screenBottomWidth = screenWidth * 1.0;
-    
-    final screenPath = Path();
-    screenPath.moveTo((size.width - screenTopWidth) / 2, screenTop);
-    screenPath.lineTo((size.width + screenTopWidth) / 2, screenTop);
-    screenPath.lineTo((size.width + screenBottomWidth) / 2, screenTop + screenHeight);
-    screenPath.lineTo((size.width - screenBottomWidth) / 2, screenTop + screenHeight);
-    screenPath.close();
-    
-    
+void paint(Canvas canvas, Size size) {
+  final screenTop = size.height * 0.15;
+  final screenHeight = size.height * 0.25;
+  final stageTop = screenTop + screenHeight;
+  final stageHeight = size.height * 0.04;
+  final baseTop = stageTop + stageHeight;
+  final baseHeight = size.height * 0.03;
+  final baseBottom = baseTop + baseHeight;
+  
+  // 🔧 修正: 青空を短くする（skyThresholdを上に移動）
+  final skyThreshold = screenTop + (screenHeight * 0.9);  // 変更: stageTop → screenTop + (screenHeight * 0.4)
+  final skyPaint = Paint()
+    ..color = const Color(0xFF87CEEB)
+    ..style = PaintingStyle.fill;
+  
+  final skyRect = Rect.fromLTWH(0, 0, size.width, skyThreshold);
+  canvas.drawRect(skyRect, skyPaint);
+  
+  // 🔧 修正: 芝生をskyThresholdから開始（上に伸びる）
+  final grassGradient = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [
+      const Color(0xFF0F4A14),
+      const Color(0xFF1B5E20),
+      const Color(0xFF2E7D32),
+    ],
+    stops: const [0.0, 0.6, 1.0],
+  );
+  
+  final grassRect = Rect.fromLTWH(0, skyThreshold, size.width, baseBottom - skyThreshold);
+  final grassPaint = Paint()
+    ..shader = grassGradient.createShader(grassRect);
+  
+  canvas.drawRect(grassRect, grassPaint);
+  
+  // 下の芝生グラデーション
+  final bottomGrassGradient = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [
+      const Color(0xFF2E7D32),
+      const Color(0xFF4CAF50),
+    ],
+    stops: const [0.0, 1.0],
+  );
+  
+  final bottomGrassRect = Rect.fromLTWH(0, baseBottom, size.width, size.height - baseBottom);
+  final bottomGrassPaint = Paint()
+    ..shader = bottomGrassGradient.createShader(bottomGrassRect);
+  
+  canvas.drawRect(bottomGrassRect, bottomGrassPaint);
+  
+  // スクリーンの枠のみ描画
+  final screenWidth = size.width * 0.8;
+  final screenTopWidth = screenWidth * 1.1;
+  final screenBottomWidth = screenWidth * 1.0;
+  
+  final screenPath = Path();
+  screenPath.moveTo((size.width - screenTopWidth) / 2, screenTop);
+  screenPath.lineTo((size.width + screenTopWidth) / 2, screenTop);
+  screenPath.lineTo((size.width + screenBottomWidth) / 2, screenTop + screenHeight);
+  screenPath.lineTo((size.width - screenBottomWidth) / 2, screenTop + screenHeight);
+  screenPath.close();
 
-    // ステージ本体
-    final stagePaint = Paint()
-      ..color = Colors.grey[700]!
-      ..style = PaintingStyle.fill;
-      
+  // ステージ本体
+  final stagePaint = Paint()
+    ..color = Colors.grey[700]!
+    ..style = PaintingStyle.fill;
 
+  final stageTopWidth = screenBottomWidth;
+  final stageBottomWidth = size.width * 0.95;
+  
+  final stagePath = Path();
+  stagePath.moveTo((size.width - stageTopWidth) / 2, stageTop);
+  stagePath.lineTo((size.width + stageTopWidth) / 2, stageTop);
+  stagePath.lineTo((size.width + stageBottomWidth) / 2, stageTop + stageHeight);
+  stagePath.lineTo((size.width - stageBottomWidth) / 2, stageTop + stageHeight);
+  stagePath.close();
+  
+  canvas.drawPath(stagePath, stagePaint);
 
-    final stageTopWidth = screenBottomWidth;
-    final stageBottomWidth = size.width * 0.95;
-    
-    final stagePath = Path();
-    stagePath.moveTo((size.width - stageTopWidth) / 2, stageTop);
-    stagePath.lineTo((size.width + stageTopWidth) / 2, stageTop);
-    stagePath.lineTo((size.width + stageBottomWidth) / 2, stageTop + stageHeight);
-    stagePath.lineTo((size.width - stageBottomWidth) / 2, stageTop + stageHeight);
-    stagePath.close();
-    
-    canvas.drawPath(stagePath, stagePaint);
+  // ステージの台座
+  final basePaint = Paint()
+    ..color = Colors.grey[800]!
+    ..style = PaintingStyle.fill;
 
-    
-    // ステージの台座
-    final basePaint = Paint()
-      ..color = Colors.grey[800]!
-      ..style = PaintingStyle.fill;
-      
-
-    final baseTopWidth = stageBottomWidth;
-    final baseBottomWidth = size.width * 0.9;
-    
-    final basePath = Path();
-    basePath.moveTo((size.width - baseTopWidth) / 2, baseTop);
-    basePath.lineTo((size.width + baseTopWidth) / 2, baseTop);
-    basePath.lineTo((size.width + baseBottomWidth) / 2, baseTop + baseHeight);
-    basePath.lineTo((size.width - baseBottomWidth) / 2, baseTop + baseHeight);
-    basePath.close();
-    
-    canvas.drawPath(basePath, basePaint);
-  }
+  final baseTopWidth = stageBottomWidth;
+  final baseBottomWidth = size.width * 0.9;
+  
+  final basePath = Path();
+  basePath.moveTo((size.width - baseTopWidth) / 2, baseTop);
+  basePath.lineTo((size.width + baseTopWidth) / 2, baseTop);
+  basePath.lineTo((size.width + baseBottomWidth) / 2, baseTop + baseHeight);
+  basePath.lineTo((size.width - baseBottomWidth) / 2, baseTop + baseHeight);
+  basePath.close();
+  
+  canvas.drawPath(basePath, basePaint);
+}
 
   @override
   bool shouldRepaint(CustomPainter oldDelegate) => false;

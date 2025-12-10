@@ -208,111 +208,187 @@ Future<void> _handleFanEntrance() async {
 }
 
   @override
-  Widget build(BuildContext context) {
+Widget build(BuildContext context) {
+  if (_isLoading) {
     return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
+      backgroundColor: Colors.black,
+      body: const Center(
+        child: CircularProgressIndicator(
+          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+        ),
+      ),
+    );
+  }
+
+  if (_errorMessage.isNotEmpty) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Center(
         child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // ヘッダー
-            Container(
-              height: 60,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Your Concert',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 32,
-            letterSpacing: -0.5,
-                      fontWeight: FontWeight.w900,
-                      fontFamily: 'Hiragino Sans',
-                    ),
-                  ),
-                  if (widget.onClose != null)
-                    GestureDetector(
-                      onTap: widget.onClose,
-                      child: Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.1),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.close,
-                          color: Colors.white,
-                          size: 24,
-                        ),
-                      ),
-                    ),
-                ],
+            Text(
+              _errorMessage,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontFamily: 'Hiragino Sans',
               ),
             ),
-            
-            const SizedBox(height: 20),
-            
-            // コンサート会場表示（適切なサイズに調整）
-            Container(
-              width: double.infinity,
-              height: 475, 
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: _buildStageContent(),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: _loadConcertData,
+              child: const Text('再試行'),
             ),
-            
-            const SizedBox(height: 12),
-            
-            // 3つの情報をコンパクトな横並びで表示
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-              
-              ),
-              child: Row(
-                children: [
-                  // 新規ファン数
-                  _buildCompactInfo(
-                    icon: Icons.group_add,
-                    label: 'New',
-                    value: '${_fanData?.stockedFans ?? 0}',
-                    color: const Color(0xFF1DB954),
-                  ),
-                  
-                  const SizedBox(width: 16),
-                  
-                  // 入場ボタン
-                  Expanded(
-                    child: _buildCompactEntranceButton(),
-                  ),
-                  
-                  const SizedBox(width: 16),
-                  
-                  // 会場の人数
-                  _buildCompactInfo(
-                    icon: Icons.people,
-                    label: 'Venue',
-                    value: _isLoading 
-                      ? '...' 
-                      : '${_fanData?.currentAudience ?? 0}',
-                    color: const Color(0xFF1DB954),
-                  ),
-                ],
-              ),
-            ),
-            
-            SizedBox(height: MediaQuery.of(context).padding.bottom + 5),
           ],
         ),
       ),
     );
   }
+
+  final audienceCount = _fanData?.currentAudience ?? 0;
+
+  return Scaffold(
+    backgroundColor: Colors.black,
+    body: ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: Stack(
+        children: [
+          // 背景レイヤー: コンサートステージ全画面表示
+          Positioned.fill(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final totalHeight = constraints.maxHeight;
+                final screenHeight = totalHeight * 0.25;
+                final screenTop = totalHeight * 0.15;
+                final stageTop = screenTop + screenHeight;
+                final stageHeight = totalHeight * 0.04;
+                final performerY = stageTop + (stageHeight / 2);
+                
+                return Stack(
+                  children: [
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.black,
+                      ),
+                    ),
+                    Positioned.fill(
+                      child: ConcertStage(
+                        width: constraints.maxWidth,
+                        height: totalHeight,
+                        imageAssetPath: 'assets/images/artistpic.png',
+                        userImageBytes: _userImageBytes,
+                      ),
+                    ),
+                    Positioned.fill(
+                      child: AudienceGrid(
+                        audienceCount: audienceCount,
+                        width: constraints.maxWidth,
+                        height: totalHeight,
+                        stageHeight: stageTop + stageHeight + (totalHeight * 0.03),
+                        enteringFansCount: _enteringFansCount,
+                      ),
+                    ),
+                    Positioned(
+                      top: performerY - 15,
+                      left: constraints.maxWidth * 0.47,
+                      child: const PerformerWidget(
+                        size: 20,
+                        color: Color(0xFF1DB954),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+          
+          // 前面レイヤー: UI要素
+          Column(
+            children: [
+              // ヘッダー
+              Container(
+                height: 60,
+                margin: const EdgeInsets.only(top: 20),
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    const Text(
+                      'Your Concert',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 32,
+                        letterSpacing: -0.5,
+                        fontWeight: FontWeight.w900,
+                        fontFamily: 'Hiragino Sans',
+                      ),
+                    ),
+                    if (widget.onClose != null)
+                      GestureDetector(
+                        onTap: widget.onClose,
+                        child: Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.1),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.close,
+                            color: Colors.white,
+                            size: 24,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              
+              const Spacer(),
+              
+              // 下部の情報パネル
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[800]!.withOpacity(0.5),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      _buildCompactInfo(
+                        icon: Icons.group_add,
+                        label: 'New',
+                        value: '${_fanData?.stockedFans ?? 0}',
+                        color: const Color(0xFF1DB954),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: _buildCompactEntranceButton(),
+                      ),
+                      const SizedBox(width: 16),
+                      _buildCompactInfo(
+                        icon: Icons.people,
+                        label: 'Venue',
+                        value: _isLoading 
+                          ? '...' 
+                          : '${_fanData?.currentAudience ?? 0}',
+                        color: const Color(0xFF1DB954),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    ),
+  );
+}
 
   Widget _buildStageContent() {
     if (_isLoading) {
@@ -350,12 +426,16 @@ Future<void> _handleFanEntrance() async {
 
     return Stack(
       children: [
-        Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            color: Colors.black,
-          ),
-        ),
+        // コンサート会場表示（適切なサイズに調整）
+Container(
+  width: double.infinity,
+  height: 475,  // 🔧 修正: 475 → 600（固定値で大きく）
+  decoration: BoxDecoration(
+    color: Colors.white.withOpacity(0.1),
+    borderRadius: BorderRadius.circular(16),
+  ),
+  child: _buildStageContent(),
+),
         Positioned.fill(
           child: _buildConcertScene(audienceCount),
         ),
