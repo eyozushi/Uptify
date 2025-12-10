@@ -119,18 +119,18 @@ class _ActionsSetupScreenState extends State<ActionsSetupScreen>
   }
 
   void _onNextPressed() {
-    final actions = _controllers
-        .map((controller) => controller.text.trim())
-        .where((text) => text.isNotEmpty)
-        .toList();
-    
-    if (actions.length >= 1) {
-      HapticFeedback.lightImpact();
-      widget.onNext(actions);
-    } else {
-      _showValidationMessage();
-    }
+  final actions = _controllers
+      .map((controller) => controller.text.trim())
+      .where((text) => text.isNotEmpty)
+      .toList();
+  
+  if (actions.length >= 1) {
+    HapticFeedback.lightImpact();
+    widget.onNext(actions);
+  } else {
+    _showValidationMessage();
   }
+}
 
   void _showValidationMessage() {
     ScaffoldMessenger.of(context).showSnackBar(

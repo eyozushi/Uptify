@@ -132,29 +132,41 @@ Future<void> _previousStep() async {
 
   // Step 1: アーティスト名入力のコールバック（顔写真も含む）
   Future<void> _onArtistNameNext(String artistName, Uint8List? profileImageBytes) async {
-    HapticFeedback.lightImpact();
-    
-    setState(() {
-      _artistName = artistName;
-      _profileImageBytes = profileImageBytes;
-    });
-    
-    print('アーティスト名を設定: $artistName');
-    print('顔写真を設定: ${profileImageBytes != null ? "${profileImageBytes.length} bytes" : "なし"}');
-    await _nextStep();
-  }
+  // キーボードを閉じる
+  FocusScope.of(context).unfocus();
+  
+  // キーボードが完全に閉じるまで待つ
+  await Future.delayed(const Duration(milliseconds: 300));
+  
+  HapticFeedback.lightImpact();
+  
+  setState(() {
+    _artistName = artistName;
+    _profileImageBytes = profileImageBytes;
+  });
+  
+  print('アーティスト名を設定: $artistName');
+  print('顔写真を設定: ${profileImageBytes != null ? "${profileImageBytes.length} bytes" : "なし"}');
+  await _nextStep();
+}
 
   // Step 2: 夢・理想像入力のコールバック
   Future<void> _onDreamInputNext(String dreamTitle) async {
-    HapticFeedback.lightImpact();
-    
-    setState(() {
-      _dreamTitle = dreamTitle;
-    });
-    
-    print('理想の自分を設定: $dreamTitle');
-    await _nextStep();
-  }
+  // キーボードを閉じる
+  FocusScope.of(context).unfocus();
+  
+  // キーボードが完全に閉じるまで待つ
+  await Future.delayed(const Duration(milliseconds: 300));
+  
+  HapticFeedback.lightImpact();
+  
+  setState(() {
+    _dreamTitle = dreamTitle;
+  });
+  
+  print('理想の自分を設定: $dreamTitle');
+  await _nextStep();
+}
 
   // Step 3: 理想像画像選択のコールバック
   Future<void> _onImageSelectionNext(Uint8List? idealImageBytes) async {
@@ -170,15 +182,21 @@ Future<void> _previousStep() async {
 
   // Step 4: 行動設定のコールバック
   Future<void> _onActionsSetupNext(List<String> actions) async {
-    HapticFeedback.lightImpact();
-    
-    setState(() {
-      _actions = actions;
-    });
-    
-    print('行動を設定: ${actions.length}個');
-    await _nextStep();
-  }
+  // キーボードを閉じる
+  FocusScope.of(context).unfocus();
+  
+  // キーボードが完全に閉じるまで待つ
+  await Future.delayed(const Duration(milliseconds: 300));
+  
+  HapticFeedback.lightImpact();
+  
+  setState(() {
+    _actions = actions;
+  });
+  
+  print('行動を設定: ${actions.length}個');
+  await _nextStep();
+}
 
   // Step 5: 完了画面のコールバック
   Future<void> _onCompletionFinish() async {
@@ -370,28 +388,11 @@ Future<void> _previousStep() async {
   }
 
   Widget _buildLoadingScreen() {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: Center(
-        child: Transform.rotate(
-          angle: -1.5708, // 反時計回りに90度回転（-π/2 radians）
-          child: Container(
-            width: 140,
-            height: 140,
-            decoration: const BoxDecoration(
-              color: Color(0xFF1DB954),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.play_arrow,
-              size: 90,
-              color: Colors.black,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+  return const Scaffold(
+    backgroundColor: Colors.black,
+    body: SizedBox.shrink(),
+  );
+}
 
   Widget _buildErrorScreen() {
     return Scaffold(

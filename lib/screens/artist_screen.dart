@@ -87,7 +87,7 @@ void initState() {
         'task': task,
         'completions': taskCompletions,
       });
-      print('  - ${task.title}: $taskCompletions回');
+      print('  - ${task.title}: $taskCompletions');
     }
     
     // シングルアルバムのタスクを追加
@@ -101,7 +101,7 @@ void initState() {
           'task': task,
           'completions': taskCompletions,
         });
-        print('    - ${task.title}: $taskCompletions回');
+        print('    - ${task.title}: $taskCompletions');
       }
     }
     
@@ -381,7 +381,7 @@ Widget _getAlbumCoverForTask(TaskItem task) {
           
           // 完了回数
           Text(
-            '$completions回',
+            '$completions',
             style: TextStyle(
               color: Colors.white.withOpacity(0.6),
               fontSize: 14,

@@ -91,13 +91,18 @@ class _ArtistNameScreenState extends State<ArtistNameScreen>
   }
 
   void _onNextPressed() {
-    if (_isFormValid) {
-      HapticFeedback.lightImpact();
-      widget.onNext(_controller.text.trim(), _selectedImageBytes);
-    } else {
-      _showValidationMessage();
-    }
+  HapticFeedback.lightImpact();
+  
+  final artistName = _controller.text.trim();
+  
+  if (artistName.isEmpty) {
+    _showErrorMessage('Please enter your artist name');
+    return;
   }
+  
+  widget.onNext(artistName, _selectedImageBytes);
+}
+
 
   Future<void> _selectImage() async {
     try {
@@ -321,7 +326,7 @@ class _ArtistNameScreenState extends State<ArtistNameScreen>
           children: [
             // アイコン（画面の上から25%の位置に固定）
             Positioned(
-              top: iconPosition - 40, // アイコンの中心が25%の位置になるよう調整
+              top: iconPosition - 50, // アイコンの中心が25%の位置になるよう調整
               left: 0,
               right: 0,
               child: Center(
@@ -381,14 +386,14 @@ class _ArtistNameScreenState extends State<ArtistNameScreen>
 
             // 🆕 以下を追加
 Positioned(
-  top: iconPosition + 70,
+  top: iconPosition - 70,
   left: 0,
   right: 0,
   child: Text(
     'Tap to set icon',
     style: TextStyle(
       fontSize: 12,
-      color: Colors.white.withOpacity(0.4),
+      color: Colors.white,
       fontFamily: 'Hiragino Sans',
     ),
     textAlign: TextAlign.center,

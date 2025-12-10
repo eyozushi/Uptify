@@ -113,13 +113,13 @@ class _DreamInputScreenState extends State<DreamInputScreen>
   }
 
   void _onNextPressed() {
-    if (_isFormValid) {
-      HapticFeedback.lightImpact();
-      widget.onNext(_dreamController.text.trim());
-    } else {
-      _showValidationMessage();
-    }
+  if (_isFormValid) {
+    HapticFeedback.lightImpact();
+    widget.onNext(_dreamController.text.trim());
+  } else {
+    _showValidationMessage();
   }
+}
 
   void _showValidationMessage() {
     ScaffoldMessenger.of(context).showSnackBar(

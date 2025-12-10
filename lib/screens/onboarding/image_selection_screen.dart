@@ -287,66 +287,44 @@ class _ImageSelectionScreenState extends State<ImageSelectionScreen>
   }
 
   Widget _buildMainContent() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final screenHeight = constraints.maxHeight;
-        
-        return Stack(
-          children: [
-            // アイコン（画面の上から25%の位置に固定）
-            Positioned(
-              top: screenHeight * 0.25 - 40,
-              left: 0,
-              right: 0,
-              child: Center(
-                child: Container(
-                  width: 80,
-                  height: 80,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF1DB954),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.photo_camera,
-                    size: 40,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
+  return LayoutBuilder(
+    builder: (context, constraints) {
+      final screenHeight = constraints.maxHeight;
+      
+      return Stack(
+        children: [
+          // 画像選択エリア（画面の上から25%の位置に移動）
+          Positioned(
+            top: screenHeight * 0.25 - 90, // 正方形の中心が25%の位置になるよう調整
+            left: 0,
+            right: 0,
+            child: Center(
+              child: _buildImagePreview(),
             ),
-            
-            // 質問文（画面の50%の位置）
-            Positioned(
-              top: screenHeight * 0.5 - 20,
-              left: 0,
-              right: 0,
-              child: const Text(
-                'What does that ideal look like?',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                  fontFamily: 'Hiragino Sans',
-                  height: 1.3,
-                ),
-                textAlign: TextAlign.center,
+          ),
+          
+          // 質問文（画面の50%の位置）
+          Positioned(
+            top: screenHeight * 0.5 - 20,
+            left: 0,
+            right: 0,
+            child: const Text(
+              'What does that ideal look like?',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+                fontFamily: 'Hiragino Sans',
+                height: 1.3,
               ),
+              textAlign: TextAlign.center,
             ),
-            
-            // 画像選択エリア（画面の75%の位置）
-            Positioned(
-              top: screenHeight * 0.75 - 75, // 正方形の中心が75%の位置になるよう調整
-              left: 0,
-              right: 0,
-              child: Center(
-                child: _buildImagePreview(),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
+          ),
+        ],
+      );
+    },
+  );
+}
 
   Widget _buildImagePreview() {
     return GestureDetector(
@@ -373,7 +351,7 @@ class _ImageSelectionScreenState extends State<ImageSelectionScreen>
                 children: [
                   Icon(
                     Icons.add_photo_alternate,
-                    size: 50,
+                    size: 30,
                     color: Colors.white,
                   ),
                   SizedBox(height: 12),
