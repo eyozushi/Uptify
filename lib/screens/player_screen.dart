@@ -520,44 +520,50 @@ void _animateToPage(int newIndex) {
     curve: Curves.easeOut,
   ));
   
-  // 🔧 追加：アニメーション開始前に即座に状態を更新
-  setState(() {
-    _currentIndex = newIndex;
-    _dragDistance = 0.0;
-  });
+  // 🔧 削除：即座の状態更新を削除
+  // setState(() {
+  //   _currentIndex = newIndex;
+  //   _dragDistance = 0.0;
+  // });
   
-  // 🔧 追加：即座に MainWrapper に通知
-  if (_isInitializationComplete && !_isForcePageChange) {
-    if (_isAutoPlayEnabled) {
+  // 🔧 追加：アニメーション完了後に状態を更新
+  _swipeController.forward(from: 0.0).then((_) {
+    if (mounted) {
       setState(() {
-        _isAutoPlayEnabled = false;
+        _currentIndex = newIndex;
+        _dragDistance = 0.0;
       });
-      _autoPlayController.reverse();
       
-      if (widget.onStateChanged != null) {
-        widget.onStateChanged!(
-          isAutoPlayEnabled: false,
-        );
+      // 🔧 追加：アニメーション完了後に通知
+      if (_isInitializationComplete && !_isForcePageChange) {
+        if (_isAutoPlayEnabled) {
+          setState(() {
+            _isAutoPlayEnabled = false;
+          });
+          _autoPlayController.reverse();
+          
+          if (widget.onStateChanged != null) {
+            widget.onStateChanged!(
+              isAutoPlayEnabled: false,
+            );
+          }
+        }
+        
+        if (widget.onStateChanged != null) {
+          final taskIndex = widget.isPlayingSingleAlbum ? newIndex : (newIndex > 0 ? newIndex - 1 : -1);
+          
+          widget.onStateChanged!(
+            currentTaskIndex: taskIndex,
+            progress: 0.0,
+            elapsedSeconds: 0,
+          );
+          
+          print('🔧 PlayerScreen: ページ切り替え通知（アニメーション完了後） → taskIndex=$taskIndex');
+        }
       }
     }
     
-    if (widget.onStateChanged != null) {
-      final taskIndex = widget.isPlayingSingleAlbum ? newIndex : (newIndex > 0 ? newIndex - 1 : -1);
-      
-      // 🔧 重要：アニメーション開始前に通知
-      widget.onStateChanged!(
-        currentTaskIndex: taskIndex,
-        progress: 0.0,
-        elapsedSeconds: 0,
-      );
-      
-      print('🔧 PlayerScreen: ページ切り替え通知（即座） → taskIndex=$taskIndex');
-    }
-  }
-  
-  // 🔧 修正：アニメーション完了後はアニメーションのリセットのみ
-  _swipeController.forward(from: 0.0).then((_) {
-    // 🔧 追加：アニメーションをリセット
+    // アニメーションをリセット
     _swipeController.reset();
     _swipeAnimation = Tween<double>(
       begin: 0.0,
@@ -1342,6 +1348,8 @@ Widget build(BuildContext context) {
   final coverSize = scrollHeight;
   final itemSpacing = 20.0;
   
+  final totalPages = widget.isPlayingSingleAlbum ? _tasks.length : _tasks.length + 1;
+  
   return Center(
     child: SizedBox(
       width: scrollWidth,
@@ -1353,7 +1361,7 @@ Widget build(BuildContext context) {
         child: Stack(
           clipBehavior: Clip.none,
           children: [
-            // 前のジャケット（画面外）
+            // 🔧 修正：常に前のジャケットを描画
             if (_currentIndex > 0)
               _buildPositionedJacket(
                 index: _currentIndex - 1,
@@ -1368,8 +1376,8 @@ Widget build(BuildContext context) {
               coverSize: coverSize,
             ),
             
-            // 次のジャケット（画面外）
-            if (_currentIndex < (widget.isPlayingSingleAlbum ? _tasks.length : _tasks.length + 1) - 1)
+            // 🔧 修正：常に次のジャケットを描画
+            if (_currentIndex < totalPages - 1)
               _buildPositionedJacket(
                 index: _currentIndex + 1,
                 offset: (_isDragging ? _dragDistance : _swipeAnimation.value) + coverSize + 40,
@@ -1715,26 +1723,26 @@ Widget _buildDefaultAlbumCover(double size, {required bool isSingle}) {
             ),
           ),
           
-          // 🔧 中央：再生ボタンとその左右のスキップ・戻るボタン
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              // 戻るボタン（再生ボタンの左）
-              _buildControlButton(
-                icon: Icons.skip_previous,
-                onTap: () {
-                  if (_currentIndex > 0) {
-                    _animateToPage(_currentIndex - 1);
-                  }
-                },
-                size: 34,
-                color: Colors.white,
-              ),
-              
-              const SizedBox(width: 24),
-              
-              // 再生ボタン（中央）
+          // 中央：再生ボタンとその左右のスキップ・戻るボタン
+Row(
+  mainAxisAlignment: MainAxisAlignment.center,
+  crossAxisAlignment: CrossAxisAlignment.center,
+  children: [
+    // 🔧 修正：戻るボタン（丸みを帯びたアイコン）
+    _buildControlButton(
+      icon: Icons.skip_previous_rounded,  // 🔧 変更：_rounded を追加
+      onTap: () {
+        if (_currentIndex > 0) {
+          _animateToPage(_currentIndex - 1);
+        }
+      },
+      size: 34,
+      color: Colors.white,
+    ),
+    
+    const SizedBox(width: 24),
+    
+    // 再生ボタン（中央）
 GestureDetector(
   onTap: _togglePlayPause,
   child: Container(
@@ -1746,30 +1754,29 @@ GestureDetector(
     ),
     alignment: Alignment.center,
     child: Icon(
-      // 🔧 修正：シングルアルバムとライフドリームアルバムで分岐
       _getPlayPauseIcon(),
-      color: Colors.black,
-      size: 38,
+      color: Color.lerp(_dominantColor, Colors.black, 0.6)!,  // 🔧 変更：背景色を30%暗く
+      size: 45,
     ),
   ),
 ),
-              
-              const SizedBox(width: 24),
-              
-              // スキップボタン（再生ボタンの右）
-              _buildControlButton(
-                icon: Icons.skip_next,
-                onTap: () {
-                  final maxIndex = widget.isPlayingSingleAlbum ? _tasks.length - 1 : _tasks.length;
-                  if (_currentIndex < maxIndex) {
-                    _animateToPage(_currentIndex + 1);
-                  }
-                },
-                size: 34,
-                color: Colors.white,
-              ),
-            ],
-          ),
+    
+    const SizedBox(width: 24),
+    
+    // 🔧 修正：スキップボタン（丸みを帯びたアイコン）
+    _buildControlButton(
+      icon: Icons.skip_next_rounded,  // 🔧 変更：_rounded を追加
+      onTap: () {
+        final maxIndex = widget.isPlayingSingleAlbum ? _tasks.length - 1 : _tasks.length;
+        if (_currentIndex < maxIndex) {
+          _animateToPage(_currentIndex + 1);
+        }
+      },
+      size: 34,
+      color: Colors.white,
+    ),
+  ],
+),
         ],
       ),
     );
@@ -2034,16 +2041,16 @@ Widget _buildLyricNotes(double coverSize) {
 IconData _getPlayPauseIcon() {
   // ライフドリームアルバムの理想像ページ（index=0）は常に一時停止アイコン
   if (_currentIndex == 0 && !widget.isPlayingSingleAlbum) {
-    return Icons.pause;
+    return Icons.pause_rounded;  // 🔧 変更：丸みを追加
   }
   
   // シングルアルバムの場合：_isPlayingの値で判定
   if (widget.isPlayingSingleAlbum) {
-    return _isPlaying ? Icons.pause : Icons.play_arrow;
+    return _isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded;  // 🔧 変更：丸みを追加
   }
   
   // ライフドリームアルバムのタスク（index≥1）：_isPlayingの値で判定
-  return _isPlaying ? Icons.pause : Icons.play_arrow;
+  return _isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded;  // 🔧 変更：丸みを追加
 }
 }
 // 🆕 完全修正：自動スクロールテキストウィジェット

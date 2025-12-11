@@ -49,29 +49,14 @@ class _ArtistScreenState extends State<ArtistScreen> {
   @override
 void initState() {
   super.initState();
-  // 🔧 修正：少し遅延させてからデータ読み込み
-  Future.delayed(const Duration(milliseconds: 200), () {
-    if (mounted) {
-      _loadArtistData();
-    }
-  });
+  // 🔧 修正：即座にデータ読み込み開始
+  _loadArtistData();
 }
 
   Future<void> _loadArtistData() async {
   try {
     // 累計完了回数を取得
     final totalCompleted = await _taskCompletionService.getTotalCompletedTasks();
-    
-    // 🔧 修正：シングルアルバムが渡されるまで待機
-    if (widget.singleAlbums.isEmpty) {
-      print('⚠️ シングルアルバムがまだ読み込まれていません。再試行します...');
-      // 少し待ってから再試行
-      await Future.delayed(const Duration(milliseconds: 100));
-      if (mounted) {
-        _loadArtistData();
-      }
-      return;
-    }
     
     // 全完了記録を一度だけ取得
     final allCompletions = await _achievementService.loadTaskCompletions();
@@ -90,19 +75,23 @@ void initState() {
       print('  - ${task.title}: $taskCompletions');
     }
     
-    // シングルアルバムのタスクを追加
-    print('📊 シングルアルバム数: ${widget.singleAlbums.length}');
-    for (final album in widget.singleAlbums) {
-      print('  - アルバム: ${album.albumName}, タスク数: ${album.tasks.length}');
-      for (final task in album.tasks) {
-        final taskCompletions = allCompletions.where((c) => c.taskId == task.id && c.wasSuccessful).length;
-        
-        taskStats.add({
-          'task': task,
-          'completions': taskCompletions,
-        });
-        print('    - ${task.title}: $taskCompletions');
+    // 🔧 修正：シングルアルバムがあれば追加（なくてもエラーにしない）
+    if (widget.singleAlbums.isNotEmpty) {
+      print('📊 シングルアルバム数: ${widget.singleAlbums.length}');
+      for (final album in widget.singleAlbums) {
+        print('  - アルバム: ${album.albumName}, タスク数: ${album.tasks.length}');
+        for (final task in album.tasks) {
+          final taskCompletions = allCompletions.where((c) => c.taskId == task.id && c.wasSuccessful).length;
+          
+          taskStats.add({
+            'task': task,
+            'completions': taskCompletions,
+          });
+          print('    - ${task.title}: $taskCompletions');
+        }
       }
+    } else {
+      print('📊 シングルアルバムなし - ライフドリームアルバムのみでランキング表示');
     }
     
     print('📊 全タスク統計数: ${taskStats.length}');
@@ -219,6 +208,35 @@ void initState() {
     );
   }
 
+  // 🔧 追加：ランキングが空の場合の表示
+  if (_taskRanking.isEmpty) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 40),
+      child: Center(
+        child: Column(
+          children: [
+            Icon(
+              Icons.music_note,
+              size: 48,
+              color: Colors.white.withOpacity(0.3),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Play tasks to see your ranking!',
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.6),
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                fontFamily: 'Hiragino Sans',
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   return Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
@@ -230,7 +248,7 @@ void initState() {
             color: Colors.white,
             fontSize: 20,
             letterSpacing: -0.3,
-            fontWeight: FontWeight.w900, // 🔧 修正：w600 → w900
+            fontWeight: FontWeight.w900,
             fontFamily: 'Hiragino Sans',
           ),
         ),
@@ -603,15 +621,19 @@ Widget _getAlbumCoverForTask(TaskItem task) {
         slivers: [
           // プロフィール画像部分（スクロール時に縮む）
           SliverAppBar(
-            expandedHeight: profileHeight,
-            pinned: false,
-            floating: false,
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            automaticallyImplyLeading: false,
-            flexibleSpace: FlexibleSpaceBar(
-              background: _buildProfileImage(),
-            ),
+  expandedHeight: profileHeight,
+  pinned: false,
+  floating: false,
+  stretch: true,  // 🆕 これを追加
+  backgroundColor: Colors.transparent,
+  elevation: 0,
+  automaticallyImplyLeading: false,
+  flexibleSpace: FlexibleSpaceBar(
+    stretchModes: const [  // 🆕 これを追加
+      StretchMode.zoomBackground,
+    ],
+    background: _buildProfileImage(),
+  ),
             leading: Container(
                 margin: const EdgeInsets.all(8),
                 decoration: BoxDecoration(

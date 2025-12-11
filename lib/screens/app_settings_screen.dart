@@ -35,7 +35,12 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
   
   // 通知設定
   bool _isNotificationEnabled = false;
-  int _selectedInterval = 15;  // 15, 30, 60のいずれか
+  int _selectedInterval = 30;  // 15, 30, 60のいずれか
+
+  // 🆕 カスタム間隔設定用
+  bool _isCustomInterval = false;
+  late TextEditingController _customIntervalController;
+
 
   // 🆕 睡眠スケジュール設定
 bool _isSleepScheduleEnabled = true;
@@ -61,12 +66,14 @@ String? _timeValidationError;
   void initState() {
     super.initState();
     _artistNameController = TextEditingController();
+    _customIntervalController = TextEditingController();  
     _loadCurrentSettings();
   }
 
   @override
   void dispose() {
     _artistNameController.dispose();
+    _customIntervalController.dispose();
     super.dispose();
   }
 
@@ -86,9 +93,17 @@ String? _timeValidationError;
     // 通知設定を取得
     final notifConfig = await _habitBreakerService.getCurrentConfig();
     _isNotificationEnabled = notifConfig.isHabitBreakerEnabled;
-    _selectedInterval = _normalizeInterval(notifConfig.habitBreakerInterval);
+    _selectedInterval = notifConfig.habitBreakerInterval;
     
-    // 🆕 睡眠スケジュール設定を取得
+    // 🆕 カスタム間隔チェック
+    if (_selectedInterval != 30 && _selectedInterval != 60) {
+      _isCustomInterval = true;
+      _customIntervalController.text = _selectedInterval.toString();
+    } else {
+      _isCustomInterval = false;
+    }
+    
+    // 睡眠スケジュール設定を取得
     _isSleepScheduleEnabled = notifConfig.sleepScheduleEnabled;
     _bedtimeHour = notifConfig.bedtimeHour;
     _bedtimeMinute = notifConfig.bedtimeMinute;
@@ -97,7 +112,7 @@ String? _timeValidationError;
     _wakeUpMinute = notifConfig.wakeUpMinute;
     _wakeUpPeriod = notifConfig.wakeUpPeriod;
     
-    // 🆕 曜日別スケジュール設定を取得
+    // 曜日別スケジュール設定を取得
     _enabledDays = Set<int>.from(notifConfig.enabledDays);
     
     // アプリバージョンを取得
@@ -114,14 +129,9 @@ String? _timeValidationError;
   }
 }
 
-  int _normalizeInterval(int interval) {
-  if (interval <= 1) return 1;  // 🆕 1分を追加
-  if (interval <= 15) return 15;
-  if (interval <= 30) return 30;
-  return 60;
-}
+  
   Future<void> _saveAllSettings() async {
-  // 🆕 バリデーションチェック
+  // バリデーションチェック
   if (_isSleepScheduleEnabled && _isSameTime()) {
     setState(() {
       _timeValidationError = 'Bedtime and wake-up time cannot be the same';
@@ -130,10 +140,21 @@ String? _timeValidationError;
     return;
   }
   
-  // 🆕 全曜日無効チェック
+  // 全曜日無効チェック
   if (_enabledDays.isEmpty) {
     _showMessage('Please enable at least one day', isSuccess: false);
     return;
+  }
+  
+  // 🆕 カスタム間隔のバリデーション
+  int finalInterval = _selectedInterval;
+  if (_isCustomInterval) {
+    final customValue = int.tryParse(_customIntervalController.text);
+    if (customValue == null || customValue < 1 || customValue > 1440) {
+      _showMessage('Please enter a valid interval (1-1440 minutes)', isSuccess: false);
+      return;
+    }
+    finalInterval = customValue;
   }
   
   setState(() {
@@ -158,8 +179,7 @@ String? _timeValidationError;
     final currentConfig = await _habitBreakerService.getCurrentConfig();
     final newConfig = currentConfig.copyWith(
       isHabitBreakerEnabled: _isNotificationEnabled,
-      habitBreakerInterval: _selectedInterval,
-      // 🆕 睡眠スケジュール設定を追加
+      habitBreakerInterval: finalInterval,  // 🔧 修正: カスタム値を使用
       sleepScheduleEnabled: _isSleepScheduleEnabled,
       bedtimeHour: _bedtimeHour,
       bedtimeMinute: _bedtimeMinute,
@@ -167,7 +187,6 @@ String? _timeValidationError;
       wakeUpHour: _wakeUpHour,
       wakeUpMinute: _wakeUpMinute,
       wakeUpPeriod: _wakeUpPeriod,
-      // 🆕 曜日別スケジュール設定を追加
       enabledDays: _enabledDays,
     );
     await _habitBreakerService.updateSettings(newConfig);
@@ -624,8 +643,8 @@ int _convertTo24Hour(int hour, String period) {
             
             const SizedBox(height: 24),
             
-            // 2. Sleep Schedule
-            _buildSleepScheduleInline(),
+            // 2. Active Days（一番上から2番目に移動）
+            _buildActiveDaysInline(),
             
             const SizedBox(height: 24),
             
@@ -636,8 +655,8 @@ int _convertTo24Hour(int hour, String period) {
             
             const SizedBox(height: 24),
             
-            // 3. Active Days
-            _buildActiveDaysInline(),
+            // 3. Sleep Schedule（一番下に移動）
+            _buildSleepScheduleInline(),
           ],
         ),
       ),
@@ -652,17 +671,32 @@ Widget _buildNotificationIntervalSettings() {
   return Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      const Text(
-        'Notification Interval',
-        style: TextStyle(
-          color: Colors.white,
-          fontSize: 16,
-          fontWeight: FontWeight.w600,
-          fontFamily: kFontFamily,
-        ),
+      // Header with switch
+      Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          const Text(
+            'Notification Interval',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              fontFamily: kFontFamily,
+            ),
+          ),
+          Switch(
+            value: _isNotificationEnabled,
+            activeColor: kAccentColor,
+            onChanged: (value) {
+              setState(() {
+                _isNotificationEnabled = value;
+              });
+            },
+          ),
+        ],
       ),
       
-      const SizedBox(height: 12),
+      const SizedBox(height: 8),
       
       Text(
         'How often should we remind you?',
@@ -673,37 +707,99 @@ Widget _buildNotificationIntervalSettings() {
         ),
       ),
       
-      const SizedBox(height: 16),
-      
-      // Interval buttons
-      Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: [
-          _buildIntervalButton(label: '1 min', minutes: 1),
-          _buildIntervalButton(label: '15 min', minutes: 15),
-          _buildIntervalButton(label: '30 min', minutes: 30),
-          _buildIntervalButton(label: '1 hour', minutes: 60),
+      // Only show interval buttons when enabled
+      if (_isNotificationEnabled) ...[
+        const SizedBox(height: 16),
+        
+        // Interval buttons
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _buildIntervalButton(label: '30 min', minutes: 30),
+            _buildIntervalButton(label: '1 hour', minutes: 60),
+            _buildCustomIntervalButton(),
+          ],
+        ),
+        
+        // Custom interval input
+        if (_isCustomInterval) ...[
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _customIntervalController,
+                  keyboardType: TextInputType.number,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontFamily: kFontFamily,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: 'Enter minutes (1-1440)',
+                    hintStyle: TextStyle(
+                      color: Colors.white.withOpacity(0.3),
+                      fontFamily: kFontFamily,
+                    ),
+                    filled: true,
+                    fillColor: Colors.black.withOpacity(0.3),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide.none,
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide.none,
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(
+                        color: kAccentColor,
+                        width: 2,
+                      ),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'minutes',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.6),
+                  fontSize: 14,
+                  fontFamily: kFontFamily,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Recommended: 30-60 minutes for best results',
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.4),
+              fontSize: 12,
+              fontFamily: kFontFamily,
+            ),
+          ),
         ],
-      ),
-      
-      // Warning for 1 min
-      if (_selectedInterval == 1) ...[
+      ] else ...[
+        // Disabled message
         const SizedBox(height: 12),
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: Colors.orange.withOpacity(0.1),
+            color: Colors.white.withOpacity(0.05),
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: Colors.orange.withOpacity(0.3),
-              width: 1,
-            ),
           ),
           child: Text(
-            '1 minute interval is for testing only',
+            'Notifications are disabled',
             style: TextStyle(
-              color: Colors.orange.shade300,
+              color: Colors.white.withOpacity(0.5),
               fontSize: 12,
               fontFamily: kFontFamily,
             ),
@@ -874,11 +970,12 @@ Widget _buildActiveDaysInline() {
 
 
   Widget _buildIntervalButton({required String label, required int minutes}) {
-  final isSelected = _selectedInterval == minutes;
+  final isSelected = !_isCustomInterval && _selectedInterval == minutes;
   
   return GestureDetector(
     onTap: () {
       setState(() {
+        _isCustomInterval = false;
         _selectedInterval = minutes;
       });
     },
@@ -902,13 +999,49 @@ Widget _buildActiveDaysInline() {
           color: Colors.white,
           fontSize: 14,
           fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-          fontFamily: 'Hiragino Sans',
+          fontFamily: kFontFamily,
         ),
       ),
     ),
   );
 }
 
+Widget _buildCustomIntervalButton() {
+  return GestureDetector(
+    onTap: () {
+      setState(() {
+        _isCustomInterval = true;
+        if (_customIntervalController.text.isEmpty) {
+          _customIntervalController.text = '45'; // デフォルト値
+        }
+      });
+    },
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      decoration: BoxDecoration(
+        color: _isCustomInterval 
+            ? const Color(0xFF1DB954) 
+            : const Color(0xFF2A2A2A),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: _isCustomInterval 
+              ? const Color(0xFF1DB954) 
+              : Colors.white.withOpacity(0.2),
+          width: 1.5,
+        ),
+      ),
+      child: Text(
+        'Custom',
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 14,
+          fontWeight: _isCustomInterval ? FontWeight.w600 : FontWeight.w400,
+          fontFamily: kFontFamily,
+        ),
+      ),
+    ),
+  );
+}
 
 
 /// 時刻ピッカー行

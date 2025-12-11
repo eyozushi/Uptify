@@ -25,7 +25,7 @@ final String wakeUpMessage;
 
   const NotificationConfig({
     this.isHabitBreakerEnabled = false,
-    this.habitBreakerInterval = 15,
+    this.habitBreakerInterval = 30,
     this.habitBreakerMessages = const [
   // 🎯 意識喚起系（5個）- 現在の行動への気づきを促す
   'What are you doing right now?',
@@ -94,7 +94,7 @@ final String wakeUpMessage;
   factory NotificationConfig.fromJson(Map<String, dynamic> json) {
     return NotificationConfig(
       isHabitBreakerEnabled: json['isHabitBreakerEnabled'] ?? false,
-      habitBreakerInterval: json['habitBreakerInterval'] ?? 1,
+      habitBreakerInterval: json['habitBreakerInterval'] ?? 30,
       habitBreakerMessages: json['habitBreakerMessages'] != null
     ? List<String>.from(json['habitBreakerMessages'])
     : const [
@@ -136,11 +136,10 @@ final String wakeUpMessage;
   }
 
   // copyWith メソッド（修正版）
-  NotificationConfig copyWith({
+NotificationConfig copyWith({
   bool? isHabitBreakerEnabled,
   int? habitBreakerInterval,
   List<String>? habitBreakerMessages,
-  // 🆕 以下を追加
   bool? sleepScheduleEnabled,
   int? bedtimeHour,
   int? bedtimeMinute,
@@ -152,25 +151,23 @@ final String wakeUpMessage;
   String? bedtimeMessage,
   String? wakeUpMessage,
 }) {
-  // 既存の間隔バリデーション（15/30/60）
+  // 🔧 修正: バリデーション処理を削除（カスタム値を許可）
   int validatedInterval = habitBreakerInterval ?? this.habitBreakerInterval;
-  if (habitBreakerInterval != null) {
-    if (habitBreakerInterval <= 1) {
-      validatedInterval = 1;
-    } else if (habitBreakerInterval <= 15) {
-      validatedInterval = 15;
-    } else if (habitBreakerInterval <= 30) {
-      validatedInterval = 30;
-    } else {
-      validatedInterval = 60;
-    }
+  
+  // 🔧 最小値チェックのみ（1分未満は1分に）
+  if (validatedInterval < 1) {
+    validatedInterval = 1;
+  }
+  
+  // 🔧 最大値チェック（1440分 = 24時間）
+  if (validatedInterval > 1440) {
+    validatedInterval = 1440;
   }
   
   return NotificationConfig(
     isHabitBreakerEnabled: isHabitBreakerEnabled ?? this.isHabitBreakerEnabled,
     habitBreakerInterval: validatedInterval,
     habitBreakerMessages: habitBreakerMessages ?? this.habitBreakerMessages,
-    // 🆕 以下を追加
     sleepScheduleEnabled: sleepScheduleEnabled ?? this.sleepScheduleEnabled,
     bedtimeHour: bedtimeHour ?? this.bedtimeHour,
     bedtimeMinute: bedtimeMinute ?? this.bedtimeMinute,

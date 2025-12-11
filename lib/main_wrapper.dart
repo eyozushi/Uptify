@@ -3062,19 +3062,22 @@ Widget _buildCurrentScreen() {
   return Stack(
     children: [
       // メインコンテンツ
-      if (!_isSettingsVisible && !_isAlbumDetailVisible) _buildMainContent(),  // 🔧 修正：アルバム詳細表示中は非表示
+      if (!_isSettingsVisible && !_isAlbumDetailVisible) _buildMainContent(),
       
-      // 🔧 修正：アルバム詳細を常に表示（PlayerScreenの下）
+      // アルバム詳細
       if (_isAlbumDetailVisible) _buildAlbumDetailScreen(),
       
+      // 🔧 この位置に移動（PlayerScreenの下）
+      if (_isArtistScreenVisible) _buildArtistScreen(),
+      
       // PlayerScreen
-if (_playingTasks.isNotEmpty && (_isDraggingPlayer || _playerDragController.value < 1.0 || _isPlayerScreenVisible))
-  Positioned(
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    child: GestureDetector(
+      if (_playingTasks.isNotEmpty && (_isDraggingPlayer || _playerDragController.value < 1.0 || _isPlayerScreenVisible))
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          child: GestureDetector(
       behavior: HitTestBehavior.opaque,
       onVerticalDragStart: (details) {
         final isAtTop = PlayerScreen.isAtTopOfScroll(_playerScreenKey);
@@ -3135,7 +3138,6 @@ if (_playingTasks.isNotEmpty && (_isDraggingPlayer || _playerDragController.valu
       // 設定画面（最前面）
       if (_isSettingsVisible) _buildSettingsScreen(),
       
-      if (_isArtistScreenVisible) _buildArtistScreen(),
     ],
   );
 }
@@ -3176,6 +3178,7 @@ Widget _buildMainContent() {
         child: Padding(
           padding: EdgeInsets.only(
             top: MediaQuery.of(context).padding.top,
+            bottom: 0, 
           ),
           child: SingleAlbumCreateScreen(
             onClose: () {
@@ -3704,6 +3707,12 @@ void _showCompletionResultDialog(bool allCompleted) {
   }
 
   Widget _buildBottomSection() {
+  // 🔧 追加：キーボードが表示されている場合は非表示
+  final keyboardVisible = MediaQuery.of(context).viewInsets.bottom > 0;
+  if (keyboardVisible) {
+    return const SizedBox.shrink();
+  }
+  
   return AnimatedBuilder(
     animation: _playerDragController,
     builder: (context, child) {
@@ -4328,20 +4337,27 @@ void _closePlayerWithAnimation() {
         final page = pages[index];
         
         return GestureDetector(
-          onTap: () {
-            // 🆕 追加：PlaybackScreen表示時のみデータ更新を呼び出し
-            if (index == 2 && _selectedPageIndex != 2) {
-              _refreshPlaybackScreen();
-            }
-            
-            setState(() {
-              _selectedPageIndex = index;
-              if (_isAlbumDetailVisible) {
-                _isAlbumDetailVisible = false;
-                _currentSingleAlbum = null;
-              }
-            });
-          },
+  onTap: () {
+    // 🆕 追加：アーティスト画面が開いている場合は閉じる
+    if (_isArtistScreenVisible) {
+      setState(() {
+        _isArtistScreenVisible = false;
+      });
+    }
+    
+    // 🆕 追加：PlaybackScreen表示時のみデータ更新を呼び出し
+    if (index == 2 && _selectedPageIndex != 2) {
+      _refreshPlaybackScreen();
+    }
+    
+    setState(() {
+      _selectedPageIndex = index;
+      if (_isAlbumDetailVisible) {
+        _isAlbumDetailVisible = false;
+        _currentSingleAlbum = null;
+      }
+    });
+  },
           child: Container(
             padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
             child: Column(
@@ -5521,9 +5537,9 @@ Widget build(BuildContext context) {
     );
   }
 
-  // 🔧 修正：Scaffoldの背景色を明示的に黒に設定
   return Scaffold(
-    backgroundColor: Colors.black, // 🔧 追加
+    backgroundColor: Colors.black,
+    resizeToAvoidBottomInset: false,  // 🔧 追加：この行を追加
     body: Column(
       children: [
         Expanded(
