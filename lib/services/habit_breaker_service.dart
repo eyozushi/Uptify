@@ -151,7 +151,7 @@ static const int _wakeUpNotificationId = 9001;
     
     await _notificationService.scheduleDelayedNotification(
       id: _nextNotificationId++,
-      title: '今すぐタスクをプレイしよう',
+      title: 'Start Your Task Now',
       body: message,
       delay: delay,
       payload: 'habit_breaker_${DateTime.now().millisecondsSinceEpoch}',
@@ -513,7 +513,7 @@ Future<void> resumeAfterTaskCompletion() async {
       
       await _notificationService.showNotification(
         id: _habitBreakerNotificationBaseId + 999, // テスト用ID
-        title: '今すぐタスクをプレイしよう（テスト）',
+        title: 'Start Your Task Now (Test)',
         body: message,
         payload: 'habit_breaker_test',
       );

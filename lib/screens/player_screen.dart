@@ -693,26 +693,37 @@ void _resetPosition() {
   }
 
   Future<void> _loadTodayCompletions() async {
-    if (widget.todayTaskCompletions != null) {
-      setState(() {
-        _todayTaskCompletions = Map.from(widget.todayTaskCompletions!);
-      });
-      return;
+  if (widget.todayTaskCompletions != null) {
+    setState(() {
+      _todayTaskCompletions = Map.from(widget.todayTaskCompletions!);
+    });
+    print('🔧 [DEBUG] 初期カウント（widget経由）: $_todayTaskCompletions');
+    return;
+  }
+  
+  try {
+    final completions = <String, int>{};
+    
+    // 🔧 デバッグ: タスクリストの確認
+    print('🔧 [DEBUG] _tasks.length = ${_tasks.length}');
+    print('🔧 [DEBUG] widget.tasks.length = ${widget.tasks.length}');
+    print('🔧 [DEBUG] isPlayingSingleAlbum = ${widget.isPlayingSingleAlbum}');
+    
+    for (final task in _tasks) {
+      final count = await _taskCompletionService.getTodayTaskSuccesses(task.id);
+      completions[task.id] = count;
+      print('🔧 [DEBUG] タスク "${task.title}" (ID: ${task.id}) = $count回');
     }
     
-    try {
-      final completions = <String, int>{};
-      for (final task in _tasks) {
-        final count = await _taskCompletionService.getTodayTaskSuccesses(task.id);
-        completions[task.id] = count;
-      }
-      setState(() {
-        _todayTaskCompletions = completions;
-      });
-    } catch (e) {
-      print('❌ 今日の完了回数読み込みエラー: $e');
-    }
+    setState(() {
+      _todayTaskCompletions = completions;
+    });
+    
+    print('✅ 今日の完了回数読み込み完了: $_todayTaskCompletions');
+  } catch (e) {
+    print('❌ 今日の完了回数読み込みエラー: $e');
   }
+}
 
   Future<void> _extractColorsFromImage() async {
   if (_isExtractingColors) return;
@@ -998,6 +1009,11 @@ void _toggleAutoPlay() {
 
   Future<void> _recordTaskCompletion(TaskItem task, bool wasSuccessful) async {
   try {
+    // 🔧 デバッグ: 完了記録開始
+    print('🔧 [DEBUG] タスク完了記録開始: ${task.title} (ID: ${task.id}), 成功: $wasSuccessful');
+    print('🔧 [DEBUG] isPlayingSingleAlbum: ${widget.isPlayingSingleAlbum}');
+    print('🔧 [DEBUG] playingSingleAlbumId: ${widget.playingSingleAlbumId}');
+    
     if (wasSuccessful) {
       await _audioService.playAchievementSound();
     } else {
@@ -1012,7 +1028,6 @@ void _toggleAutoPlay() {
       });
       print('🔔 即座にカウント更新: ${task.title} ${oldCount} → ${oldCount + 1}');
       
-      // 🆕 追加: 新しく完了したタスクをSharedPreferencesに記録
       await _recordNewTaskCompletion();
     }
 
@@ -1020,11 +1035,17 @@ void _toggleAutoPlay() {
       await widget.onTaskCompleted!(task, wasSuccessful);
       
       if (wasSuccessful) {
-        // 🔧 修正: 最新のカウントを通知
         widget.onCompletionCountsChanged?.call(_todayTaskCompletions);
         print('🔔 MainWrapperに最新カウントを通知: ${_todayTaskCompletions[task.id]}');
       }
     } else {
+      // 🔧 デバッグ: 記録内容を確認
+      print('🔧 [DEBUG] recordTaskCompletion呼び出し:');
+      print('  - taskId: ${task.id}');
+      print('  - taskTitle: ${task.title}');
+      print('  - albumType: ${widget.isPlayingSingleAlbum ? 'single' : 'life_dream'}');
+      print('  - albumId: ${widget.isPlayingSingleAlbum ? widget.playingSingleAlbumId : null}');
+      
       await _taskCompletionService.recordTaskCompletion(
         taskId: task.id,
         taskTitle: task.title,
@@ -1032,32 +1053,36 @@ void _toggleAutoPlay() {
         elapsedSeconds: _elapsedSeconds,
         albumType: widget.isPlayingSingleAlbum ? 'single' : 'life_dream',
         albumName: _idealSelf,
-        albumId: widget.isPlayingSingleAlbum ? 'single_album_id' : null,
+        albumId: widget.isPlayingSingleAlbum ? widget.playingSingleAlbumId : null,
       );
       
       if (wasSuccessful) {
         widget.onCompletionCountsChanged?.call(_todayTaskCompletions);
       }
       
+      // 🔧 追加: 完了記録後にカウントを再読み込み
       await _loadTodayCompletions();
     }
     
     widget.onDataChanged?.call();
 
   } catch (e) {
+    print('❌ タスク完了記録エラー: $e');
     if (wasSuccessful) {
       setState(() {
         _todayTaskCompletions[task.id] = (_todayTaskCompletions[task.id] ?? 1) - 1;
       });
     }
     
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('❌ 記録の保存に失敗しました'),
-        backgroundColor: Colors.red,
-        duration: const Duration(seconds: 2),
-      ),
-    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('❌ 記録の保存に失敗しました'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
   }
 }
 
@@ -1522,10 +1547,20 @@ Widget _buildDefaultAlbumCover(double size, {required bool isSingle}) {
   final showCompletionButton = !(_currentIndex == 0 && !widget.isPlayingSingleAlbum);
   
   int completionCount = 0;
+  TaskItem? currentTask; // 🔧 追加: 現在のタスクを明示的に取得
+  
   if (showCompletionButton) {
     final actualTaskIndex = widget.isPlayingSingleAlbum ? _currentIndex : _currentIndex - 1;
     if (actualTaskIndex >= 0 && actualTaskIndex < _tasks.length) {
-      final currentTask = _tasks[actualTaskIndex];
+      currentTask = _tasks[actualTaskIndex]; // 🔧 追加
+      
+      // 🔧 デバッグログ追加
+      print('🔧 [DEBUG] 完了カウント表示:');
+      print('  - currentTask.id: ${currentTask.id}');
+      print('  - currentTask.title: ${currentTask.title}');
+      print('  - _todayTaskCompletions[${currentTask.id}]: ${_todayTaskCompletions[currentTask.id]}');
+      print('  - _todayTaskCompletions全体: $_todayTaskCompletions');
+      
       completionCount = _todayTaskCompletions[currentTask.id] ?? 0;
     }
   }
@@ -1537,9 +1572,8 @@ Widget _buildDefaultAlbumCover(double size, {required bool isSingle}) {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 🔧 修正：Transform.translateで少し上に移動
             Transform.translate(
-              offset: const Offset(0, -1), // 🆕 追加：2ピクセル上に移動
+              offset: const Offset(0, -1),
               child: AutoScrollText(
                 text: _getCurrentTitle(),
                 style: const TextStyle(
@@ -1548,12 +1582,12 @@ Widget _buildDefaultAlbumCover(double size, {required bool isSingle}) {
                   letterSpacing: -0.8,
                   fontWeight: FontWeight.w800,
                   fontFamily: 'Hiragino Sans',
-                  height: 1.5, // 🆕 追加：行の高さを調整
+                  height: 1.5,
                 ),
                 onTap: _navigateToAlbumDetail,
               ),
             ),
-            const SizedBox(height: 4), // 🔧 修正：4 → 2に縮小
+            const SizedBox(height: 4),
             GestureDetector(
               onTap: _navigateToAlbumDetail,
               child: Text(

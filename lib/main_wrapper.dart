@@ -953,7 +953,7 @@ Future<void> _scheduleNormalTaskCompletion() async {
     await _notificationService.scheduleDelayedNotification(
       id: notificationId,
       title: 'Task Complete',
-      body: '\"${currentTask.title}\"の時間が終了しました',
+      body: 'Time is up for "${currentTask.title}"',
       delay: Duration(seconds: remainingSeconds),
       payload: payload,
       withActions: true,
@@ -1219,7 +1219,7 @@ Future<void> _scheduleCurrentTaskCompletion() async {
       await _notificationService.scheduleDelayedNotification(
         id: 9900 + _currentTaskIndex,
         title: 'Task Complete!',
-        body: '\"${currentTask.title}\"の時間が終了しました。このタスクはできましたか？',
+        body: 'Time is up for "${currentTask.title}"',
         delay: Duration(seconds: remainingSeconds),
         payload: payload,
         withActions: true,
@@ -1281,7 +1281,7 @@ Future<void> _scheduleNormalTaskNotification() async {
   await _notificationService.scheduleDelayedNotification(
     id: 50000 + _currentTaskIndex,
     title: 'Task Complete',
-    body: '\"${currentTask.title}\"の時間が終了しました',
+    body: 'Time is up for "${currentTask.title}"',
     delay: Duration(seconds: remainingSeconds),
     payload: 'notification_type=NORMAL&taskIndex=$_currentTaskIndex',
     withActions: true,
@@ -1753,6 +1753,10 @@ Future<void> _initializeAudioService() async {
   Future<void> _loadUserData() async {
   try {
     final data = await _dataService.loadUserData();
+    
+    // 🔧 修正: 既存のカウントをバックアップ
+    final existingCounts = Map<String, int>.from(_todayTaskCompletions);
+    
     setState(() {
       _currentIdealSelf = data['idealSelf'] ?? 'Ideal Self';
       _currentArtistName = data['artistName'] ?? 'You';
@@ -1784,8 +1788,25 @@ Future<void> _initializeAudioService() async {
       }
     });
     
-    await _loadTodayCompletions();
+    // 🔧 修正: ライフドリームアルバムのカウントのみ再読み込み
+    final lifeDreamCompletions = <String, int>{};
+    for (final task in _currentTasks) {
+      final count = await _taskCompletionService.getTodayTaskSuccesses(task.id);
+      lifeDreamCompletions[task.id] = count;
+    }
+    
+    // 🔧 重要: 既存のカウント（シングルアルバム含む）を保持してマージ
+    setState(() {
+      _todayTaskCompletions = {
+        ...existingCounts, // 既存のカウントを保持
+        ...lifeDreamCompletions, // ライフドリームアルバムのカウントで上書き
+      };
+    });
+    
+    print('✅ _loadUserData完了: カウント保持 → $_todayTaskCompletions');
+    
   } catch (e) {
+    print('❌ ユーザーデータ読み込みエラー: $e');
     setState(() {
       _currentTasks = _dataService.getDefaultTasks();
     });
@@ -2986,18 +3007,20 @@ int _getCurrentTaskNumberForNotification() {
   }
 
   void _resetProgressOnly() {
-    setState(() {
-      _elapsedSeconds = 0;
-      _currentProgress = 0.0;
-      _isPlaying = false;
-    });
-    
-    _taskStartTime = null;
-    _pauseStartTime = null;
-    _totalPausedSeconds = 0;
-    
-    print('🔧 MainWrapper: 進捗をリセットしました（現在のタスクに留まります）');
-  }
+  setState(() {
+    _elapsedSeconds = 0;
+    _currentProgress = 0.0;
+    _isPlaying = false;
+  });
+  
+  _taskStartTime = null;
+  _pauseStartTime = null;
+  _totalPausedSeconds = 0;
+  
+  // 🔧 修正：_todayTaskCompletionsは保持する（上書きしない）
+  print('🔧 MainWrapper: 進捗をリセットしました（現在のタスクに留まります）');
+  print('🔧 保持されたカウント: $_todayTaskCompletions');
+}
 
   Future<void> _recordTaskCompletionInApp(TaskItem task, String albumName, int elapsedSeconds, bool wasSuccessful) async {
   try {
@@ -3026,28 +3049,29 @@ int _getCurrentTaskNumberForNotification() {
       
       print('✅ タスク完了カウント更新: ${task.title} → ${_todayTaskCompletions[task.id]}');
       
-      // 🆕 追加: PlayerScreenに即座に通知
-      if (mounted) {
-        // PlayerScreenの状態を強制更新
-        setState(() {});
-      }
-      
       await _notifyNewTaskCompletion();
     } else {
       await _audioService.playNotificationSound();
     }
     
-    // 🔧 修正: データ再読み込み後も最新のカウントを保持
+    // 🔧 重要：現在のカウントをバックアップ
     final currentCounts = Map<String, int>.from(_todayTaskCompletions);
+    
+    // データ再読み込み
     await _loadUserData();
     
-    // 🔧 重要: 再読み込み後に最新のカウントをマージ
-    setState(() {
-      _todayTaskCompletions = {
-        ..._todayTaskCompletions,
-        ...currentCounts,
-      };
-    });
+    // 🔧 重要：再読み込み後にシングルアルバムのカウントを復元
+    if (_isPlayingSingleAlbum) {
+      setState(() {
+        // ライフドリームアルバムのカウントに、シングルアルバムのカウントをマージ
+        _todayTaskCompletions = {
+          ..._todayTaskCompletions,
+          ...currentCounts,
+        };
+      });
+      
+      print('✅ シングルアルバムカウント復元: $_todayTaskCompletions');
+    }
     
     print('✅ タスク完了記録完了: ${task.title} (成功: $wasSuccessful)');
   } catch (e) {
