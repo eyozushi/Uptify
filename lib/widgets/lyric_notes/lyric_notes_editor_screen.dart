@@ -138,46 +138,38 @@ List<LyricNoteItem> _getVisibleNotes() {
     return _notes.indexWhere((n) => n.id == targetNote.id);
   }
 
-  /// 行のコントローラーをセットアップ
-void _setupLine(int index, LyricNoteItem note) {
-  // 🔧 修正: 空の場合はダミー文字を入れる
-  final displayText = note.text.isEmpty ? _dummyChar : note.text;
+  void _setupLine(int index, LyricNoteItem note) {
+  final displayText = note.text;
   final controller = TextEditingController(text: displayText);
   final focusNode = FocusNode();
   
   _controllers.add(controller);
   _focusNodes.add(focusNode);
   
-  // 🆕 追加: 前回のテキストを保持する変数
   String previousText = displayText;
+  bool hasAddedNewLine = false; // 🆕 追加: 新しい行を追加したかのフラグ
   
-  // コントローラーにリスナーを追加
-controller.addListener(() {
-  if (!_isUpdating) {
-    final currentText = controller.text;
-    
-    // 🐛 デバッグ: 現在の状態を表示
-    print('🐛 リスナー発火: index=$index, currentText="$currentText" (length=${currentText.length}), previousText="$previousText" (length=${previousText.length})');
-    
-    // 🔧 修正: ダミー文字のみの場合は空として扱う
-    final currentTextClean = currentText == _dummyChar ? '' : currentText;
-    final previousTextClean = previousText == _dummyChar ? '' : previousText;
-    
-    // 🔧 修正: ダミー文字が削除された（空→空のデリート）を検知
-    if (currentText.isEmpty && previousText == _dummyChar) {
-      print('🐛 デリート検知条件: currentText.isEmpty=${currentText.isEmpty}, previousText==$_dummyChar=${previousText == _dummyChar}');
+  controller.addListener(() {
+    if (!_isUpdating) {
+      final currentText = controller.text;
       
-      final realIndex = _getRealIndex(index);
-      if (realIndex != -1) {
-        final currentNote = _notes[realIndex];
+      print('🐛 リスナー発火: index=$index, currentText="$currentText" (length=${currentText.length}), previousText="$previousText" (length=${previousText.length})');
+      
+      final currentTextClean = currentText == _dummyChar ? '' : currentText;
+      final previousTextClean = previousText == _dummyChar ? '' : previousText;
+      
+      if (currentText.isEmpty && previousTextClean.isEmpty && previousText.isNotEmpty) {
+        print('🐛 デリート検知条件: currentText.isEmpty=${currentText.isEmpty}, previousText==$_dummyChar=${previousText == _dummyChar}');
         
-        print('🔍 空行でデリート検知（ダミー文字削除）: visibleIndex=$index, level=${currentNote.level}');
-    
-          // 🔧 修正: WidgetsBinding.instance.addPostFrameCallbackで遅延実行
+        final realIndex = _getRealIndex(index);
+        if (realIndex != -1) {
+          final currentNote = _notes[realIndex];
+          
+          print('🔍 空行でデリート検知（ダミー文字削除）: visibleIndex=$index, level=${currentNote.level}');
+      
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!mounted || _isUpdating) return;
             
-            // 最初の行で親の場合
             if (index == 0 && currentNote.level == 1) {
               print('🔍 最初の親（Level 1）→ 子孫を削除してLevel 0に変換');
               _isUpdating = true;
@@ -206,8 +198,6 @@ controller.addListener(() {
                   
                   WidgetsBinding.instance.addPostFrameCallback((_) {
                     if (index < _controllers.length) {
-                      // 🔧 修正: ダミー文字を再設定
-                      _controllers[index].text = _dummyChar;
                       _controllers[index].selection = 
                           const TextSelection.collapsed(offset: 0);
                     }
@@ -215,11 +205,10 @@ controller.addListener(() {
                 }
               });
               
-              previousText = _dummyChar; // 🔧 修正: previousTextを更新
+              previousText = currentText;
               return;
             }
             
-            // 親（Level 1）で空の場合
             if (currentNote.level == 1) {
               print('🔍 親（Level 1）で空 → Level 0に変換');
               _isUpdating = true;
@@ -240,8 +229,6 @@ controller.addListener(() {
                   
                   WidgetsBinding.instance.addPostFrameCallback((_) {
                     if (index < _controllers.length) {
-                      // 🔧 修正: ダミー文字を再設定
-                      _controllers[index].text = _dummyChar;
                       _controllers[index].selection = 
                           const TextSelection.collapsed(offset: 0);
                     }
@@ -249,11 +236,10 @@ controller.addListener(() {
                 }
               });
               
-              previousText = _dummyChar; // 🔧 修正: previousTextを更新
+              previousText = currentText;
               return;
             }
             
-            // 子（Level 2）でリスト化されていて空の場合
             if (currentNote.level == 2 && currentNote.isCollapsed) {
               print('🔍 子（Level 2、リスト化）で空 → 通常の子に変換');
               _isUpdating = true;
@@ -274,8 +260,6 @@ controller.addListener(() {
                   
                   WidgetsBinding.instance.addPostFrameCallback((_) {
                     if (index < _controllers.length) {
-                      // 🔧 修正: ダミー文字を再設定
-                      _controllers[index].text = _dummyChar;
                       _controllers[index].selection = 
                           const TextSelection.collapsed(offset: 0);
                     }
@@ -283,11 +267,10 @@ controller.addListener(() {
                 }
               });
               
-              previousText = _dummyChar; // 🔧 修正: previousTextを更新
+              previousText = currentText;
               return;
             }
             
-            // 2行目以降で空の場合、前の行に戻る
             if (index > 0) {
               print('🔍 _handleBackspace呼び出し（スマホ、ダミー文字削除）: visibleIndex=$index');
               _handleBackspace(index);
@@ -300,33 +283,24 @@ controller.addListener(() {
         }
       }
       
-      // 前回のテキストを更新
       previousText = currentText;
       
-      // 🔧 修正: テキストが変更された時、ダミー文字を除去して保存
       final realIndex = _getRealIndex(index);
       if (realIndex == -1) return;
       
-      // ダミー文字を除去してノートを更新
       _notes[realIndex] = _notes[realIndex].copyWith(
         text: currentTextClean,
         updatedAt: DateTime.now(),
       );
       
-      // 最後の行に入力があった場合、新しい空行を追加
-      if (realIndex == _notes.length - 1 && currentTextClean.isNotEmpty) {
+      // 🔧 修正: 最後の行に入力があった場合、リビルドを回避
+      if (realIndex == _notes.length - 1 && currentTextClean.isNotEmpty && !hasAddedNewLine) {
+        hasAddedNewLine = true; // 🆕 追加: フラグを立てる
         _notes.add(LyricNoteItem(text: '', level: 0, parentId: null));
-        
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted && !_isUpdating) {
-            setState(() {
-              _rebuildControllers();
-            });
-          }
-        });
+        print('✅ 新しい空行を追加（リビルドなし）: 合計${_notes.length}行');
+        // 🔧 修正: setStateを呼ばない（リビルドしない）
       }
       
-      // 自動保存
       _autoSaveTimer?.cancel();
       _autoSaveTimer = Timer(const Duration(milliseconds: 500), () {
         if (mounted) {
@@ -1061,11 +1035,8 @@ bool _shouldShowHint(int visibleIndex) {
   
   final controllerText = _controllers[visibleIndex].text;
   
-  // 🔧 修正: コントローラーのテキストから判定
-  // ダミー文字のみ、または完全に空の場合のみヒントを表示
-  final cleanText = controllerText == _dummyChar ? '' : controllerText;
-  
-  return cleanText.isEmpty;
+  // 🔧 修正: 完全に空の場合のみヒントを表示
+  return controllerText.isEmpty;
 }
 
 /// レベルに応じたヒントテキストの左パディングを取得

@@ -324,4 +324,4 @@ def main():
     print(f"✨ Processing complete! {success_count}/{len(files)} files updated")
 
 if __name__ == "__main__":
-    main()
+    main()python3 title_case.py
