@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
+import 'dart:math' as math;
 import 'package:flutter/gestures.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/task_item.dart';
@@ -16,6 +17,7 @@ import 'settings_screen.dart';
 import 'album_detail_screen.dart';
 import 'package:palette_generator/palette_generator.dart';
 import '../widgets/lyric_notes_widget.dart';
+
 
 // カスタムの太いプラスアイコンを描画するクラス
 class ThickPlusPainter extends CustomPainter {
@@ -1547,23 +1549,18 @@ Widget _buildDefaultAlbumCover(double size, {required bool isSingle}) {
   final showCompletionButton = !(_currentIndex == 0 && !widget.isPlayingSingleAlbum);
   
   int completionCount = 0;
-  TaskItem? currentTask; // 🔧 追加: 現在のタスクを明示的に取得
+  TaskItem? currentTask;
   
   if (showCompletionButton) {
     final actualTaskIndex = widget.isPlayingSingleAlbum ? _currentIndex : _currentIndex - 1;
     if (actualTaskIndex >= 0 && actualTaskIndex < _tasks.length) {
-      currentTask = _tasks[actualTaskIndex]; // 🔧 追加
-      
-      // 🔧 デバッグログ追加
-      print('🔧 [DEBUG] 完了カウント表示:');
-      print('  - currentTask.id: ${currentTask.id}');
-      print('  - currentTask.title: ${currentTask.title}');
-      print('  - _todayTaskCompletions[${currentTask.id}]: ${_todayTaskCompletions[currentTask.id]}');
-      print('  - _todayTaskCompletions全体: $_todayTaskCompletions');
-      
+      currentTask = _tasks[actualTaskIndex];
       completionCount = _todayTaskCompletions[currentTask.id] ?? 0;
     }
   }
+  
+  // 🆕 追加：完了済みかどうかを判定
+  final hasCompleted = completionCount > 0;
   
   return Row(
     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1617,10 +1614,10 @@ Widget _buildDefaultAlbumCover(double size, {required bool isSingle}) {
                 width: 32,
                 height: 32,
                 decoration: BoxDecoration(
-                  color: Colors.transparent,
+                  color: Color.lerp(_dominantColor, Colors.black, 0.6)!, // 🔧 修正：0.7 → 0.5
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: Colors.white,
+                    color: hasCompleted ? const Color(0xFF1DB954) : Colors.white,
                     width: 3,
                   ),
                   boxShadow: [
@@ -1636,10 +1633,10 @@ Widget _buildDefaultAlbumCover(double size, {required bool isSingle}) {
                     ? Text(
                         completionCount.toString(),
                         style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
+                          color: Color(0xFF1DB954),
+                          fontSize: 18,
                           fontWeight: FontWeight.w800,
-                          fontFamily: 'SF Pro Text',
+                          fontFamily: 'SF Pro Rounded',
                         ),
                       )
                     : SizedBox(
@@ -1659,28 +1656,115 @@ Widget _buildDefaultAlbumCover(double size, {required bool isSingle}) {
   );
 }
 
+/// 🔧 修正：今日のタスク実行時間をプロット表示（丸い点）
+Widget _buildTaskExecutionPlots() {
+  if (_currentIndex != 0 || widget.isPlayingSingleAlbum) {
+    return const SizedBox.shrink();
+  }
+  
+  return FutureBuilder<List<Map<String, dynamic>>>(
+    future: _getTodayTaskExecutions(),
+    builder: (context, snapshot) {
+      if (!snapshot.hasData || snapshot.data!.isEmpty) {
+        return const SizedBox.shrink();
+      }
+      
+      final executions = snapshot.data!;
+      final totalMinutesInDay = 24 * 60;
+      final screenWidth = MediaQuery.of(context).size.width;
+      final coverSize = screenWidth - 60; // 🔧 修正：ジャケットと同じ幅計算
+      
+      return SizedBox(
+        width: double.infinity,
+        height: 4,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: executions.map((execution) {
+            final startTime = execution['startTime'] as DateTime;
+            final startMinutes = startTime.hour * 60 + startTime.minute;
+            final position = startMinutes / totalMinutesInDay;
+            
+            return Positioned(
+              left: position * coverSize - 6, // 🔧 修正：coverSizeを使用
+              top: -2.5,
+              child: Container(
+                width: 8,
+                height: 8,
+                decoration: const BoxDecoration(
+                  color: Color(0xFF1DB954),
+                  shape: BoxShape.circle,
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      );
+    },
+  );
+}
+
+/// 🆕 新規追加：今日のタスク実行履歴を取得（_buildTaskExecutionPlots の直後に配置）
+/// 🔧 修正：今日のタスク実行履歴を取得
+Future<List<Map<String, dynamic>>> _getTodayTaskExecutions() async {
+  try {
+    final today = DateTime.now();
+    final todayCompletions = await _dataService.getTaskCompletionsByDate(today);
+    
+    // 🔧 デバッグ出力
+    print('📊 今日の完了タスク数: ${todayCompletions.length}');
+    
+    // 成功したタスクのみを抽出
+    final executions = <Map<String, dynamic>>[];
+    for (final completion in todayCompletions) {
+      if (completion.wasSuccessful) {
+        print('✅ 成功タスク: ${completion.taskTitle}, 開始: ${completion.startedAt}');
+        executions.add({
+          'startTime': completion.startedAt,
+          'duration': completion.elapsedSeconds,
+        });
+      }
+    }
+    
+    print('🎯 プロット対象: ${executions.length}件');
+    return executions;
+  } catch (e) {
+    print('❌ タスク実行履歴取得エラー: $e');
+    return [];
+  }
+}
+
   Widget _buildProgressBar() {
   return Column(
     children: [
-      SliderTheme(
-        data: SliderTheme.of(context).copyWith(
-          activeTrackColor: Colors.white,
-          inactiveTrackColor: Colors.white.withOpacity(0.3),
-          thumbColor: Colors.white,
-          thumbShape: const RoundSliderThumbShape(
-            enabledThumbRadius: 6,
-          ),
-          overlayShape: const RoundSliderOverlayShape(
-            overlayRadius: 12,
-          ),
-          trackHeight: 4,
-          trackShape: const RoundedRectSliderTrackShape(),
-          overlayColor: Colors.transparent,
-          padding: EdgeInsets.zero, // 🔧 パディングを0に
-        ),
-        child: Slider(
-          value: _getCurrentTimeProgress().clamp(0.0, 1.0),
-          onChanged: (value) {},
+      SizedBox(
+        height: 4,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            SliderTheme(
+              data: SliderTheme.of(context).copyWith(
+                activeTrackColor: Colors.white,
+                inactiveTrackColor: Colors.white.withOpacity(0.3),
+                thumbColor: Colors.white,
+                thumbShape: const RoundSliderThumbShape(
+                  enabledThumbRadius: 6,
+                ),
+                overlayShape: const RoundSliderOverlayShape(
+                  overlayRadius: 12,
+                ),
+                trackHeight: 4,
+                trackShape: const RoundedRectSliderTrackShape(),
+                overlayColor: Colors.transparent,
+                padding: EdgeInsets.zero,
+              ),
+              child: Slider(
+                value: _getCurrentTimeProgress().clamp(0.0, 1.0),
+                onChanged: (value) {},
+              ),
+            ),
+            if (_currentIndex == 0 && !widget.isPlayingSingleAlbum)
+              _buildTaskExecutionPlots(),
+          ],
         ),
       ),
       const SizedBox(height: 8),
@@ -1762,51 +1846,51 @@ Row(
   mainAxisAlignment: MainAxisAlignment.center,
   crossAxisAlignment: CrossAxisAlignment.center,
   children: [
-    // 🔧 修正：戻るボタン（丸みを帯びたアイコン）
+    // 🔧 修正：戻るボタン（適度な丸み）
     _buildControlButton(
-      icon: Icons.skip_previous_rounded,  // 🔧 変更：_rounded を追加
+      icon: Icons.skip_previous_rounded,  // 🔧 変更：_rounded に戻す
       onTap: () {
         if (_currentIndex > 0) {
           _animateToPage(_currentIndex - 1);
         }
       },
-      size: 34,
+      size: 40,
       color: Colors.white,
     ),
     
     const SizedBox(width: 24),
     
     // 再生ボタン（中央）
-GestureDetector(
-  onTap: _togglePlayPause,
-  child: Container(
-    width: 64,
-    height: 64,
-    decoration: const BoxDecoration(
-      color: Colors.white,
-      shape: BoxShape.circle,
+    GestureDetector(
+      onTap: _togglePlayPause,
+      child: Container(
+        width: 64,
+        height: 64,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          shape: BoxShape.circle,
+        ),
+        alignment: Alignment.center,
+        child: Icon(
+          _getPlayPauseIcon(),
+          color: Color.lerp(_dominantColor, Colors.black, 0.6)!,
+          size: 45,
+        ),
+      ),
     ),
-    alignment: Alignment.center,
-    child: Icon(
-      _getPlayPauseIcon(),
-      color: Color.lerp(_dominantColor, Colors.black, 0.6)!,  // 🔧 変更：背景色を30%暗く
-      size: 45,
-    ),
-  ),
-),
     
     const SizedBox(width: 24),
     
-    // 🔧 修正：スキップボタン（丸みを帯びたアイコン）
+    // 🔧 修正：スキップボタン（適度な丸み）
     _buildControlButton(
-      icon: Icons.skip_next_rounded,  // 🔧 変更：_rounded を追加
+      icon: Icons.skip_next_rounded,  // 🔧 変更：_rounded に戻す
       onTap: () {
         final maxIndex = widget.isPlayingSingleAlbum ? _tasks.length - 1 : _tasks.length;
         if (_currentIndex < maxIndex) {
           _animateToPage(_currentIndex + 1);
         }
       },
-      size: 34,
+      size: 40,
       color: Colors.white,
     ),
   ],
@@ -1931,7 +2015,7 @@ GestureDetector(
                     height: 24,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: _isAutoPlayEnabled ? Colors.white : Colors.grey[600],
+                      color: Color.lerp(_dominantColor, Colors.black, 0.6)!,
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withOpacity(0.2),
@@ -2071,20 +2155,20 @@ Widget _buildLyricNotes(double coverSize) {
   );
 }
 
-/// 🆕 再生/一時停止アイコンを取得
+/// 🔧 修正：再生/一時停止アイコンを取得
 IconData _getPlayPauseIcon() {
   // ライフドリームアルバムの理想像ページ（index=0）は常に一時停止アイコン
   if (_currentIndex == 0 && !widget.isPlayingSingleAlbum) {
-    return Icons.pause_rounded;  // 🔧 変更：丸みを追加
+    return Icons.pause_rounded;  // 🔧 変更：適度な丸み
   }
   
   // シングルアルバムの場合：_isPlayingの値で判定
   if (widget.isPlayingSingleAlbum) {
-    return _isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded;  // 🔧 変更：丸みを追加
+    return _isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded;  // 🔧 変更：適度な丸み
   }
   
   // ライフドリームアルバムのタスク（index≥1）：_isPlayingの値で判定
-  return _isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded;  // 🔧 変更：丸みを追加
+  return _isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded;  // 🔧 変更：適度な丸み
 }
 }
 // 🆕 完全修正：自動スクロールテキストウィジェット

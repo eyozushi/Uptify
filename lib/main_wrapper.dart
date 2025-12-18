@@ -3095,15 +3095,24 @@ Widget _buildCurrentScreen() {
       if (_isArtistScreenVisible) _buildArtistScreen(),
       
       // PlayerScreen
-      if (_playingTasks.isNotEmpty && (_isDraggingPlayer || _playerDragController.value < 1.0 || _isPlayerScreenVisible))
-        Positioned(
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          child: GestureDetector(
-      behavior: HitTestBehavior.opaque,
+if (_playingTasks.isNotEmpty && (_isDraggingPlayer || _playerDragController.value < 1.0 || _isPlayerScreenVisible))
+  Positioned(
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    child: GestureDetector(
+      behavior: HitTestBehavior.translucent, // 🔧 修正
       onVerticalDragStart: (details) {
+        // 🔧 追加：PlayerScreen完全に閉じている時もドラッグ開始可能
+        if (_playerDragController.value == 1.0) {
+          setState(() {
+            _isDraggingPlayer = true;
+            _isPlayerScreenVisible = true;
+          });
+          return;
+        }
+        
         final isAtTop = PlayerScreen.isAtTopOfScroll(_playerScreenKey);
         if (!isAtTop) return;
         
@@ -3118,6 +3127,7 @@ Widget _buildCurrentScreen() {
           _isPlayerScreenVisible = true;
         });
       },
+
       onVerticalDragUpdate: (details) {
         if (_isDraggingPlayer && !_isAnimating) {
           final deltaOffset = details.delta.dy / screenHeight;
@@ -3127,7 +3137,7 @@ Widget _buildCurrentScreen() {
       onVerticalDragEnd: (details) {
   if (!_isDraggingPlayer) return;
   
-  // 🔧 修正：setState を削除して即座にアニメーション開始
+  // 🔧 修正：即座にフラグをクリア（setState不要）
   _isDraggingPlayer = false;
   
   final velocity = details.primaryVelocity ?? 0;
@@ -3731,7 +3741,6 @@ void _showCompletionResultDialog(bool allCompleted) {
   }
 
   Widget _buildBottomSection() {
-  // 🔧 追加：キーボードが表示されている場合は非表示
   final keyboardVisible = MediaQuery.of(context).viewInsets.bottom > 0;
   if (keyboardVisible) {
     return const SizedBox.shrink();
@@ -3744,28 +3753,29 @@ void _showCompletionResultDialog(bool allCompleted) {
         return const SizedBox.shrink();
       }
       
-      // 🔧 value が変わるたびに再計算
       final opacity = _playerDragController.value >= 0.95 
           ? 1.0 
           : _playerDragController.value <= 0.7
               ? 0.0 
               : ((_playerDragController.value - 0.7) / 0.25);
       
-      return Opacity(
-        opacity: opacity,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (_playingTasks.isNotEmpty) _buildMiniPlayerWithDrag(),
-            if (_playingTasks.isNotEmpty) _buildFullWidthProgressBar(),
-            _buildPageSelector(),
-          ],
+      return SizedBox( // 🔧 修正：Opacity → SizedBox
+        height: opacity > 0 ? null : 0, // 🔧 opacity = 0 の時は高さ0
+        child: Opacity(
+          opacity: opacity,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (_playingTasks.isNotEmpty) _buildMiniPlayerWithDrag(),
+              if (_playingTasks.isNotEmpty) _buildFullWidthProgressBar(),
+              _buildPageSelector(),
+            ],
+          ),
         ),
       );
     },
   );
 }
-
 // main_wrapper.dart の _buildMiniPlayerWithDrag メソッド
 
 Widget _buildMiniPlayerWithDrag() {
@@ -3795,28 +3805,33 @@ Widget _buildMiniPlayerWithDrag() {
       });
     },
     onVerticalDragUpdate: (details) {
-  if (_isDraggingPlayer && !_isAnimating) {
-    final deltaOffset = details.delta.dy / screenHeight;
-    _playerDragController.value = (_playerDragController.value + deltaOffset).clamp(0.0, 1.0);
-  }
-},
+      if (_isDraggingPlayer && !_isAnimating) {
+        final deltaOffset = details.delta.dy / screenHeight;
+        _playerDragController.value = (_playerDragController.value + deltaOffset).clamp(0.0, 1.0);
+      }
+    },
     onVerticalDragEnd: (details) {
-  if (!_isDraggingPlayer) return;
-  
-  // 🔧 修正：setState を削除
-  _isDraggingPlayer = false;
-  
-  final velocity = details.primaryVelocity ?? 0;
-  final currentValue = _playerDragController.value;
-  
-  if (velocity < -500 || currentValue < 0.7) {
-    _openPlayerWithAnimation();
-  } else {
-    _closePlayerWithAnimation();
-  }
-},
+      if (!_isDraggingPlayer) return;
+      
+      _isDraggingPlayer = false;
+      
+      final velocity = details.primaryVelocity ?? 0;
+      final currentValue = _playerDragController.value;
+      
+      if (velocity < -500 || currentValue < 0.7) {
+        _openPlayerWithAnimation();
+      } else {
+        _closePlayerWithAnimation();
+      }
+    },
     onTap: () {
       print('🎵 簡易プレイヤー: タップで開く');
+      
+      // 🔧 修正：タップ時のみ setState で即座に表示
+      setState(() {
+        _isPlayerScreenVisible = true;
+      });
+      
       _openPlayerWithAnimation();
     },
     child: Container(
@@ -3851,7 +3866,6 @@ Widget _buildMiniPlayerWithDrag() {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  // 🔧 修正：インデックスのバリデーション
                   _playingTasks.isNotEmpty && _currentTaskIndex >= 0 && _currentTaskIndex < _playingTasks.length
                       ? (_playingTasks[_currentTaskIndex].title.isEmpty
                           ? 'タスク${_currentTaskIndex + 1}'
@@ -4185,10 +4199,9 @@ void _openPlayerWithAnimation() {
   if (!mounted) return;
   
   _isAnimating = true;
-  _isPlayerScreenVisible = true;
   
   final remainingDistance = _playerDragController.value;
-  final duration = (400 * remainingDistance).toInt().clamp(250, 400); // 🔧 修正：250〜400ms
+  final duration = (400 * remainingDistance).toInt().clamp(250, 400);
   
   _playerDragController.animateTo(
     0.0,
@@ -4349,68 +4362,79 @@ void _closePlayerWithAnimation() {
     {'icon': Icons.add_circle_outline, 'label': 'Release'},
   ];
 
-  return Container(
-    height: 80,
-    decoration: const BoxDecoration(
-      color: Colors.black,
-    ),
-    child: Row(
-      mainAxisAlignment: MainAxisAlignment.spaceAround,
-      children: List.generate(pages.length, (index) {
-        final isSelected = _selectedPageIndex == index;
-        final page = pages[index];
-        
-        return GestureDetector(
-  onTap: () {
-    // 🆕 追加：アーティスト画面が開いている場合は閉じる
-    if (_isArtistScreenVisible) {
-      setState(() {
-        _isArtistScreenVisible = false;
-      });
-    }
-    
-    // 🆕 追加：PlaybackScreen表示時のみデータ更新を呼び出し
-    if (index == 2 && _selectedPageIndex != 2) {
-      _refreshPlaybackScreen();
-    }
-    
-    setState(() {
-      _selectedPageIndex = index;
-      if (_isAlbumDetailVisible) {
-        _isAlbumDetailVisible = false;
-        _currentSingleAlbum = null;
-      }
-    });
-  },
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  page['icon'] as IconData,
-                  color: isSelected 
-                      ? const Color(0xFF1DB954) 
-                      : Colors.white.withOpacity(0.6),
-                  size: 26,
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  page['label'] as String,
-                  style: TextStyle(
+  return AnimatedBuilder( // 🔧 追加
+    animation: _playerDragController,
+    builder: (context, child) {
+      // 🔧 PlayerScreenがドラッグ中は透明に
+      final isPlayerDragging = _playerDragController.value < 0.95;
+      
+      return AnimatedOpacity( // 🔧 追加：滑らかなフェード
+        opacity: isPlayerDragging ? 0.0 : 1.0,
+        duration: const Duration(milliseconds: 150),
+        child: child!,
+      );
+    },
+    child: Container(
+      height: 80,
+      decoration: const BoxDecoration(
+        color: Colors.black,
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: List.generate(pages.length, (index) {
+          final isSelected = _selectedPageIndex == index;
+          final page = pages[index];
+          
+          return GestureDetector(
+            onTap: () {
+              if (_isArtistScreenVisible) {
+                setState(() {
+                  _isArtistScreenVisible = false;
+                });
+              }
+              
+              if (index == 2 && _selectedPageIndex != 2) {
+                _refreshPlaybackScreen();
+              }
+              
+              setState(() {
+                _selectedPageIndex = index;
+                if (_isAlbumDetailVisible) {
+                  _isAlbumDetailVisible = false;
+                  _currentSingleAlbum = null;
+                }
+              });
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    page['icon'] as IconData,
                     color: isSelected 
                         ? const Color(0xFF1DB954) 
                         : Colors.white.withOpacity(0.6),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    fontFamily: 'Hiragino Sans',
+                    size: 26,
                   ),
-                ),
-              ],
+                  const SizedBox(height: 6),
+                  Text(
+                    page['label'] as String,
+                    style: TextStyle(
+                      color: isSelected 
+                          ? const Color(0xFF1DB954) 
+                          : Colors.white.withOpacity(0.6),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      fontFamily: 'Hiragino Sans',
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        );
-      }),
+          );
+        }),
+      ),
     ),
   );
 }
@@ -5563,13 +5587,24 @@ Widget build(BuildContext context) {
 
   return Scaffold(
     backgroundColor: Colors.black,
-    resizeToAvoidBottomInset: false,  // 🔧 追加：この行を追加
+    resizeToAvoidBottomInset: false,
     body: Column(
       children: [
         Expanded(
           child: _buildCurrentScreen(),
         ),
-        _buildBottomSection(),
+        // 🔧 修正：AnimatedBuilderで下にずらす
+        AnimatedBuilder(
+          animation: _playerDragController,
+          builder: (context, child) {
+            final offset = (1.0 - _playerDragController.value) * 100; // 🔧 PlayerScreenが開くほど下に移動
+            return Transform.translate(
+              offset: Offset(0, offset),
+              child: child!,
+            );
+          },
+          child: _buildBottomSection(),
+        ),
       ],
     ),
   );

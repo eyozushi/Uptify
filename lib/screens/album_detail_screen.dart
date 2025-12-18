@@ -7,6 +7,7 @@ import '../models/task_item.dart';
 import '../models/lyric_note_item.dart';
 import '../widgets/lyric_notes/lyric_notes_editor_screen.dart';
 import '../services/data_service.dart';
+import '../services/task_completion_service.dart';
 
 
 class AlbumDetailScreen extends StatefulWidget {
@@ -50,19 +51,43 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
   Color _accentColor = const Color(0xFF1A1A2E);
   bool _isExtractingColors = false;
 
+  // 🆕 追加：今日の完了タスク判定用
+final TaskCompletionService _taskCompletionService = TaskCompletionService();
+Map<String, bool> _todayCompletedTasks = {};
+
   @override
-  void initState() {
-    super.initState();
+void initState() {
+  super.initState();
+  
+  if (widget.albumImagePath.isNotEmpty && File(widget.albumImagePath).existsSync()) {
+    _albumImage = File(widget.albumImagePath);
+  }
+  
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    _extractColorsFromImage();
+    _loadTodayCompletions(); // 🆕 追加
+  });
+}
+
+/// 🆕 新規追加：今日完了したタスクを読み込み
+Future<void> _loadTodayCompletions() async {
+  try {
+    final completedMap = <String, bool>{};
     
-    if (widget.albumImagePath.isNotEmpty && File(widget.albumImagePath).existsSync()) {
-      _albumImage = File(widget.albumImagePath);
+    for (final task in widget.tasks) {
+      final count = await _taskCompletionService.getTodayTaskSuccesses(task.id);
+      completedMap[task.id] = count > 0;
     }
     
-    // 🆕 追加：色抽出を開始
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _extractColorsFromImage();
-    });
+    if (mounted) {
+      setState(() {
+        _todayCompletedTasks = completedMap;
+      });
+    }
+  } catch (e) {
+    print('❌ 今日の完了タスク読み込みエラー: $e');
   }
+}
 
   // 🆕 新規追加メソッド：アルバム画像から色を抽出
 Future<void> _extractColorsFromImage() async {
@@ -449,6 +474,8 @@ Widget build(BuildContext context) {
   }
 
   Widget _buildTrackItem(TaskItem task, int index) {
+  final isCompletedToday = _todayCompletedTasks[task.id] ?? false;
+  
   return GestureDetector(
     onTap: () {
       print('🎵 タスクタップ: ${task.title} (index: $index)');
@@ -468,7 +495,6 @@ Widget build(BuildContext context) {
       ),
       child: Row(
         children: [
-          // Track Info (左詰め)
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -478,19 +504,36 @@ Widget build(BuildContext context) {
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 14,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w500,
                     fontFamily: 'Hiragino Sans',
                     letterSpacing: -0.5
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                
               ],
             ),
           ),
 
-          // Duration (タスクの設定時間を表示)
+          // 🔧 修正：チェックマークを左に移動、黒く太く
+          if (isCompletedToday) ...[
+            Container(
+              width: 20,
+              height: 20,
+              decoration: const BoxDecoration(
+                color: Color(0xFF1DB954),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.check,
+                color: Colors.black,
+                size: 16,
+                weight: 900,
+              ),
+            ),
+            const SizedBox(width: 20), // 🔧 修正：8 → 12
+          ],
+
           Text(
             _formatDuration(task.duration),
             style: TextStyle(
@@ -503,7 +546,6 @@ Widget build(BuildContext context) {
 
           const SizedBox(width: 16),
 
-          // 🔧 修正：鉛筆アイコンに変更
           GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: () {
@@ -512,7 +554,7 @@ Widget build(BuildContext context) {
             child: Container(
               padding: const EdgeInsets.all(8),
               child: Icon(
-                Icons.edit_outlined, // 🔧 鉛筆アイコン
+                Icons.edit_outlined,
                 color: Colors.white.withOpacity(0.6),
                 size: 24,
               ),
@@ -566,9 +608,7 @@ Future<void> _saveLyricNotes(String taskId, List<LyricNoteItem> notes) async {
   try {
     final dataService = DataService();
     
-    // 🔧 修正：シングルアルバムかライフドリームアルバムかで分岐
     if (widget.isSingleAlbum && widget.albumId != null) {
-      // シングルアルバムの場合
       await dataService.updateSingleAlbumTaskLyricNotes(
         albumId: widget.albumId!,
         taskId: taskId,
@@ -576,12 +616,10 @@ Future<void> _saveLyricNotes(String taskId, List<LyricNoteItem> notes) async {
       );
       print('✅ シングルアルバムのLyric Notes保存完了: $taskId (${notes.length}行)');
     } else {
-      // ライフドリームアルバムの場合
       await dataService.updateTaskLyricNotes(taskId, notes);
       print('✅ ライフドリームアルバムのLyric Notes保存完了: $taskId (${notes.length}行)');
     }
     
-    // タスクリストを更新
     setState(() {
       final taskIndex = widget.tasks.indexWhere((t) => t.id == taskId);
       if (taskIndex != -1) {
@@ -590,6 +628,8 @@ Future<void> _saveLyricNotes(String taskId, List<LyricNoteItem> notes) async {
         );
       }
     });
+    
+    await _loadTodayCompletions(); // 🆕 追加：保存後に再読み込み
     
   } catch (e) {
     print('❌ Lyric Notes保存エラー: $e');

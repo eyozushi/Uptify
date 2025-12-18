@@ -45,6 +45,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
   int _totalTasksCompleted = 0;
   List<Map<String, dynamic>> _taskRanking = [];
   bool _isLoading = true;
+  String _lifeDreamAlbumName = 'Life Dream Album'; // 🆕 追加
 
   @override
 void initState() {
@@ -55,6 +56,10 @@ void initState() {
 
   Future<void> _loadArtistData() async {
   try {
+    // 🆕 追加：ライフドリームアルバム名を取得
+    final userData = await _dataService.loadUserData();
+    final idealSelf = userData['idealSelf'] as String?;
+    
     // 累計完了回数を取得
     final totalCompleted = await _taskCompletionService.getTotalCompletedTasks();
     
@@ -100,6 +105,7 @@ void initState() {
     taskStats.sort((a, b) => (b['completions'] as int).compareTo(a['completions'] as int));
     
     setState(() {
+      _lifeDreamAlbumName = idealSelf ?? 'Life Dream Album'; // 🆕 追加
       _totalTasksCompleted = totalCompleted;
       _taskRanking = taskStats.take(5).toList(); // 上位5位
       _isLoading = false;
@@ -113,6 +119,7 @@ void initState() {
     });
   }
 }
+
   Widget _buildProfileImage() {
   final screenHeight = MediaQuery.of(context).size.height;
   final profileHeight = screenHeight * 0.5; // 画面の半分
@@ -435,7 +442,6 @@ Widget _getAlbumCoverForTask(TaskItem task) {
       // 🔧 修正：ライフドリームアルバム
       GestureDetector(
         onTap: () {
-          // 🔧 修正：ライフドリームアルバム詳細に移動
           if (widget.onNavigateToLifeDreamAlbumDetail != null) {
             widget.onNavigateToLifeDreamAlbumDetail!();
           }
@@ -485,9 +491,9 @@ Widget _getAlbumCoverForTask(TaskItem task) {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Life Dream Album',
-                      style: TextStyle(
+                    Text(
+                      _lifeDreamAlbumName, // 🔧 修正：State変数を使用
+                      style: const TextStyle(
                         color: Colors.white,
                         fontSize: 15,
                         fontWeight: FontWeight.w400,
@@ -607,7 +613,6 @@ Widget _getAlbumCoverForTask(TaskItem task) {
     ],
   );
 }
-
   
 
   @override
