@@ -1656,84 +1656,10 @@ Widget _buildDefaultAlbumCover(double size, {required bool isSingle}) {
   );
 }
 
-/// 🔧 修正：今日のタスク実行時間をプロット表示（丸い点）
-Widget _buildTaskExecutionPlots() {
-  if (_currentIndex != 0 || widget.isPlayingSingleAlbum) {
-    return const SizedBox.shrink();
-  }
-  
-  return FutureBuilder<List<Map<String, dynamic>>>(
-    future: _getTodayTaskExecutions(),
-    builder: (context, snapshot) {
-      if (!snapshot.hasData || snapshot.data!.isEmpty) {
-        return const SizedBox.shrink();
-      }
-      
-      final executions = snapshot.data!;
-      final totalMinutesInDay = 24 * 60;
-      final screenWidth = MediaQuery.of(context).size.width;
-      final coverSize = screenWidth - 60; // 🔧 修正：ジャケットと同じ幅計算
-      
-      return SizedBox(
-        width: double.infinity,
-        height: 4,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: executions.map((execution) {
-            final startTime = execution['startTime'] as DateTime;
-            final startMinutes = startTime.hour * 60 + startTime.minute;
-            final position = startMinutes / totalMinutesInDay;
-            
-            return Positioned(
-              left: position * coverSize - 6, // 🔧 修正：coverSizeを使用
-              top: -2.5,
-              child: Container(
-                width: 8,
-                height: 8,
-                decoration: const BoxDecoration(
-                  color: Color(0xFF1DB954),
-                  shape: BoxShape.circle,
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-      );
-    },
-  );
-}
 
-/// 🆕 新規追加：今日のタスク実行履歴を取得（_buildTaskExecutionPlots の直後に配置）
-/// 🔧 修正：今日のタスク実行履歴を取得
-Future<List<Map<String, dynamic>>> _getTodayTaskExecutions() async {
-  try {
-    final today = DateTime.now();
-    final todayCompletions = await _dataService.getTaskCompletionsByDate(today);
-    
-    // 🔧 デバッグ出力
-    print('📊 今日の完了タスク数: ${todayCompletions.length}');
-    
-    // 成功したタスクのみを抽出
-    final executions = <Map<String, dynamic>>[];
-    for (final completion in todayCompletions) {
-      if (completion.wasSuccessful) {
-        print('✅ 成功タスク: ${completion.taskTitle}, 開始: ${completion.startedAt}');
-        executions.add({
-          'startTime': completion.startedAt,
-          'duration': completion.elapsedSeconds,
-        });
-      }
-    }
-    
-    print('🎯 プロット対象: ${executions.length}件');
-    return executions;
-  } catch (e) {
-    print('❌ タスク実行履歴取得エラー: $e');
-    return [];
-  }
-}
 
-  Widget _buildProgressBar() {
+  // 【既存メソッドの修正】
+Widget _buildProgressBar() {
   return Column(
     children: [
       SizedBox(
@@ -1762,6 +1688,7 @@ Future<List<Map<String, dynamic>>> _getTodayTaskExecutions() async {
                 onChanged: (value) {},
               ),
             ),
+            // 🔧 追加：棒人間のプロットを表示
             if (_currentIndex == 0 && !widget.isPlayingSingleAlbum)
               _buildTaskExecutionPlots(),
           ],
@@ -1794,6 +1721,83 @@ Future<List<Map<String, dynamic>>> _getTodayTaskExecutions() async {
     ],
   );
 }
+
+// 【既存メソッドの修正】
+/// 🆕 今日のタスク実行時間をプロット表示（棒人間版）
+Widget _buildTaskExecutionPlots() {
+  if (_currentIndex != 0 || widget.isPlayingSingleAlbum) {
+    return const SizedBox.shrink();
+  }
+  
+  return FutureBuilder<List<Map<String, dynamic>>>(
+    future: _getTodayTaskExecutions(),
+    builder: (context, snapshot) {
+      if (!snapshot.hasData || snapshot.data!.isEmpty) {
+        return const SizedBox.shrink();
+      }
+      
+      final executions = snapshot.data!;
+      final totalMinutesInDay = 24 * 60;
+      final screenWidth = MediaQuery.of(context).size.width;
+      final coverSize = screenWidth - 60;
+      
+      return SizedBox(
+        width: double.infinity,
+        height: 40,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: executions.asMap().entries.map((entry) {
+            final index = entry.key;
+            final execution = entry.value;
+            final startTime = execution['startTime'] as DateTime;
+            final startMinutes = startTime.hour * 60 + startTime.minute;
+            final position = startMinutes / totalMinutesInDay;
+            
+            // 🔧 修正：変数名を変更
+            final colorIndex = (index * 7 + startMinutes) % _StickFigurePainter._audienceColors.length;
+            final stickFigureColor = _StickFigurePainter._audienceColors[colorIndex];
+            
+            return Positioned(
+              left: position * coverSize - 8,
+              bottom: 4,
+              child: CustomPaint(
+                size: const Size(16, 32),
+                painter: _StickFigurePainter(
+                  color: stickFigureColor, // 🔧 修正
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      );
+    },
+  );
+}
+
+// 【新規追加】_buildTaskExecutionPlots() の直後に配置
+/// 🆕 今日のタスク実行履歴を取得
+Future<List<Map<String, dynamic>>> _getTodayTaskExecutions() async {
+  try {
+    final today = DateTime.now();
+    final todayCompletions = await _dataService.getTaskCompletionsByDate(today);
+    
+    final executions = <Map<String, dynamic>>[];
+    for (final completion in todayCompletions) {
+      if (completion.wasSuccessful) {
+        executions.add({
+          'startTime': completion.startedAt,
+          'duration': completion.elapsedSeconds,
+        });
+      }
+    }
+    
+    return executions;
+  } catch (e) {
+    print('❌ タスク実行履歴取得エラー: $e');
+    return [];
+  }
+}
+
  Widget _buildControls() {
     final screenWidth = MediaQuery.of(context).size.width;
     final coverSize = screenWidth - 60;
@@ -2186,6 +2190,126 @@ class AutoScrollText extends StatefulWidget {
 
   @override
   State<AutoScrollText> createState() => _AutoScrollTextState();
+}
+
+// 【既存クラスの修正】ファイル末尾
+/// 🆕 棒人間を描画するカスタムペインター（audience_grid.dartと同じ形状）
+class _StickFigurePainter extends CustomPainter {
+  final Color color;
+  
+  // 🔧 追加：audience_grid.dartと同じ色リスト
+  static const List<Color> _audienceColors = [
+    // 落ち着いた暖色系
+    Color(0xFFEF5350), // ソフトレッド
+    Color(0xFFFF7043), // ソフトオレンジ
+    Color(0xFFFFCA28), // ソフトイエロー
+    Color(0xFFEC407A), // ソフトピンク
+    Color(0xFFFFB74D), // ソフトアンバー
+    
+    // 落ち着いた寒色系
+    Color(0xFF42A5F5), // ソフトブルー
+    Color(0xFF5C6BC0), // ソフトインディゴ
+    Color(0xFF7E57C2), // ソフトパープル
+    Color(0xFFAB47BC), // ソフトマゼンタ
+    Color(0xFF26C6DA), // ソフトシアン
+    
+    // 落ち着いた緑系
+    Color(0xFF66BB6A), // ソフトグリーン
+    Color(0xFF26A69A), // ソフトティール
+    Color(0xFF9CCC65), // ソフトライム
+    Color(0xFF78909C), // ブルーグレー
+    
+    // 中間トーン
+    Color(0xFFEF5350), // コーラル
+    Color(0xFFF06292), // ローズ
+    Color(0xFFBA68C8), // ラベンダー
+    Color(0xFF9575CD), // ライトパープル
+    Color(0xFF64B5F6), // スカイブルー
+    Color(0xFF4DD0E1), // アクア
+    Color(0xFF4DB6AC), // ターコイズ
+    Color(0xFF81C784), // ミントグリーン
+    
+    // 明るめのニュートラル
+    Color(0xFFFFB74D), // ピーチ
+    Color(0xFFFFD54F), // サンシャイン
+    Color(0xFFDCE775), // ライム
+    Color(0xFFAED581), // リーフグリーン
+    Color(0xFFA1887F), // ブラウン
+    Color(0xFF90A4AE), // グレイブルー
+    
+    // 明るい色（控えめ）
+    Color(0xFFFFFFFF), // 白
+    Color(0xFFF5F5F5), // オフホワイト
+    Color(0xFFEEEEEE), // ライトグレー
+    Color(0xFFE0E0E0), // シルバー
+  ];
+  
+  _StickFigurePainter({required this.color});
+  
+  @override
+  void paint(Canvas canvas, Size size) {
+    final audienceSize = 14.0;
+    
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = math.max(2.0, audienceSize * 0.15)
+      ..strokeCap = StrokeCap.round;
+
+    final fillPaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+
+    final centerX = size.width / 2;
+    final centerY = size.height / 2;
+    final scale = (audienceSize * 1.5) / 20;
+    
+    // 頭（塗りつぶし）
+    final headRadius = 3 * scale;
+    canvas.drawCircle(
+      Offset(centerX, centerY - 5 * scale),
+      headRadius,
+      fillPaint,
+    );
+    
+    // 体
+    canvas.drawLine(
+      Offset(centerX, centerY - 3 * scale),
+      Offset(centerX, centerY + 4 * scale),
+      paint,
+    );
+    
+    // 左腕
+    canvas.drawLine(
+      Offset(centerX, centerY - 1 * scale),
+      Offset(centerX - 2.5 * scale, centerY + 1.5 * scale),
+      paint,
+    );
+    
+    // 右腕
+    canvas.drawLine(
+      Offset(centerX, centerY - 1 * scale),
+      Offset(centerX + 2.5 * scale, centerY + 1.5 * scale),
+      paint,
+    );
+    
+    // 左脚
+    canvas.drawLine(
+      Offset(centerX, centerY + 4 * scale),
+      Offset(centerX - 2 * scale, centerY + 8 * scale),
+      paint,
+    );
+    
+    // 右脚
+    canvas.drawLine(
+      Offset(centerX, centerY + 4 * scale),
+      Offset(centerX + 2 * scale, centerY + 8 * scale),
+      paint,
+    );
+  }
+  
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class _AutoScrollTextState extends State<AutoScrollText> with SingleTickerProviderStateMixin {
