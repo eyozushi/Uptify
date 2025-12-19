@@ -104,12 +104,14 @@ class PlayerScreen extends StatefulWidget {
     int? elapsedSeconds,
     bool? isAutoPlayEnabled,
     int? forcePageChange,
+    Color? albumColor,
   })? onStateChanged;
   final VoidCallback? onClose;
   final VoidCallback? onNavigateToSettings;
   final VoidCallback? onNavigateToAlbumDetail;
   final Function(TaskItem task, bool wasSuccessful)? onTaskCompleted;
   final Function(Map<String, int>)? onCompletionCountsChanged;
+   final Function(Color)? onAlbumColorChanged;
 
   const PlayerScreen({
     super.key,
@@ -134,6 +136,7 @@ class PlayerScreen extends StatefulWidget {
     this.onNavigateToAlbumDetail,
     this.onTaskCompleted,
     this.onCompletionCountsChanged,
+    this.onAlbumColorChanged,
   });
 
   @override
@@ -727,7 +730,8 @@ void _resetPosition() {
   }
 }
 
-  Future<void> _extractColorsFromImage() async {
+  // 【既存メソッドの修正】最後の部分のみ変更
+Future<void> _extractColorsFromImage() async {
   if (_isExtractingColors) return;
   
   setState(() {
@@ -753,9 +757,8 @@ void _resetPosition() {
       );
       
       if (mounted) {
-        Color selectedColor = const Color(0xFF2D1B69); // フォールバック
+        Color selectedColor = const Color(0xFF2D1B69);
         
-        // 🔧 新規：彩度（saturation）をチェックする関数
         double getSaturation(Color color) {
           final r = color.red / 255.0;
           final g = color.green / 255.0;
@@ -767,62 +770,57 @@ void _resetPosition() {
           if (max == 0) return 0;
           return (max - min) / max;
         }
-double scoreColor(PaletteColor paletteColor) {
-  final color = paletteColor.color;
-  final population = paletteColor.population; // 出現頻度
-  final saturation = getSaturation(color); // 彩度
-  final luminance = color.computeLuminance(); // 明度
-  
-  double score = 0;
-  
-  // 🔧 修正1: 出現頻度のベーススコア（より柔軟に）
-  if (population < 100) {
-    score -= 500; // 極端に少ない色は除外
-  } else if (population < 500) {
-    score -= 100; // やや少ない色は減点
-  } else if (population > 2000) {
-    score += 150; // 多い色は加点（ただし後で彩度チェック）
-  } else {
-    score += 50; // 適度な出現頻度
-  }
-  
-  // 🔧 修正2: 彩度を最重視（Spotifyスタイル）
-  if (saturation > 0.4) {
-    score += 300; // 高彩度の色を大幅優遇
-  } else if (saturation > 0.25) {
-    score += 150; // 中程度の彩度も評価
-  } else if (saturation < 0.15) {
-    score -= 400; // 無彩色（白・グレー・黒）を大幅減点
-  }
-  
-  // 🔧 修正3: 明度の評価（暗すぎず明るすぎず）
-  if (luminance < 0.1) {
-    score -= 200; // 真っ黒に近い色は減点
-  } else if (luminance > 0.85) {
-    score -= 300; // 真っ白に近い色は大幅減点
-  } else if (luminance >= 0.2 && luminance <= 0.6) {
-    score += 100; // 適度な明度は加点
-  }
-  
-  // 🔧 修正4: 彩度と出現頻度の組み合わせボーナス
-  if (saturation > 0.3 && population > 1000) {
-    score += 200; // 特徴的で目立つ色にボーナス
-  }
-  
-  // 🔧 修正5: 極端な色相の調整（オレンジ・赤・青・紫を優遇）
-  final hue = HSLColor.fromColor(color).hue;
-  if ((hue >= 0 && hue <= 30) ||     // 赤
-      (hue >= 180 && hue <= 240) ||  // 青
-      (hue >= 270 && hue <= 330)) {  // 紫・マゼンタ
-    score += 50; // 視覚的に印象的な色相にボーナス
-  }
-  
-  print('🎨 色スコア: $color - sat:${saturation.toStringAsFixed(2)}, lum:${luminance.toStringAsFixed(2)}, pop:$population, hue:${hue.toStringAsFixed(0)}, score:${score.toStringAsFixed(1)}');
-  
-  return score;
-}
         
-        // 🔧 変更：全ての色をスコアリングして最適な色を選択
+        double scoreColor(PaletteColor paletteColor) {
+          final color = paletteColor.color;
+          final population = paletteColor.population;
+          final saturation = getSaturation(color);
+          final luminance = color.computeLuminance();
+          
+          double score = 0;
+          
+          if (population < 100) {
+            score -= 500;
+          } else if (population < 500) {
+            score -= 100;
+          } else if (population > 2000) {
+            score += 150;
+          } else {
+            score += 50;
+          }
+          
+          if (saturation > 0.4) {
+            score += 300;
+          } else if (saturation > 0.25) {
+            score += 150;
+          } else if (saturation < 0.15) {
+            score -= 400;
+          }
+          
+          if (luminance < 0.1) {
+            score -= 200;
+          } else if (luminance > 0.85) {
+            score -= 300;
+          } else if (luminance >= 0.2 && luminance <= 0.6) {
+            score += 100;
+          }
+          
+          if (saturation > 0.3 && population > 1000) {
+            score += 200;
+          }
+          
+          final hue = HSLColor.fromColor(color).hue;
+          if ((hue >= 0 && hue <= 30) ||
+              (hue >= 180 && hue <= 240) ||
+              (hue >= 270 && hue <= 330)) {
+            score += 50;
+          }
+          
+          print('🎨 色スコア: $color - sat:${saturation.toStringAsFixed(2)}, lum:${luminance.toStringAsFixed(2)}, pop:$population, hue:${hue.toStringAsFixed(0)}, score:${score.toStringAsFixed(1)}');
+          
+          return score;
+        }
+        
         final List<PaletteColor> allColors = [
           if (paletteGenerator.vibrantColor != null) paletteGenerator.vibrantColor!,
           if (paletteGenerator.lightVibrantColor != null) paletteGenerator.lightVibrantColor!,
@@ -834,7 +832,6 @@ double scoreColor(PaletteColor paletteColor) {
         ];
         
         if (allColors.isNotEmpty) {
-          // スコアが最も高い色を選択
           PaletteColor bestColor = allColors[0];
           double bestScore = scoreColor(bestColor);
           
@@ -850,26 +847,62 @@ double scoreColor(PaletteColor paletteColor) {
           print('🎨 最終選択色: $selectedColor (score: ${bestScore.toStringAsFixed(1)})');
         }
         
-        setState(() {
-          _dominantColor = selectedColor;
-          _accentColor = Colors.black;
-          _isExtractingColors = false;
-        });
+        // 【既存メソッドの修正】該当部分のみ
+setState(() {
+  _dominantColor = selectedColor;
+  _accentColor = Colors.black;
+  _isExtractingColors = false;
+});
+
+// 🔧 修正：非同期で遅延実行
+Future.microtask(() {
+  if (mounted && widget.onAlbumColorChanged != null) {
+    widget.onAlbumColorChanged!(selectedColor);
+  }
+});
+
+// 🆕 修正：シンプルなコールバック
+if (widget.onAlbumColorChanged != null) {
+  widget.onAlbumColorChanged!(selectedColor);
+}
       }
     } else {
       setState(() {
-        _dominantColor = const Color(0xFF2D1B69);
-        _accentColor = Colors.black;
-        _isExtractingColors = false;
-      });
+  _dominantColor = const Color(0xFF2D1B69);
+  _accentColor = Colors.black;
+  _isExtractingColors = false;
+});
+
+Future.microtask(() {
+  if (mounted && widget.onAlbumColorChanged != null) {
+    widget.onAlbumColorChanged!(const Color(0xFF2D1B69));
+  }
+});
+
+// 🆕 追加
+if (widget.onAlbumColorChanged != null) {
+  widget.onAlbumColorChanged!(const Color(0xFF2D1B69));
+}
     }
   } catch (e) {
     print('❌ 色抽出エラー: $e');
     setState(() {
-      _dominantColor = const Color(0xFF2D1B69);
-      _accentColor = Colors.black;
-      _isExtractingColors = false;
-    });
+  _dominantColor = const Color(0xFF2D1B69);
+  _accentColor = Colors.black;
+  _isExtractingColors = false;
+});
+
+Future.microtask(() {
+  if (mounted && widget.onAlbumColorChanged != null) {
+    widget.onAlbumColorChanged!(const Color(0xFF2D1B69));
+  }
+});
+
+
+// 🆕 追加
+if (widget.onAlbumColorChanged != null) {
+  widget.onAlbumColorChanged!(const Color(0xFF2D1B69));
+}
   }
 }
 
@@ -1193,6 +1226,11 @@ String _getCurrentTime() {
 
   @override
 Widget build(BuildContext context) {
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (widget.onStateChanged != null && mounted) {
+      widget.onStateChanged!(albumColor: _dominantColor);
+    }
+  });
   final screenWidth = MediaQuery.of(context).size.width;
   final horizontalPadding = 20.0;
   final albumMargin = 10.0;
