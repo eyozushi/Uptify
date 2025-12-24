@@ -424,12 +424,12 @@ Widget build(BuildContext context) {
                           GestureDetector(
                             // 🔧 修正: 理想像ページから再生する場合
                             onTap: () {
-                              if (widget.onPlayTaskPressed != null) {
-                                widget.onPlayTaskPressed!(-1); // 🔧 理想像ページから開始
-                              } else {
-                                widget.onPlayPressed?.call();
-                              }
-                            },
+  if (widget.onPlayTaskPressed != null) {
+    widget.onPlayTaskPressed!(0); // 🔧 修正：-1 → 0 に変更（最初のタスクから開始）
+  } else {
+    widget.onPlayPressed?.call();
+  }
+},
                             child: Container(
                               width: 64,
                               height: 64,

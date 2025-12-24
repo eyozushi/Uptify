@@ -3336,18 +3336,17 @@ Widget _buildMainContent() {
       albumId: album.id,              // 🔧 追加
       isSingleAlbum: true,            // 🔧 追加
       onPlayPressed: () {
-        // 🔧 修正：PlayerScreenを開く（アルバム詳細は非表示）
-        if (_isPlayingSingleAlbum && _playingSingleAlbum != null && _playingSingleAlbum!.id == album.id) {
-          print('🎵 同じアルバム - 現在の再生状態を保持');
-          setState(() {
-            _isPlayerScreenVisible = true;
-            // _isAlbumDetailVisible はtrueのまま（背景に残す）
-          });
-        } else {
-          print('🎵 違うアルバム - 新しい再生開始');
-          _showSingleAlbumPlayer(album, taskIndex: 0);
-        }
-      },
+  // 🔧 修正：シングルアルバムの場合は最初のタスク（index=0）から再生開始
+  if (_isPlayingSingleAlbum && _playingSingleAlbum != null && _playingSingleAlbum!.id == album.id) {
+    print('🎵 同じアルバム - 現在の再生状態を保持');
+    setState(() {
+      _isPlayerScreenVisible = true;
+    });
+  } else {
+    print('🎵 違うアルバム - 新しい再生開始（最初のタスクから）');
+    _showSingleAlbumPlayer(album, taskIndex: 0); // 🔧 修正：明示的にindex=0を指定
+  }
+},
       onPlayTaskPressed: (taskIndex) {
   // 🔧 修正: タスク切り替え時にもPlayerScreenを開く
   if (_isPlayingSingleAlbum && _playingSingleAlbum != null && _playingSingleAlbum!.id == album.id) {

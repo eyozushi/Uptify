@@ -269,7 +269,7 @@ void didUpdateWidget(covariant HomeScreen oldWidget) {
             SizedBox(width: 12),
             Expanded(
               child: Text(
-                'おめでとう　今日も理想像に近づいた',
+                'Congratulations.\nYou moved closer to your ideal self today.',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 16,
