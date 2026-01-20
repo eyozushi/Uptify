@@ -1,74 +1,72 @@
 import 'package:flutter/material.dart';
 
-// models/notification_config.dart - 改善版
 class NotificationConfig {
   final bool isHabitBreakerEnabled;
   final int habitBreakerInterval;
   final List<String> habitBreakerMessages;
 
   // 睡眠スケジュール設定
-final bool sleepScheduleEnabled;
-final int bedtimeHour;        // 1-12
-final int bedtimeMinute;      // 0, 15, 30, 45
-final String bedtimePeriod;   // 'AM' or 'PM'
-final int wakeUpHour;         // 1-12
-final int wakeUpMinute;       // 0, 15, 30, 45
-final String wakeUpPeriod;    // 'AM' or 'PM'
+  final bool sleepScheduleEnabled;
+  final int bedtimeHour;
+  final int bedtimeMinute;
+  final String bedtimePeriod;
+  final int wakeUpHour;
+  final int wakeUpMinute;
+  final String wakeUpPeriod;
 
-// 曜日別スケジュール（1=Sunday, 7=Saturday）
-final Set<int> enabledDays;
+  // 曜日別スケジュール（1=Sunday, 7=Saturday）
+  final Set<int> enabledDays;
 
-// 特別メッセージ
-final String bedtimeMessage;
-final String wakeUpMessage;
-
+  // 特別メッセージ
+  final String bedtimeMessage;
+  final String wakeUpMessage;
 
   const NotificationConfig({
-    this.isHabitBreakerEnabled = false,
-    this.habitBreakerInterval = 30,
+    this.isHabitBreakerEnabled = true,  // ✅ 初期状態をONに変更
+    this.habitBreakerInterval = 30,     // ✅ 30分間隔（変更なし）
     this.habitBreakerMessages = const [
-  // 🎯 意識喚起系（5個）- 現在の行動への気づきを促す
-  'What are you doing right now?',
-  'What did you accomplish in the last 5 minutes?',
-  'Use phone time for tasks instead?',
-  'Is this action really necessary?',
-  'What are you focusing on right now?',
-  
-  // 🚀 目標志向系（4個）- 具体的な目標達成を意識させる
-  'Are you moving toward your ideal self?',
-  'Making progress on today\'s tasks?',
-  'Let\'s play the next track',
-  'Start actions toward your dreams?',
-  
-  // ⏰ 時間管理系（4個）- 時間の使い方を見直させる
-  'How will you use these 15 minutes?',
-  'Use your limited time wisely',
-  'Satisfied with how you\'re using time?',
-  'Time won\'t come back. Make the most of now',
-  
-  // 🔄 習慣改善系（4個）- 悪い習慣からの離脱を促す
-  'Stop social media, start tasks?',
-  'End the idle time?',
-  'Choose growth over scrolling?',
-  'Now is the moment to change habits',
-  
-  // ✨ モチベーション系（3個）- 前向きな気持ちを促進
-  'Small steps create big changes',
-  'Your future changes with each action',
-  'You can do it. Let\'s start',
-],
-
+      // 🎯 意識喚起系（5個）
+      'What are you doing right now?',
+      'What did you accomplish in the last 5 minutes?',
+      'Use phone time for tasks instead?',
+      'Is this action really necessary?',
+      'What are you focusing on right now?',
+      
+      // 🚀 目標志向系（4個）
+      'Are you moving toward your ideal self?',
+      'Making progress on today\'s tasks?',
+      'Let\'s play the next track',
+      'Start actions toward your dreams?',
+      
+      // ⏰ 時間管理系（4個）
+      'How will you use these 15 minutes?',
+      'Use your limited time wisely',
+      'Satisfied with how you\'re using time?',
+      'Time won\'t come back. Make the most of now',
+      
+      // 🔄 習慣改善系（4個）
+      'Stop social media, start tasks?',
+      'End the idle time?',
+      'Choose growth over scrolling?',
+      'Now is the moment to change habits',
+      
+      // ✨ モチベーション系（3個）
+      'Small steps create big changes',
+      'Your future changes with each action',
+      'You can do it. Let\'s start',
+    ],
+    
     this.sleepScheduleEnabled = true,
-  this.bedtimeHour = 10,
-  this.bedtimeMinute = 0,
-  this.bedtimePeriod = 'PM',
-  this.wakeUpHour = 6,
-  this.wakeUpMinute = 0,
-  this.wakeUpPeriod = 'AM',
-  this.enabledDays = const {1, 2, 3, 4, 5, 6, 7},
-  this.bedtimeMessage = 'Time to put your phone away and rest 🌙',
-  this.wakeUpMessage = 'Good morning! Ready to conquer today? ☀️',
-});
+    this.bedtimeHour = 10,
+    this.bedtimeMinute = 0,
+    this.bedtimePeriod = 'PM',
+    this.wakeUpHour = 6,
+    this.wakeUpMinute = 0,
+    this.wakeUpPeriod = 'AM',
+    this.enabledDays = const {1, 2, 3, 4, 5, 6, 7},
+    this.bedtimeMessage = 'Time to put your phone away and rest 🌙',
+    this.wakeUpMessage = 'Good morning! Ready to conquer today? ☀️',
+  });
 
 
   // JSON変換用

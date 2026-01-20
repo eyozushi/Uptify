@@ -1,10 +1,16 @@
+// main.dart - 通知初期化対応版
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'main_wrapper.dart';
 import 'services/main_wrapper_provider.dart';
+import 'services/habit_breaker_service.dart';  // ✅ 追加
+import 'services/notification_service.dart';   // ✅ 追加
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // ✅ 通知システムの初期化（最優先）
+  await _initializeNotificationSystem();
   
   // Spotify風のシステムUI設定
   SystemChrome.setSystemUIOverlayStyle(
@@ -23,6 +29,34 @@ void main() async {
   ]);
   
   runApp(const LifeTrackApp());
+}
+
+/// ✅ 新規追加：通知システム初期化
+Future<void> _initializeNotificationSystem() async {
+  try {
+    print('🔔 通知システム初期化開始...');
+    
+    // 1. NotificationServiceを初期化
+    final notificationService = NotificationService();
+    final initialized = await notificationService.initialize();
+    
+    if (!initialized) {
+      print('⚠️ NotificationService初期化失敗 - 通知機能は利用できません');
+      return;
+    }
+    
+    // 2. 通知チャンネルを作成（Android用）
+    await notificationService.createNotificationChannels();
+    
+    // 3. HabitBreakerServiceを初期化＆自動起動
+    final habitBreakerService = HabitBreakerService();
+    await habitBreakerService.initialize();
+    
+    print('✅ 通知システム初期化完了');
+  } catch (e) {
+    print('❌ 通知システム初期化エラー: $e');
+    // エラーがあってもアプリは起動させる
+  }
 }
 
 class LifeTrackApp extends StatelessWidget {

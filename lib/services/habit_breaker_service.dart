@@ -346,77 +346,6 @@ void resumeNotifications() {
   }
 }
 
-/// タスク完了後に通知を再開（外部から呼び出し用）
-Future<void> resumeAfterTaskCompletion() async {
-  try {
-    print('🎯 タスク完了後の通知再開処理を開始');
-    
-    // 一時停止を解除
-    if (_isPaused) {
-      print('🔧 一時停止状態を解除します');
-      resumeNotifications();
-    }
-    
-    // 設定を再読み込み
-    final config = await _dataService.loadNotificationConfig();
-    _cachedConfig = config;
-    
-    // 通知が無効な場合は再開しない
-    if (!config.isHabitBreakerEnabled) {
-      print('📵 通知が無効のため再開しません');
-      return;
-    }
-    
-    // 全曜日無効チェック
-    if (config.allDaysDisabled) {
-      print('📵 全ての曜日が無効のため再開しません');
-      return;
-    }
-    
-    // 現在の状態をチェック
-    final now = DateTime.now();
-    
-    // 睡眠時間チェック
-    if (config.sleepScheduleEnabled && config.isSleepTime(now)) {
-      print('🔧 睡眠時間中のため通知スキップ（起床後に自動再開されます）');
-      return;
-    }
-    
-    // 曜日チェック
-    final weekday = now.weekday == 7 ? 7 : now.weekday;
-    final convertedWeekday = weekday == 7 ? 1 : weekday + 1;
-    if (!config.isDayEnabled(convertedWeekday)) {
-      print('🔧 無効な曜日のため通知スキップ（次の有効日に自動再開されます）');
-      return;
-    }
-    
-    // 🔧 修正: 通知システムの状態に応じた処理
-    if (!_isActive) {
-      // システムが完全停止している場合は再起動
-      print('🔧 通知システムが停止しているため完全再起動を実行');
-      await startHabitBreaker();
-    } else if (_schedulingTimer == null || !_schedulingTimer!.isActive) {
-      // タイマーだけが停止している場合はタイマーのみ再起動
-      print('🔧 定期タイマーが停止しているため再起動');
-      await _startPeriodicNotifications(config);
-    } else {
-      // 既に正常稼働中の場合は次の通知をスケジュール
-      print('🔧 通知システム稼働中 - 次の通知をスケジュール');
-      await _scheduleNextNotification(config, isFirst: false);
-    }
-    
-    print('✅ タスク完了後の通知再開完了');
-  } catch (e) {
-    print('❌ タスク完了後の通知再開エラー: $e');
-    // エラーが発生しても通知システムを再起動
-    try {
-      print('🔄 エラー復旧のため通知システムを再起動');
-      await startHabitBreaker();
-    } catch (retryError) {
-      print('❌ 通知システム再起動も失敗: $retryError');
-    }
-  }
-}
 
   // 🔧 新機能: 指定時間後に自動再開（オプション）
   void pauseNotificationsWithAutoResume(Duration pauseDuration) {
@@ -526,19 +455,29 @@ Future<void> resumeAfterTaskCompletion() async {
 
   // アプリ起動時の初期化（設定に基づいて自動開始）
   Future<void> initialize() async {
-    try {
-      final config = await _dataService.loadNotificationConfig();
-      _cachedConfig = config;
-      
-      if (config.isHabitBreakerEnabled) {
-        await startHabitBreaker();
-      }
-      
-      print('🔄 HabitBreakerService初期化完了');
-    } catch (e) {
-      print('❌ HabitBreakerService初期化エラー: $e');
+  try {
+    print('🔄 HabitBreakerService初期化開始...');
+    
+    final config = await _dataService.loadNotificationConfig();
+    _cachedConfig = config;
+    
+    print('📋 通知設定読み込み完了:');
+    print('  - 定期通知: ${config.isHabitBreakerEnabled ? "ON" : "OFF"}');
+    print('  - 間隔: ${config.habitBreakerInterval}分');
+    print('  - 睡眠スケジュール: ${config.sleepScheduleEnabled ? "ON" : "OFF"}');
+    print('  - 有効曜日: ${config.enabledDays.length}日');
+    
+    // ✅ 設定がONなら自動起動
+    if (config.isHabitBreakerEnabled) {
+      await startHabitBreaker();
+      print('✅ HabitBreakerService初期化完了 - 通知システム起動済み');
+    } else {
+      print('ℹ️ HabitBreakerService初期化完了 - 通知はOFF状態');
     }
+  } catch (e) {
+    print('❌ HabitBreakerService初期化エラー: $e');
   }
+}
 
   Future<void> dispose() async {
   _schedulingTimer?.cancel();

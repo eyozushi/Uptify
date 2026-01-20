@@ -14,7 +14,7 @@ class ActivitySession {
   final ActivityState state;
   final int currentTaskIndex;
   final int totalTasks;
-  final bool isAutoPlay;
+  // ❌ 削除：final bool isAutoPlay;
   
   const ActivitySession({
     required this.id,
@@ -22,6 +22,6 @@ class ActivitySession {
     required this.state,
     required this.currentTaskIndex,
     required this.totalTasks,
-    required this.isAutoPlay,
+    // ❌ 削除：required this.isAutoPlay,
   });
 }

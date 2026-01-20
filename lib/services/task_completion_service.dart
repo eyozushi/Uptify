@@ -6,6 +6,7 @@ import '../services/notification_service.dart';
 import '../services/data_service.dart';
 import '../services/achievement_service.dart';
 import '../services/habit_breaker_service.dart';
+import '../services/notification_coordinator.dart';
 import '../models/task_completion.dart';
 import '../models/task_item.dart';
 import 'dart:math' as math;
@@ -21,6 +22,7 @@ class TaskCompletionService {
   final AchievementService _achievementService = AchievementService(); 
 
   final HabitBreakerService _habitBreakerService = HabitBreakerService();
+  final NotificationCoordinator _notificationCoordinator = NotificationCoordinator();
   
   static const int _taskCompletionNotificationBaseId = 200;
   int _nextNotificationId = _taskCompletionNotificationBaseId;
@@ -645,7 +647,8 @@ void clearSentNotifications() {
   print('✅ 送信済み通知記録をクリアしました');
 }
 
-  Future<void> recordTaskCompletion({
+  // 既存メソッドの修正（末尾部分のみ変更）
+Future<void> recordTaskCompletion({
   required String taskId,
   required String taskTitle,
   required bool wasSuccessful,
@@ -673,13 +676,12 @@ void clearSentNotifications() {
     await _dataService.saveTaskCompletion(completion);
     await _dataService.addTaskCompletionToUserData(taskId, completion.completedAt);
     
-    // ライフドリームアルバムのタスク完了時はキャッシュをクリア
     if (wasSuccessful && albumType == 'life_dream') {
       await _clearRecordGaugeCache();
     }
     
-    // 🆕 追加: タスク完了後にhabit_breaker通知を再開
-    await _habitBreakerService.resumeAfterTaskCompletion();
+
+    await _notificationCoordinator.resumeAfterTask();
     
     print('タスク完了記録を保存しました: $taskTitle (成功: $wasSuccessful)');
   } catch (e) {
@@ -688,7 +690,8 @@ void clearSentNotifications() {
   }
 }
 
-  Future<void> recordTaskCompletionFromNotification({
+  // 既存メソッドの修正（末尾部分のみ変更）
+Future<void> recordTaskCompletionFromNotification({
   required String taskId,
   required String taskTitle,
   required String albumName,
@@ -708,9 +711,6 @@ void clearSentNotifications() {
       albumId: albumId,
     );
     
-    // 🆕 追加: 通知からの完了記録後もhabit_breaker通知を再開
-    // （recordTaskCompletion内で既に呼ばれているが、念のため明示的に呼び出し）
-    await _habitBreakerService.resumeAfterTaskCompletion();
     
     print('通知からのタスク完了記録が完了しました: $taskTitle (成功: $wasSuccessful)');
   } catch (e) {

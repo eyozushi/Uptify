@@ -32,6 +32,7 @@ import 'widgets/completion_result_dialog.dart';
 import 'widgets/activity_widget.dart';
 import 'screens/artist_screen.dart'; 
 import 'services/live_activities_service.dart';
+import 'services/notification_coordinator.dart';
 import 'models/live_activity_data.dart';
 import 'models/activity_state.dart';
 
@@ -134,9 +135,7 @@ double _playerDragVelocity = 0.0; // 🆕 追加：ドラッグ速度を記録
   Timer? _progressTimer;
   int _elapsedSeconds = 0;
   
-  // 🆕 自動再生機能
-  bool _isAutoPlayEnabled = false;
-  bool _isAutoPlayInProgress = false;
+
 
   // 通知からの復帰フラグ
   bool _isNotificationReturning = false;
@@ -175,10 +174,9 @@ Color _currentAlbumColor = const Color(0xFF2D1B69); // デフォルト色
   bool _isActivityActive = false;
   Timer? _activityUpdateTimer;
 
-  // 🆕 時刻ベース状態管理用の変数
-  DateTime? _autoPlaySessionStartTime;
-  List<int> _taskDurations = []; // 各タスクの時間（秒）
-  bool _isTimeBasedRestorationEnabled = false;
+  // ✅ 追加
+final NotificationCoordinator _notificationCoordinator = NotificationCoordinator();
+
 
   // 今日のタスク完了回数をリアルタイム管理
   Map<String, int> _todayTaskCompletions = {};
@@ -220,23 +218,7 @@ late Animation<double> _playerDragAnimation;
   print('🌟 理想像ページでプレイヤーを開始しました（インデックス: -1）');
 }
 
-  // _toggleAutoPlay()メソッドまたは自動再生開始部分に追加
-void _startAutoPlaySession() {
-  if (!_isAutoPlayEnabled || _playingTasks.isEmpty) return;
   
-  try {
-    _autoPlaySessionStartTime = DateTime.now();
-    _taskDurations = _playingTasks.map((task) => task.duration * 60).toList();
-    _isTimeBasedRestorationEnabled = true;
-    
-    // SharedPreferencesに永続保存
-    _saveAutoPlaySessionData();
-    
-    print('自動再生セッション開始: ${_autoPlaySessionStartTime}');
-  } catch (e) {
-    print('自動再生セッション開始エラー: $e');
-  }
-}
 
   @override
 void initState() {
@@ -352,135 +334,55 @@ _playerDragAnimation = Tween<double>(
     }
   }
 
-  void _onAppPaused() {
+  // 既存メソッドの修正
+void _onAppPaused() {
   print('🔧 アプリがバックグラウンドに移行開始');
-  print('🔧 現在の状態: isPlaying=${_isPlaying}, playingTasks=${_playingTasks.length}, currentTaskIndex=${_currentTaskIndex}');
-  print('🔧 現在の進捗: elapsed=${_elapsedSeconds}秒, progress=${_currentProgress}');
   
   if (_isPlaying && _playingTasks.isNotEmpty) {
     _pauseStartTime = DateTime.now();
     
-    _habitBreakerService.pauseNotifications();
     
-    // 🔧 修正：自動再生の場合のみ現在のタスクの通知をスケジュール
-    if (_isAutoPlayEnabled && _currentTaskIndex >= 0) {
-      print('🔔 自動再生モード: 現在のタスクの残り時間で通知をスケジュール');
-      _scheduleCurrentTaskAutoPlayNotification();
-    } else if (!_isAutoPlayEnabled) {
+    // ✅ 追加
+    _notificationCoordinator.pauseForTask();
+
+    // ✅ 簡素化：通常モードのみ
+    if (_currentTaskIndex >= 0) {
       print('🔔 通常モード: バックグラウンド通知をスケジュール');
       _scheduleBackgroundTaskCompletion();
     }
     
-    print('🔧 アプリがバックグラウンドに移行完了 - 自動再生: $_isAutoPlayEnabled');
-  } else {
-    print('🔧 通知スケジュール条件に合わない: isPlaying=${_isPlaying}, tasksEmpty=${_playingTasks.isEmpty}');
+    print('🔧 アプリがバックグラウンドに移行完了');
   }
 }
 
+// 既存メソッドの修正（大幅簡素化）
 void _onAppResumed() {
   if (_isNotificationReturning) {
     _isNotificationReturning = false;
     return;
   }
 
-  // 自動再生が有効で、タスクが再生中だった場合
-  if (_isAutoPlayEnabled && _isPlaying && _playingTasks.isNotEmpty && _taskStartTime != null) {
-    final now = DateTime.now();
-    final totalElapsed = now.difference(_taskStartTime!).inSeconds - _totalPausedSeconds;
-    
-    // 現在のタスクの完了チェックと次タスクへの自動移行
-    _checkAndProcessCompletedTasks(totalElapsed);
-    
-  } else if (_isPlaying && _playingTasks.isNotEmpty && _pauseStartTime != null) {
-    // 通常モードの復帰処理（既存）
+  
+  // ✅ 簡素化：通常モードのみ
+  if (_isPlaying && _playingTasks.isNotEmpty && _pauseStartTime != null) {
     final pauseDuration = DateTime.now().difference(_pauseStartTime!);
     _totalPausedSeconds += pauseDuration.inSeconds;
     
     if (_taskStartTime != null) {
       final totalElapsed = DateTime.now().difference(_taskStartTime!).inSeconds - _totalPausedSeconds;
-      _checkAndProcessCompletedTasks(totalElapsed);
+      _updateCurrentTaskState(totalElapsed);
     }
     
     _pauseStartTime = null;
-    _habitBreakerService.resumeNotifications();
+    
+    // ✅ 追加
+    _notificationCoordinator.resumeAfterTask();
+    
     _cancelBackgroundTaskCompletion();
   }
 }
 
-void _checkAndProcessCompletedTasks(int totalElapsed) {
-  if (_currentTaskIndex < 0 || _currentTaskIndex >= _playingTasks.length) return;
-  
-  int cumulativeTime = 0;
-  int targetTaskIndex = _currentTaskIndex;
-  
-  // 完了したタスクを順次処理
-  for (int i = _currentTaskIndex; i < _playingTasks.length; i++) {
-    final taskDuration = _playingTasks[i].duration * 60;
-    
-    if (totalElapsed >= cumulativeTime + taskDuration) {
-      // このタスクは完了済み
-      if (i == _currentTaskIndex) {
-        // 現在のタスクが完了
-        _recordCompletedTaskInBackground(_playingTasks[i]);
-      }
-      
-      cumulativeTime += taskDuration;
-      targetTaskIndex = i + 1;
-    } else {
-      // このタスクは進行中
-      break;
-    }
-  }
-  
-  // 状態を更新
-  if (targetTaskIndex > _currentTaskIndex) {
-    if (targetTaskIndex >= _playingTasks.length) {
-      // 全タスク完了
-      _completeAllTasksInBackground();
-    } else {
-      // 次のタスクに移行
-      _moveToTaskInBackground(targetTaskIndex, totalElapsed - cumulativeTime);
-    }
-  } else {
-    // 現在のタスクを継続
-    _updateCurrentTaskState(totalElapsed - cumulativeTime);
-  }
-}
-
-void _completeAllTasksInBackground() {
-  final lastTaskIndex = _playingTasks.length - 1;
-  final lastPageIndex = _isPlayingSingleAlbum ? lastTaskIndex : lastTaskIndex + 1;
-  
-  setState(() {
-    _currentTaskIndex = lastTaskIndex;
-    _forcePlayerPageIndex = lastPageIndex;
-    _isPlaying = false;
-    _isAutoPlayEnabled = false;
-    _elapsedSeconds = _playingTasks[lastTaskIndex].duration * 60;
-    _currentProgress = 1.0;
-    _isPlayerScreenVisible = true;
-  });
-  
-  // PlayerScreenに完了状態を通知
-  _onPlayerStateChanged(
-    currentTaskIndex: lastTaskIndex,
-    isPlaying: false,
-    progress: 1.0,
-    elapsedSeconds: _playingTasks[lastTaskIndex].duration * 60,
-    isAutoPlayEnabled: false,
-    forcePageChange: lastPageIndex,
-  );
-  
-  // アルバム完了ダイアログを表示
-  Future.delayed(const Duration(milliseconds: 500), () {
-    if (mounted) {
-      _showAlbumCompletionDialog();
-    }
-  });
-  
-  print('バックグラウンド復帰: 全タスク完了状態に設定');
-}
-
+// 既存メソッドの修正
 void _updateCurrentTaskState(int elapsedInCurrentTask) {
   if (_currentTaskIndex < 0 || _currentTaskIndex >= _playingTasks.length) return;
   
@@ -492,10 +394,9 @@ void _updateCurrentTaskState(int elapsedInCurrentTask) {
     _currentProgress = _elapsedSeconds / maxElapsed;
     _isPlaying = true;
     
-    // 🔧 修正：タスク開始時刻を正しく設定
-    _taskStartTime = DateTime.now();  // 現在時刻を開始時刻とする
+    _taskStartTime = DateTime.now();
     _pauseStartTime = null;
-    _totalPausedSeconds = 0;  // リセット
+    _totalPausedSeconds = 0;
   });
   
   WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -505,47 +406,11 @@ void _updateCurrentTaskState(int elapsedInCurrentTask) {
         isPlaying: true,
         progress: _currentProgress,
         elapsedSeconds: _elapsedSeconds,
-        isAutoPlayEnabled: _isAutoPlayEnabled,
       );
       
       _startProgressTimer();
       
       print('バックグラウンド復帰: タスク${_currentTaskIndex + 1}継続 (${_elapsedSeconds}秒経過)');
-    }
-  });
-}
-
-void _moveToTaskInBackground(int taskIndex, int elapsedInCurrentTask) {
-  final pageIndex = _isPlayingSingleAlbum ? taskIndex : taskIndex + 1;
-  
-  setState(() {
-    _currentTaskIndex = taskIndex;
-    _forcePlayerPageIndex = pageIndex;
-    _elapsedSeconds = elapsedInCurrentTask.clamp(0, _playingTasks[taskIndex].duration * 60 - 1);
-    _currentProgress = _elapsedSeconds / (_playingTasks[taskIndex].duration * 60);
-    _isPlaying = true;
-    _isAutoPlayEnabled = true;
-    
-    // 🔧 修正：タスク開始時刻を正しく設定
-    _taskStartTime = DateTime.now();  // 現在時刻を開始時刻とする
-    _pauseStartTime = null;
-    _totalPausedSeconds = 0;  // リセット
-  });
-  
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    if (mounted) {
-      _onPlayerStateChanged(
-        currentTaskIndex: taskIndex,
-        isPlaying: true,
-        progress: _currentProgress,
-        elapsedSeconds: _elapsedSeconds,
-        isAutoPlayEnabled: true,
-        forcePageChange: pageIndex,
-      );
-      
-      _startProgressTimer();
-      
-      print('バックグラウンド復帰: タスク${taskIndex + 1}に移動 (${_elapsedSeconds}秒経過)');
     }
   });
 }
@@ -578,110 +443,8 @@ Future<void> _recordCompletedTaskInBackground(TaskItem task) async {
 
 
 
-// 🆕 自動再生状態の検証と修正
-void _validateAndCorrectAutoPlayState() {
-  if (!_isAutoPlayEnabled || _taskStartTime == null) return;
-  
-  // 実際の経過時間から現在いるべき状態を計算
-  final actualElapsed = DateTime.now().difference(_taskStartTime!).inSeconds - _totalPausedSeconds;
-  
-  int expectedTaskIndex = _isPlayingSingleAlbum ? 0 : -1;
-  int expectedElapsed = 0;
-  int cumulativeTime = 0;
-  
-  for (int i = (_isPlayingSingleAlbum ? 0 : -1); i < _playingTasks.length; i++) {
-    final taskDuration = i == -1 ? 0 : _playingTasks[i].duration * 60;
-    
-    if (actualElapsed <= cumulativeTime + taskDuration) {
-      expectedTaskIndex = i;
-      expectedElapsed = actualElapsed - cumulativeTime;
-      break;
-    }
-    
-    cumulativeTime += taskDuration;
-  }
-  
-  // 状態が間違っていれば修正
-  // 状態が間違っていれば修正
-if (expectedTaskIndex != _currentTaskIndex || 
-    (expectedElapsed - _elapsedSeconds).abs() > 5) {  // Math.abs → .abs()に修正
-  
-  print('🔧 状態修正: ${_currentTaskIndex} → ${expectedTaskIndex}, ${_elapsedSeconds}秒 → ${expectedElapsed}秒');
-  
-  setState(() {
-    _currentTaskIndex = expectedTaskIndex;
-    _elapsedSeconds = expectedElapsed;
-    _updateProgress();
-    _forcePlayerPageIndex = _isPlayingSingleAlbum ? expectedTaskIndex : expectedTaskIndex + 1;
-  });
-  
-  _onPlayerStateChanged(
-    currentTaskIndex: expectedTaskIndex,
-    progress: _currentProgress,
-    elapsedSeconds: expectedElapsed,
-    forcePageChange: _forcePlayerPageIndex,
-  );
-}
-}
 
-// 🆕 自動再生状態の確認と修正
-void _checkAndCorrectAutoPlayState() {
-  if (!_isAutoPlayEnabled || _playingTasks.isEmpty) return;
-  
-  try {
-    // 現在時刻と開始時刻から実際の進行状況を計算
-    if (_taskStartTime != null) {
-      final actualElapsed = DateTime.now().difference(_taskStartTime!).inSeconds - _totalPausedSeconds;
-      
-      // 累積で何秒経過したかを計算
-      int cumulativeTime = 0;
-      int correctTaskIndex = -1;
-      int correctElapsedInCurrentTask = 0;
-      
-      for (int i = (_isPlayingSingleAlbum ? 0 : -1); i < _playingTasks.length; i++) {
-        final taskDuration = i == -1 ? 0 : _playingTasks[i].duration * 60;
-        
-        if (actualElapsed <= cumulativeTime + taskDuration) {
-          correctTaskIndex = i;
-          correctElapsedInCurrentTask = actualElapsed - cumulativeTime;
-          break;
-        }
-        
-        cumulativeTime += taskDuration;
-      }
-      
-      // 状態が間違っている場合は修正
-      if (correctTaskIndex != _currentTaskIndex) {
-        print('🔧 自動再生状態修正: ${_currentTaskIndex} → ${correctTaskIndex}');
-        
-        setState(() {
-          _currentTaskIndex = correctTaskIndex;
-          _elapsedSeconds = correctElapsedInCurrentTask;
-          _updateProgress();
-          
-          // PlayerScreenページも更新
-          _forcePlayerPageIndex = _isPlayingSingleAlbum 
-              ? correctTaskIndex 
-              : correctTaskIndex + 1;
-        });
-        
-        // PlayerScreenに状態変更を通知
-        _onPlayerStateChanged(
-          currentTaskIndex: correctTaskIndex,
-          isPlaying: true,
-          progress: _currentProgress,
-          elapsedSeconds: correctElapsedInCurrentTask,
-          isAutoPlayEnabled: true,
-          forcePageChange: _forcePlayerPageIndex,
-        );
-        
-        _startNewTask();
-      }
-    }
-  } catch (e) {
-    print('❌ 自動再生状態確認エラー: $e');
-  }
-}
+
 
 // 新規追加メソッド
 Future<void> _checkForNewTasks() async {
@@ -710,220 +473,12 @@ Future<void> _notifyChartsScreenOfCompletion() async {
   }
 }
 
-// 🆕 自動再生セッション復元チェック（修正版）
-Future<void> _checkAndRestoreAutoPlaySession() async {
-  try {
-    final prefs = await SharedPreferences.getInstance();
-    
-    // 🔧 修正: getBoolの正しい使用方法
-    final isSessionActive = prefs.getBool('autoplay_session_active') ?? false;
-    if (!isSessionActive) {
-      return;
-    }
-    
-    final startTimeStr = prefs.getString('autoplay_start_time');
-    if (startTimeStr == null) return;
-    
-    final startTime = DateTime.parse(startTimeStr);
-    final taskDurationStrings = prefs.getStringList('autoplay_task_durations') ?? [];
-    final taskDurations = taskDurationStrings.map((d) => int.parse(d)).toList();
-    final initialTaskIndex = prefs.getInt('autoplay_current_task_index') ?? 0;
-    
-    // 5分以上経過していたらセッションを破棄
-    if (DateTime.now().difference(startTime).inMinutes > 300) {
-      await _clearAutoPlaySessionData();
-      return;
-    }
-    
-    // 現在の状態を計算
-    final calculatedState = _calculateCurrentStateFromTime(startTime, taskDurations, initialTaskIndex);
-    
-    // セッションデータを作成
-    final sessionData = {
-      'startTime': startTime,
-      'currentTaskIndex': initialTaskIndex,
-      'taskDurations': taskDurations,
-      'albumName': prefs.getString('autoplay_album_name') ?? '',
-      'isSingleAlbum': prefs.getBool('autoplay_is_single_album') ?? false,
-    };
-    
-    // 計算結果でアプリ状態を復元
-    await _restoreAutoPlayState(calculatedState, sessionData);
-    
-    print('自動再生セッション復元完了');
-  } catch (e) {
-    print('自動再生セッション復元エラー: $e');
-    await _clearAutoPlaySessionData();
-  }
-}
 
-// 🆕 自動再生状態の復元
-Future<void> _restoreAutoPlayState(Map<String, dynamic> calculatedState, Map<String, dynamic> sessionData) async {
-  try {
-    final taskIndex = calculatedState['taskIndex'] as int;
-    final elapsedSeconds = calculatedState['elapsedSeconds'] as int;
-    final progress = calculatedState['progress'] as double;
-    final isCompleted = calculatedState['isCompleted'] as bool;
-    final isPlaying = calculatedState['isPlaying'] as bool;
-    
-    // タスクリストを復元（セッションデータに基づいて）
-    final isSingleAlbum = sessionData['isSingleAlbum'] as bool;
-    _isPlayingSingleAlbum = isSingleAlbum;
-    
-    final pageIndex = isSingleAlbum ? taskIndex : taskIndex + 1;
-    
-    setState(() {
-      _currentTaskIndex = taskIndex;
-      _elapsedSeconds = elapsedSeconds;
-      _currentProgress = progress;
-      _isPlaying = isPlaying && !isCompleted;
-      _isAutoPlayEnabled = isPlaying && !isCompleted;
-      _forcePlayerPageIndex = pageIndex;
-      _isPlayerScreenVisible = true;
-      _autoPlaySessionStartTime = sessionData['startTime'] as DateTime;
-      _isTimeBasedRestorationEnabled = true;
-    });
-    
-    if (isCompleted) {
-      // アルバム完了状態
-      Future.delayed(const Duration(milliseconds: 500), () {
-        if (mounted) _showAlbumCompletionDialog();
-      });
-    } else if (isPlaying) {
-      // 継続再生状態
-      _startNewTask();
-      _startProgressTimer();
-    }
-    
-    // PlayerScreenに状態を通知
-    _onPlayerStateChanged(
-      currentTaskIndex: taskIndex,
-      isPlaying: isPlaying && !isCompleted,
-      progress: progress,
-      elapsedSeconds: elapsedSeconds,
-      isAutoPlayEnabled: isPlaying && !isCompleted,
-      forcePageChange: pageIndex,
-    );
-    
-    print('状態復元完了: タスク${taskIndex + 1}, ${elapsedSeconds}秒経過, 進捗${(progress * 100).toInt()}%');
-  } catch (e) {
-    print('状態復元実行エラー: $e');
-  }
-}
 
-// 🆕 自動再生セッションデータをクリア（修正版）
-Future<void> _clearAutoPlaySessionData() async {
-  try {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('autoplay_start_time');
-    await prefs.remove('autoplay_current_task_index');
-    await prefs.remove('autoplay_task_durations');
-    await prefs.remove('autoplay_album_name');
-    await prefs.remove('autoplay_is_single_album');
-    await prefs.remove('autoplay_session_active'); // 🔧 修正: setBoolではなくremove
-    
-    _autoPlaySessionStartTime = null;
-    _isTimeBasedRestorationEnabled = false;
-    
-    print('自動再生セッションデータをクリア');
-  } catch (e) {
-    print('セッションデータクリアエラー: $e');
-  }
-}
 
-// 自動再生停止時またはアルバム完了時に呼び出し
-void _stopAutoPlaySession() {
-  _clearAutoPlaySessionData();
-  print('自動再生セッション終了');
-}
 
-Future<void> _scheduleAutoPlayTaskCompletions() async {
-  print('🔧 自動再生モード: タスク切り替え通知をスケジュール');
-  
-  // 完了済みタスクのIDリスト
-  List<String> completedTaskIds = [];
-  for (int i = 0; i < _currentTaskIndex; i++) {
-    if (i >= 0 && i < _playingTasks.length) {
-      completedTaskIds.add(_playingTasks[i].id);
-    }
-  }
-  
-  int cumulativeSeconds = 0;
-  
-  for (int i = _currentTaskIndex; i < _playingTasks.length; i++) {
-    final task = _playingTasks[i];
-    
-    // 時間計算
-    if (i == _currentTaskIndex) {
-      cumulativeSeconds = (task.duration * 60) - _elapsedSeconds;
-    } else {
-      cumulativeSeconds += (task.duration * 60);
-    }
-    
-    // この時点での完了タスクリスト
-    List<String> taskIdsUpToNow = List.from(completedTaskIds);
-    for (int j = _currentTaskIndex; j <= i; j++) {
-      if (j < _playingTasks.length) {
-        taskIdsUpToNow.add(_playingTasks[j].id);
-      }
-    }
-    
-    final isLastTask = (i == _playingTasks.length - 1);
-    final notificationId = AutoPlayNotificationSystem.autoPlayTaskId(i);
-    
-    // ペイロード作成（自動再生用の特別な形式）
-    final payload = _createAutoPlayPayload(
-      taskIndex: i,
-      isLastTask: isLastTask,
-      completedTaskIds: taskIdsUpToNow,
-      albumName: _isPlayingSingleAlbum && _playingSingleAlbum != null 
-          ? _playingSingleAlbum!.albumName 
-          : _currentIdealSelf,
-    );
-    
-    // タイトルとボディをタスクに応じて変更
-    String title;
-    String body;
-    
-    if (isLastTask) {
-      title = '🎉 アルバム完了！';
-      body = 'All tasks completed. Record your progress.';
-    } else {
-      final nextTask = _playingTasks[i + 1];
-      title = '⏭️ タスク切り替え';
-      body = '\"${task.title}\"が完了。次は「${nextTask.title}」です。';
-    }
-    
-    await _notificationService.scheduleDelayedNotification(
-      id: notificationId,
-      title: title,
-      body: body,
-      delay: Duration(seconds: cumulativeSeconds),
-      payload: payload,
-      withActions: false,
-    );
-    
-    print('🔧 自動再生通知[$i]: ID=$notificationId, ${cumulativeSeconds}秒後');
-  }
-}
 
-// 自動再生用ペイロード作成
-String _createAutoPlayPayload({
-  required int taskIndex,
-  required bool isLastTask,
-  required List<String> completedTaskIds,
-  required String albumName,
-}) {
-  return [
-    'mode=AUTO_PLAY',
-    'taskIndex=$taskIndex',
-    'isLastTask=$isLastTask',
-    'completedTaskIds=${completedTaskIds.join(",")}',
-    'albumName=${Uri.encodeComponent(albumName)}',
-    'isSingleAlbum=$_isPlayingSingleAlbum',
-    'timestamp=${DateTime.now().millisecondsSinceEpoch}',
-  ].join('&');
-}
+
 
 Future<void> _scheduleNormalTaskCompletion() async {
   print('🔧 通常モード通知スケジュール開始');
@@ -968,9 +523,7 @@ Future<void> _scheduleNormalTaskCompletion() async {
   }
 }
 
-// 削除: _scheduleAutoPlayFinalNotification()メソッド全体
-
-// 復活: _scheduleBackgroundTaskCompletion()メソッドの修正
+// 既存メソッドの修正（簡素化）
 Future<void> _scheduleBackgroundTaskCompletion() async {
   print('🔧 バックグラウンド通知スケジュール開始');
   
@@ -979,299 +532,22 @@ Future<void> _scheduleBackgroundTaskCompletion() async {
     return;
   }
   
-  if (_isAutoPlayEnabled) {
-    // 自動再生時も個別タスク完了通知をスケジュール
-    await _scheduleAutoPlayTaskNotifications();
-  } else {
-    await _scheduleNormalTaskCompletion();
-  }
-}
-
-
-Future<void> _scheduleAutoPlayTaskNotifications() async {
-  try {
-    // 現在のタスクの残り時間を計算
-    final currentTask = _playingTasks[_currentTaskIndex];
-    final remainingSeconds = (currentTask.duration * 60) - _elapsedSeconds;
-    
-    if (remainingSeconds <= 0) {
-      print('残り時間が0以下のためスケジュールをスキップ');
-      return;
-    }
-    
-    final notificationId = 20000 + _currentTaskIndex;
-    final isLastTask = _currentTaskIndex >= _playingTasks.length - 1;
-    
-    // ペイロード作成（シンプルに）
-    final payload = [
-      'mode=AUTO_PLAY_TASK',
-      'completedTaskIndex=$_currentTaskIndex',
-      'isLastTask=$isLastTask',
-    ].join('&');
-    
-    await _notificationService.scheduleDelayedNotification(
-      id: notificationId,
-      title: isLastTask ? 'Album Complete!' : 'Task Switch',
-      body: isLastTask
-          ? 'All tasks complete. Please check results.'
-          : '\"${currentTask.title}\"完了→次のタスクを開始',
-      delay: Duration(seconds: remainingSeconds),
-      payload: payload,
-      withActions: false,
-    );
-    
-    print('自動再生タスク通知スケジュール: ${currentTask.title} - ${remainingSeconds}秒後');
-    
-    // ここが重要：バックグラウンドでも次のタスクに自動で進むようにタイマーを設定
-    if (!isLastTask && _isAutoPlayEnabled) {
-      Future.delayed(Duration(seconds: remainingSeconds), () {
-        if (_isAutoPlayEnabled && !_isPlayerScreenVisible && mounted) {
-          // バックグラウンドで次のタスクに自動移動
-          _autoMoveToNextTaskInBackground();
-        }
-      });
-    }
-    
-  } catch (e) {
-    print('自動再生タスク通知スケジュールエラー: $e');
-  }
-}
-
-// バックグラウンドで次のタスクに自動移動
-void _autoMoveToNextTaskInBackground() {
-  if (!_isAutoPlayEnabled) return;
   
-  // 最後のタスクかチェック
-  if (_currentTaskIndex >= _playingTasks.length - 1) {
-    // アルバム完了
-    setState(() {
-      _isPlaying = false;
-      _isAutoPlayEnabled = false;
-    });
-    return;
-  }
-  
-  // 次のタスクに移動
-  final nextTaskIndex = _currentTaskIndex + 1;
-  final nextPageIndex = _isPlayingSingleAlbum ? nextTaskIndex : nextTaskIndex + 1;
-  
-  setState(() {
-    _currentTaskIndex = nextTaskIndex;
-    _forcePlayerPageIndex = nextPageIndex;
-    _elapsedSeconds = 0;
-    _currentProgress = 0.0;
-    _isPlaying = true;
-    _taskStartTime = DateTime.now();
-    _totalPausedSeconds = 0;
-  });
-  
-  print('🔄 バックグラウンド自動タスク切り替え: タスク${nextTaskIndex}開始');
-  
-  // 次のタスクの通知もスケジュール
-  _scheduleAutoPlayTaskNotifications();
-}
-
-// 新規追加メソッド
-Future<void> _scheduleNextTaskAutoPlayNotifications(int nextTaskIndex, int delayFromNow) async {
-  if (nextTaskIndex >= _playingTasks.length) return;
-  
-  final nextTask = _playingTasks[nextTaskIndex];
-  final totalDelay = delayFromNow + (nextTask.duration * 60);
-  final isLastTask = nextTaskIndex >= _playingTasks.length - 1;
-  
-  final notificationId = 20000 + nextTaskIndex;
-  
-  final payload = [
-    'mode=AUTO_PLAY_TASK',
-    'completedTaskIndex=$nextTaskIndex',
-    'nextTaskIndex=${nextTaskIndex + 1}',
-    'isLastTask=$isLastTask',
-    'albumName=${Uri.encodeComponent(_isPlayingSingleAlbum && _playingSingleAlbum != null ? _playingSingleAlbum!.albumName : _currentIdealSelf)}',
-    'isSingleAlbum=$_isPlayingSingleAlbum',
-    'shouldContinueAutoPlay=true',
-    'timestamp=${DateTime.now().millisecondsSinceEpoch}',
-  ].join('&');
-  
-  await _notificationService.scheduleDelayedNotification(
-    id: notificationId,
-    title: isLastTask ? 'Album Complete!' : 'Task Switch',
-    body: isLastTask
-        ? '全てのタスクが完了しました。'
-        : '\"${nextTask.title}\"を開始します',
-    delay: Duration(seconds: totalDelay),
-    payload: payload,
-    withActions: false,
-  );
-  
-  // 再帰的に次のタスクもスケジュール
-  if (!isLastTask) {
-    _scheduleNextTaskAutoPlayNotifications(nextTaskIndex + 1, totalDelay);
-  }
-}
-
-// 🆕 自動再生セッションデータを永続保存
-Future<void> _saveAutoPlaySessionData() async {
-  try {
-    final prefs = await SharedPreferences.getInstance();
-    
-    if (_autoPlaySessionStartTime != null) {
-      await prefs.setString('autoplay_start_time', _autoPlaySessionStartTime!.toIso8601String());
-      await prefs.setInt('autoplay_current_task_index', _currentTaskIndex);
-      await prefs.setStringList('autoplay_task_durations', _taskDurations.map((d) => d.toString()).toList());
-      await prefs.setString('autoplay_album_name', _isPlayingSingleAlbum && _playingSingleAlbum != null 
-          ? _playingSingleAlbum!.albumName 
-          : _currentIdealSelf);
-      await prefs.setBool('autoplay_is_single_album', _isPlayingSingleAlbum);
-      await prefs.setBool('autoplay_session_active', true);
-      
-      print('自動再生セッションデータ保存完了');
-    }
-  } catch (e) {
-    print('自動再生セッションデータ保存エラー: $e');
-  }
+  // ✅ 簡素化：通常モードのみ
+  await _scheduleNormalTaskCompletion();
 }
 
 
 
-// 🆕 時刻ベースの状態計算
-Map<String, dynamic> _calculateCurrentStateFromTime(DateTime startTime, List<int> taskDurations, int initialTaskIndex) {
-  final elapsedSeconds = DateTime.now().difference(startTime).inSeconds;
-  
-  // 初期タスクまでの累積時間を計算
-  int cumulativeSeconds = 0;
-  for (int i = (_isPlayingSingleAlbum ? 0 : -1); i < initialTaskIndex; i++) {
-    if (i >= 0 && i < taskDurations.length) {
-      cumulativeSeconds += taskDurations[i];
-    }
-  }
-  
-  // 初期タスクの進行時間も加算
-  cumulativeSeconds += _elapsedSeconds;
-  
-  // 現在いるべきタスクを特定
-  int currentTaskIndex = _isPlayingSingleAlbum ? 0 : -1;
-  int currentElapsedInTask = 0;
-  int totalElapsed = cumulativeSeconds + (elapsedSeconds - _elapsedSeconds);
-  
-  int tempCumulative = 0;
-  for (int i = (_isPlayingSingleAlbum ? 0 : -1); i < taskDurations.length; i++) {
-    final taskDuration = i == -1 ? 0 : taskDurations[i];
-    
-    if (totalElapsed <= tempCumulative + taskDuration) {
-      currentTaskIndex = i;
-      currentElapsedInTask = totalElapsed - tempCumulative;
-      break;
-    }
-    
-    tempCumulative += taskDuration;
-  }
-  
-  // 全タスク完了チェック
-  final totalDuration = taskDurations.fold(0, (sum, duration) => sum + duration);
-  final isCompleted = totalElapsed >= totalDuration;
-  
-  return {
-    'taskIndex': isCompleted ? taskDurations.length - 1 : currentTaskIndex,
-    'elapsedSeconds': isCompleted ? taskDurations.last : currentElapsedInTask.clamp(0, currentTaskIndex >= 0 && currentTaskIndex < taskDurations.length ? taskDurations[currentTaskIndex] : 0),
-    'progress': isCompleted ? 1.0 : (currentTaskIndex >= 0 && currentTaskIndex < taskDurations.length && taskDurations[currentTaskIndex] > 0 
-        ? currentElapsedInTask / taskDurations[currentTaskIndex] 
-        : 0.0),
-    'isCompleted': isCompleted,
-    'isPlaying': !isCompleted,
-  };
-}
 
-
-
+// 既存メソッドの修正（簡素化）
 Future<void> _cancelBackgroundTaskCompletion() async {
-  if (_isAutoPlayEnabled) {
-    // 自動再生の全通知をキャンセル
-    for (int i = 0; i < _playingTasks.length; i++) {
-      await _notificationService.cancelNotification(
-        AutoPlayNotificationSystem.autoPlayTaskId(i)
-      );
-    }
-    print('✅ 自動再生通知をすべてキャンセル');
-  } else {
-    // 通常モードの現在のタスク通知をキャンセル
-    await _notificationService.cancelNotification(
-      AutoPlayNotificationSystem.normalTaskId(_currentTaskIndex)
-    );
-    print('✅ 通常モード通知をキャンセル');
-  }
-}
-
-
-// _scheduleCurrentTaskCompletion メソッド内を修正
-Future<void> _scheduleCurrentTaskCompletion() async {
-  if (_currentTaskIndex >= 0 && _currentTaskIndex < _playingTasks.length) {
-    final currentTask = _playingTasks[_currentTaskIndex];
-    final remainingSeconds = (currentTask.duration * 60) - _elapsedSeconds;
-    
-    if (remainingSeconds > 0) {
-      // ペイロードを直接作成（メソッド呼び出しを避ける）
-      final payload = 'type=background_task_completed'
-          '&taskId=${currentTask.id}'
-          '&taskTitle=${currentTask.title}'
-          '&albumName=${_isPlayingSingleAlbum && _playingSingleAlbum != null ? _playingSingleAlbum!.albumName : _currentIdealSelf}'
-          '&albumType=${_isPlayingSingleAlbum ? 'single' : 'life_dream'}'
-          '&albumId=${_isPlayingSingleAlbum && _playingSingleAlbum != null ? _playingSingleAlbum!.id : ''}'
-          '&elapsedSeconds=${currentTask.duration * 60}'
-          '&notificationType=background_task_completed';
-      
-      await _notificationService.scheduleDelayedNotification(
-        id: 9900 + _currentTaskIndex,
-        title: 'Task Complete!',
-        body: 'Time is up for "${currentTask.title}"',
-        delay: Duration(seconds: remainingSeconds),
-        payload: payload,
-        withActions: true,
-      );
-      
-      print('🔧 通常モード: バックグラウンド完了通知をスケジュール: ${remainingSeconds}秒後');
-    }
-  }
-}
-
-Future<void> _scheduleAutoPlayNotifications() async {
-  print('🎯 自動再生専用通知システムを起動');
   
-  // 全タスクのIDリストを作成
-  final allTaskIds = _playingTasks.map((t) => t.id).toList();
-  
-  // セッション情報を作成
-  final sessionInfo = AutoPlayNotificationManager.createAutoPlaySession(
-    taskIds: allTaskIds,
-    albumName: _isPlayingSingleAlbum && _playingSingleAlbum != null 
-        ? _playingSingleAlbum!.albumName 
-        : _currentIdealSelf,
-    isSingleAlbum: _isPlayingSingleAlbum,
-    startTime: DateTime.now(),
+  // ✅ 簡素化：通常モードのみ
+  await _notificationService.cancelNotification(
+    AutoPlayNotificationSystem.normalTaskId(_currentTaskIndex)
   );
-  
-  // 最後のタスクのみ通知をスケジュール（シンプルに）
-  int totalSeconds = 0;
-  
-  // 残り時間を計算
-  for (int i = _currentTaskIndex; i < _playingTasks.length; i++) {
-    if (i == _currentTaskIndex) {
-      totalSeconds = (_playingTasks[i].duration * 60) - _elapsedSeconds;
-    } else {
-      totalSeconds += (_playingTasks[i].duration * 60);
-    }
-  }
-  
-  // 最終完了通知のみスケジュール
-  await _notificationService.scheduleDelayedNotification(
-    id: 99999, // 固定ID
-    title: '🎉 すべてのタスク完了！',
-    body: 'Well done! Record your task completion.',
-    delay: Duration(seconds: totalSeconds),
-    payload: 'notification_type=AUTO_PLAY_FINAL&$sessionInfo',
-    withActions: false,
-  );
-  
-  print('✅ 自動再生最終通知をスケジュール: ${totalSeconds}秒後');
+  print('✅ 通常モード通知をキャンセル');
 }
 
 // 通常モード用の通知（既存のものを簡略化）
@@ -1291,351 +567,9 @@ Future<void> _scheduleNormalTaskNotification() async {
   );
 }
 
-// main_wrapper.dart - 自動再生専用通知システム修正版
-
-Future<void> _scheduleAllRemainingTasksCompletion() async {
-  print('🔧 自動再生モード: 全タスクの通知をスケジュール');
-  
-  // 既に完了したタスクのIDリスト
-  List<String> completedTaskIds = [];
-  for (int i = 0; i < _currentTaskIndex; i++) {
-    if (i >= 0 && i < _playingTasks.length) {
-      completedTaskIds.add(_playingTasks[i].id);
-    }
-  }
-  
-  int cumulativeSeconds = 0;
-  
-  for (int i = _currentTaskIndex; i < _playingTasks.length; i++) {
-    final task = _playingTasks[i];
-    
-    // 時間計算
-    if (i == _currentTaskIndex) {
-      cumulativeSeconds = (task.duration * 60) - _elapsedSeconds;
-    } else {
-      cumulativeSeconds += (task.duration * 60);
-    }
-    
-    // このタスクまでの完了リスト
-    List<String> taskIdsAtThisPoint = List.from(completedTaskIds);
-    for (int j = _currentTaskIndex; j <= i; j++) {
-      if (j < _playingTasks.length) {
-        taskIdsAtThisPoint.add(_playingTasks[j].id);
-      }
-    }
-    
-    final isLastTask = (i == _playingTasks.length - 1);
-    final notificationId = NotificationIds.autoPlayTask(i);
-    
-    // ペイロード作成
-    final payload = [
-      'type=${isLastTask ? "album_completed" : "task_completed"}',
-      'taskIndex=$i',
-      'totalTasks=${_playingTasks.length}',
-      'completedTasks=${taskIdsAtThisPoint.join(",")}',
-      'albumName=${_isPlayingSingleAlbum && _playingSingleAlbum != null ? _playingSingleAlbum!.albumName : _currentIdealSelf}',
-      'isLastTask=$isLastTask',
-      'timestamp=${DateTime.now().millisecondsSinceEpoch}',
-    ].join('&');
-
-    print('📝 通知ペイロード: $payload');
-    
-    await _notificationService.scheduleDelayedNotification(
-      id: notificationId,
-      title: isLastTask ? 'Album Complete!' : '\"${task.title}\"完了',
-      body: isLastTask 
-          ? 'すべてのタスクが完了しました'
-          : 'Moving to next task',
-      delay: Duration(seconds: cumulativeSeconds),
-      payload: payload,
-      withActions: isLastTask,
-    );
-    
-    print('🔧 通知スケジュール: ID=$notificationId, ${cumulativeSeconds}秒後');
-  }
-}
-
-// 🆕 新しいメソッド: アルバム完了専用通知のスケジュール
-Future<void> _scheduleAlbumCompletionNotification(int delaySeconds, int finalTaskIndex) async {
-  try {
-    // 完了済みタスクのIDリストを作成
-    List<String> allCompletedTaskIds = [];
-    for (int i = 0; i < _playingTasks.length; i++) {
-      allCompletedTaskIds.add(_playingTasks[i].id);
-    }
-    
-    // 🔧 修正: 専用の「アルバム完了」ペイロードを作成
-    final payload = _createAlbumCompletionPayload(
-      finalTaskIndex: finalTaskIndex,
-      completedTaskIds: allCompletedTaskIds,
-      totalElapsedSeconds: _playingTasks.fold(0, (sum, task) => sum + (task.duration * 60)),
-    );
-    
-    await _notificationService.scheduleDelayedNotification(
-      id: 8900, // 専用のID
-      title: '🎉 アルバム完了！',
-      body: '\"${_isPlayingSingleAlbum && _playingSingleAlbum != null ? _playingSingleAlbum!.albumName : _currentIdealSelf}\"のすべてのタスクが完了しました。\n\nお疲れ様でした！結果を確認しましょう。',
-      delay: Duration(seconds: delaySeconds),
-      payload: payload,
-      withActions: true,
-    );
-    
-    print('🔧 アルバム完了通知をスケジュール: ${delaySeconds}秒後');
-  } catch (e) {
-    print('❌ アルバム完了通知スケジュールエラー: $e');
-  }
-}
-
-// 🆕 新しいメソッド: タスク進行通知のスケジュール
-Future<void> _scheduleTaskProgressNotification(int delaySeconds, TaskItem task, int taskIndex) async {
-  try {
-    // 現在のタスクまでの完了済みIDリストを作成
-    List<String> completedTaskIds = [];
-    for (int i = 0; i <= taskIndex; i++) {
-      if (i < _playingTasks.length) {
-        completedTaskIds.add(_playingTasks[i].id);
-      }
-    }
-    
-    // 🔧 修正: 専用の「進行通知」ペイロードを作成
-    final payload = _createTaskProgressPayload(
-      currentTaskIndex: taskIndex,
-      completedTaskIds: completedTaskIds,
-      totalElapsedSeconds: completedTaskIds.length * 60 * 3, // 簡易計算
-    );
-    
-    await _notificationService.scheduleDelayedNotification(
-      id: 8800 + taskIndex, // 進行通知専用のID範囲
-      title: '🔄 次のタスクを開始',
-      body: '\"${task.title}\"が完了しました。\n次のタスクに自動で進みます。',
-      delay: Duration(seconds: delaySeconds),
-      payload: payload,
-      withActions: false,
-    );
-    
-    print('🔧 タスク進行通知をスケジュール: タスク${taskIndex + 1}「${task.title}」- ${delaySeconds}秒後');
-  } catch (e) {
-    print('❌ タスク進行通知スケジュールエラー: $e');
-  }
-}
-
-// 🆕 新しいメソッド: アルバム完了専用ペイロード作成
-String _createAlbumCompletionPayload({
-  required int finalTaskIndex,
-  required List<String> completedTaskIds,
-  required int totalElapsedSeconds,
-}) {
-  return 'type=auto_play_album_completed'
-      '&finalTaskIndex=$finalTaskIndex'
-      '&totalTasks=${_playingTasks.length}'
-      '&completedTaskIds=${completedTaskIds.join(',')}'
-      '&albumName=${_isPlayingSingleAlbum && _playingSingleAlbum != null ? _playingSingleAlbum!.albumName : _currentIdealSelf}'
-      '&albumType=${_isPlayingSingleAlbum ? 'single' : 'life_dream'}'
-      '&albumId=${_isPlayingSingleAlbum && _playingSingleAlbum != null ? _playingSingleAlbum!.id : ''}'
-      '&totalElapsedSeconds=$totalElapsedSeconds'
-      '&isAutoPlayCompleted=true'
-      '&notificationType=auto_play_album_completed';
-}
-
-// 🆕 新しいメソッド: タスク進行専用ペイロード作成
-String _createTaskProgressPayload({
-  required int currentTaskIndex,
-  required List<String> completedTaskIds,
-  required int totalElapsedSeconds,
-}) {
-  return 'type=auto_play_task_progress'
-      '&currentTaskIndex=$currentTaskIndex'
-      '&totalTasks=${_playingTasks.length}'
-      '&completedTaskIds=${completedTaskIds.join(',')}'
-      '&albumName=${_isPlayingSingleAlbum && _playingSingleAlbum != null ? _playingSingleAlbum!.albumName : _currentIdealSelf}'
-      '&albumType=${_isPlayingSingleAlbum ? 'single' : 'life_dream'}'
-      '&albumId=${_isPlayingSingleAlbum && _playingSingleAlbum != null ? _playingSingleAlbum!.id : ''}'
-      '&totalElapsedSeconds=$totalElapsedSeconds'
-      '&isAutoPlayInProgress=true'
-      '&notificationType=auto_play_task_progress';
-}
 
 
-// 🆕 新しいメソッド: 自動再生アルバム完了通知の処理
-Future<void> _handleAutoPlayAlbumCompletedNotification(Map<String, String> payloadData) async {
-  try {
-    print('🎉 自動再生アルバム完了通知処理開始');
-    
-    _isNotificationReturning = true;
-    
-    // ペイロードから状態を復元
-    final finalTaskIndex = int.tryParse(payloadData['finalTaskIndex'] ?? '') ?? _playingTasks.length - 1;
-    final completedTaskIdsStr = payloadData['completedTaskIds'] ?? '';
-    final completedTaskIds = completedTaskIdsStr.split(',').where((id) => id.isNotEmpty).toList();
-    final totalElapsedSeconds = int.tryParse(payloadData['totalElapsedSeconds'] ?? '0') ?? 0;
-    
-    // 🔧 修正: すべてのタスクを完了済みとして記録
-    for (final taskId in completedTaskIds) {
-      final taskIndex = _playingTasks.indexWhere((t) => t.id == taskId);
-      if (taskIndex >= 0) {
-        final task = _playingTasks[taskIndex];
-        
-        // 重複記録を防ぐため、今日の完了回数をチェック
-        final currentCount = _todayTaskCompletions[task.id] ?? 0;
-        if (currentCount == 0) {
-          await _taskCompletionService.recordTaskCompletion(
-            taskId: task.id,
-            taskTitle: task.title,
-            wasSuccessful: true,
-            elapsedSeconds: task.duration * 60,
-            albumType: _isPlayingSingleAlbum ? 'single' : 'life_dream',
-            albumName: _isPlayingSingleAlbum && _playingSingleAlbum != null 
-                ? _playingSingleAlbum!.albumName 
-                : _currentIdealSelf,
-            albumId: _isPlayingSingleAlbum && _playingSingleAlbum != null 
-                ? _playingSingleAlbum!.id 
-                : null,
-          );
-          
-          setState(() {
-            _todayTaskCompletions[task.id] = 1;
-          });
-        }
-      }
-    }
-    
-    // 🔧 修正: アプリを「アルバム完了」状態に設定
-    final lastPageIndex = _isPlayingSingleAlbum ? finalTaskIndex : finalTaskIndex + 1;
-    
-    setState(() {
-      _isPlaying = false;
-      _isAutoPlayEnabled = false;
-      _currentTaskIndex = finalTaskIndex;
-      _forcePlayerPageIndex = lastPageIndex;
-      _elapsedSeconds = _playingTasks[finalTaskIndex].duration * 60;
-      _currentProgress = 1.0;
-      _isPlayerScreenVisible = true;
-    });
-    
-    // PlayerScreenに完了状態を通知
-    _onPlayerStateChanged(
-      currentTaskIndex: finalTaskIndex,
-      isPlaying: false,
-      progress: 1.0,
-      elapsedSeconds: _playingTasks[finalTaskIndex].duration * 60,
-      isAutoPlayEnabled: false,
-      forcePageChange: lastPageIndex,
-    );
-    
-    await _loadUserData();
-    
-    // 🎉 アルバム完了申告ダイアログを表示
-    Future.delayed(const Duration(milliseconds: 1000), () {
-      if (mounted) {
-        _showAlbumCompletionDialog();
-      }
-    });
-    
-    print('✅ 自動再生アルバム完了処理完了 - 全${completedTaskIds.length}タスク完了');
-    
-  } catch (e) {
-    print('❌ 自動再生アルバム完了処理エラー: $e');
-  }
-}
 
-// 🆕 新しいメソッド: 自動再生タスク進行通知の処理
-Future<void> _handleAutoPlayTaskProgressNotification(Map<String, String> payloadData) async {
-  try {
-    print('🔄 自動再生タスク進行通知処理開始');
-    
-    _isNotificationReturning = true;
-    
-    // ペイロードから状態を復元
-    final currentTaskIndex = int.tryParse(payloadData['currentTaskIndex'] ?? '') ?? 0;
-    final completedTaskIdsStr = payloadData['completedTaskIds'] ?? '';
-    final completedTaskIds = completedTaskIdsStr.split(',').where((id) => id.isNotEmpty).toList();
-    
-    // 完了済みタスクを記録
-    for (final taskId in completedTaskIds) {
-      final taskIndex = _playingTasks.indexWhere((t) => t.id == taskId);
-      if (taskIndex >= 0 && taskIndex < currentTaskIndex) {
-        final task = _playingTasks[taskIndex];
-        
-        final currentCount = _todayTaskCompletions[task.id] ?? 0;
-        if (currentCount == 0) {
-          await _taskCompletionService.recordTaskCompletion(
-            taskId: task.id,
-            taskTitle: task.title,
-            wasSuccessful: true,
-            elapsedSeconds: task.duration * 60,
-            albumType: _isPlayingSingleAlbum ? 'single' : 'life_dream',
-            albumName: _isPlayingSingleAlbum && _playingSingleAlbum != null 
-                ? _playingSingleAlbum!.albumName 
-                : _currentIdealSelf,
-            albumId: _isPlayingSingleAlbum && _playingSingleAlbum != null 
-                ? _playingSingleAlbum!.id 
-                : null,
-          );
-          
-          setState(() {
-            _todayTaskCompletions[task.id] = 1;
-          });
-        }
-      }
-    }
-    
-    // 現在のタスクの状態に設定（自動再生継続）
-    final pageIndex = _isPlayingSingleAlbum ? currentTaskIndex : currentTaskIndex + 1;
-    
-    setState(() {
-      _currentTaskIndex = currentTaskIndex;
-      _forcePlayerPageIndex = pageIndex;
-      _elapsedSeconds = 0;
-      _currentProgress = 0.0;
-      _isPlaying = true;
-      _isAutoPlayEnabled = true;
-      _isPlayerScreenVisible = true;
-    });
-    
-    _startNewTask();
-    _startProgressTimer();
-    
-    _onPlayerStateChanged(
-      currentTaskIndex: currentTaskIndex,
-      isPlaying: true,
-      progress: 0.0,
-      elapsedSeconds: 0,
-      isAutoPlayEnabled: true,
-      forcePageChange: pageIndex,
-    );
-    
-    await _loadUserData();
-    
-    print('✅ 自動再生タスク進行処理完了 - タスク${currentTaskIndex + 1}を継続');
-    
-  } catch (e) {
-    print('❌ 自動再生タスク進行処理エラー: $e');
-  }
-}
-
-
-Future<void> _scheduleAutoPlayProgressNotification(int delaySeconds, TaskItem task, int taskIndex) async {
-  // ペイロードを直接作成
-  final payload = 'type=background_auto_play_progress'
-      '&taskId=${task.id}'
-      '&taskTitle=${task.title}'
-      '&albumName=${_isPlayingSingleAlbum && _playingSingleAlbum != null ? _playingSingleAlbum!.albumName : _currentIdealSelf}'
-      '&albumType=${_isPlayingSingleAlbum ? 'single' : 'life_dream'}'
-      '&albumId=${_isPlayingSingleAlbum && _playingSingleAlbum != null ? _playingSingleAlbum!.id : ''}'
-      '&elapsedSeconds=${task.duration * 60}'
-      '&notificationType=background_auto_play_progress';
-  
-  await _notificationService.scheduleDelayedNotification(
-    id: 9900 + taskIndex,
-    title: 'タスク完了（自動再生）',
-    body: '\"${task.title}\"が完了しました。次のタスクに進みます。',
-    delay: Duration(seconds: delaySeconds),
-    payload: payload,
-    withActions: false,
-  );
-  
-  print('🔧 自動再生進行通知をスケジュール: タスク${taskIndex + 1}「${task.title}」- ${delaySeconds}秒後');
-}
 
 
 
@@ -1697,8 +631,6 @@ Future<void> _initializeAudioService() async {
     
     await _loadUserData();
     
-    // 🆕 自動再生セッション復元チェックを追加
-    await _checkAndRestoreAutoPlaySession();
     
     await minDisplayTime;
     
@@ -1872,18 +804,17 @@ Future<void> _extractAlbumColor() async {
   }
 }
 
-  void _onPlayerStateChanged({
+  // 既存メソッドの修正
+void _onPlayerStateChanged({
   int? currentTaskIndex,
   bool? isPlaying,
   double? progress,
   int? elapsedSeconds,
-  bool? isAutoPlayEnabled,
   int? forcePageChange, 
   Color? albumColor,
 }) {
   print('🔧 MainWrapper: PlayerScreenから状態変更受信');
   
-  // 🔧 修正: 状態が変更された場合は常に setState を呼ぶ
   bool shouldUpdate = false;
   
   if (currentTaskIndex != null && _currentTaskIndex != currentTaskIndex) {
@@ -1895,7 +826,6 @@ Future<void> _extractAlbumColor() async {
   if (isPlaying != null && _isPlaying != isPlaying) {
     if (!_isPlaying && isPlaying) {
       _isPlaying = true;
-      // バックグラウンド復帰時は _startNewTask() をスキップ
       if (_taskStartTime == null) {
         _startNewTask();
       }
@@ -1918,21 +848,10 @@ Future<void> _extractAlbumColor() async {
     shouldUpdate = true;
   }
   
-  if (isAutoPlayEnabled != null && _isAutoPlayEnabled != isAutoPlayEnabled) {
-    _isAutoPlayEnabled = isAutoPlayEnabled;
-    print('🔄 MainWrapper: 自動再生状態変更 → $_isAutoPlayEnabled');
-    
-    if (!_isAutoPlayEnabled) {
-      _isAutoPlayInProgress = false;
-    }
-    shouldUpdate = true;
-  }
+  // ❌ 削除：自動再生状態管理（約10行削除）
   
-  // 🔧 修正: いずれかの状態が変更された場合に setState を呼ぶ
   if (shouldUpdate) {
-    setState(() {
-      // 状態はすでに更新済み
-    });
+    setState(() {});
   }
 }
 
@@ -2277,8 +1196,7 @@ Future<void> _deleteSingleAlbum(SingleAlbum album) async {
       _stopProgressTimer();
       
       setState(() {
-        _isPlaying = false;
-        _isAutoPlayEnabled = false;
+        _isPlaying = false; 
         _isPlayingSingleAlbum = false;
         _playingSingleAlbum = null;
         _playingTasks = [];
@@ -2438,12 +1356,10 @@ Future<void> _deleteSingleAlbum(SingleAlbum album) async {
   _notifyActivityStateChange(isPlaying: _isPlaying);
 }
 
+// 既存メソッドの修正（タイマーコールバック内の条件分岐を簡素化）
 void _startProgressTimer() {
   _stopProgressTimer();
-
-  print('🔧 タイマー開始時の状態: isPlaying=$_isPlaying, taskIndex=$_currentTaskIndex');
   
-  // 🔧 修正：_isPlayingのチェックを削除し、強制的にタイマーを開始
   if (_playingTasks.isEmpty) {
     print('🔧 タイマー停止: playingTasksが空');
     return;
@@ -2454,72 +1370,50 @@ void _startProgressTimer() {
   }
   
   _progressTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-  print('🔧 タイマーコールバック実行: isPlaying=$_isPlaying');
-  
-  if (_playingTasks.isEmpty) {
-    print('🔧 タイマー停止: playingTasksが空');
-    timer.cancel();
-    return;
-  }
-  
-  setState(() {
-    // 🔧 修正：シンプルなインクリメント方式に変更
-    _elapsedSeconds++;
-    
-    if (_currentTaskIndex == -1) {
-      _currentProgress = 0.0;
+    if (_playingTasks.isEmpty) {
+      timer.cancel();
       return;
     }
     
-    if (_currentTaskIndex >= 0 && _currentTaskIndex < _playingTasks.length) {
-      final currentTask = _playingTasks[_currentTaskIndex];
-      final totalSeconds = currentTask.duration * 60;
-      final progress = totalSeconds > 0 ? _elapsedSeconds / totalSeconds : 0.0;
-      _currentProgress = progress.clamp(0.0, 1.0);
+    setState(() {
+      _elapsedSeconds++;
       
-      _onPlayerStateChanged(
-        progress: _currentProgress,
-        elapsedSeconds: _elapsedSeconds,
-      );
-      print('🔧 MainWrapper→PlayerScreen通知: progress=$_currentProgress, elapsed=$_elapsedSeconds');
-      
-      if (_isPlayerScreenVisible && mounted) {
-        WidgetsBinding.instance.ensureVisualUpdate();
+      if (_currentTaskIndex == -1) {
+        _currentProgress = 0.0;
+        return;
       }
       
-      if (_currentProgress >= 1.0 && !_isAutoPlayInProgress) {
-  print('タスク完了検知: ${currentTask.title}');
-  
-  final maxElapsed = totalSeconds;
-  _elapsedSeconds = math.min(_elapsedSeconds, maxElapsed);
-  _currentProgress = 1.0;
-  
-  if (_isAutoPlayEnabled) {
-    print('自動再生処理を開始します');
-    
-    // 🔧 修正：フラグ設定をここでは行わない（_handleAutoPlayTaskCompletionで行う）
-    
-    // 即座にタイマーを停止
-    timer.cancel();
-    
-    // 処理を実行
-    Future.delayed(const Duration(milliseconds: 50), () {
-      if (mounted && _isAutoPlayEnabled) {
-        _handleAutoPlayTaskCompletion(currentTask);
+      if (_currentTaskIndex >= 0 && _currentTaskIndex < _playingTasks.length) {
+        final currentTask = _playingTasks[_currentTaskIndex];
+        final totalSeconds = currentTask.duration * 60;
+        final progress = totalSeconds > 0 ? _elapsedSeconds / totalSeconds : 0.0;
+        _currentProgress = progress.clamp(0.0, 1.0);
+        
+        _onPlayerStateChanged(
+          progress: _currentProgress,
+          elapsedSeconds: _elapsedSeconds,
+        );
+        
+        if (_currentProgress >= 1.0) {
+          print('タスク完了検知: ${currentTask.title}');
+          
+          final maxElapsed = totalSeconds;
+          _elapsedSeconds = math.min(_elapsedSeconds, maxElapsed);
+          _currentProgress = 1.0;
+          
+          // ❌ 削除：自動再生分岐（約15行削除）
+          
+          // ✅ 簡素化：通常モードのみ
+          _isPlaying = false;
+          print('通常モード: 完了通知を送信');
+          _stopProgressTimer();
+          _sendTaskPlayCompletedNotification(currentTask);
+          
+          return;
+        }
       }
     });
-  } else {
-    _isPlaying = false;
-    print('通常モード: 完了通知を送信');
-    _stopProgressTimer();
-    _sendTaskPlayCompletedNotification(currentTask);
-  }
-  
-  return;
-}
-    }
   });
-});
   
   print('⏱️ MainWrapper: プログレスタイマーを開始しました');
 }
@@ -2535,7 +1429,6 @@ void _startLiveActivityIfNeeded() async {  // asyncを追加
           ? _playingSingleAlbum!.albumName
           : _currentIdealSelf,
       artistName: _currentArtistName,
-      isAutoPlay: _isAutoPlayEnabled,
       isPlayingSingleAlbum: _isPlayingSingleAlbum,
     );
     
@@ -2582,177 +1475,6 @@ void _notifyActivityStateChange({
   }
 }
 
-void _handleAutoPlayTaskCompletion(TaskItem completedTask) async {
-  print('アプリ内自動再生タスク完了: ${completedTask.title}');
-  
-  // 🔧 修正：フラグチェックを削除し、常に処理を実行
-  print('🔧 自動再生タスク完了処理を開始');
-  
-  // 🔧 修正：二重実行防止のためにフラグを設定
-  _isAutoPlayInProgress = true;
-  
-  try {
-    await _audioService.playTaskCompletedSound();
-    
-    // タイマーを一時停止
-    _stopProgressTimer();
-    
-    // 500ms待機してから次の処理（UIの更新を待つ）
-    await Future.delayed(const Duration(milliseconds: 500));
-    
-    // 次のタスクがあるかチェック
-    if (_hasNextTaskFixed()) {
-      print('🔄 次のタスクに自動移動します');
-      _moveToNextTaskAutomatically();
-    } else {
-      print('🎉 最後のタスクです。アルバム完了処理を実行');
-      _completeAllTasksInAutoPlay();
-    }
-    
-  } catch (e) {
-    print('❌ アプリ内自動再生タスク完了処理エラー: $e');
-  } finally {
-    // 🔧 修正：処理完了後にフラグをリセット
-    Future.delayed(const Duration(milliseconds: 100), () {
-      _isAutoPlayInProgress = false;
-    });
-  }
-}
-
-void _completeAllTasksInAutoPlay() {
-  print('🎉 自動再生アルバム完了処理開始');
-  
-  // 🔧 修正：最後のタスクの完了時刻に設定
-  final lastTaskIndex = _playingTasks.length - 1;
-  final lastTask = _playingTasks[lastTaskIndex];
-  final lastTaskDuration = lastTask.duration * 60;
-  
-  setState(() {
-    _isPlaying = false;
-    _isAutoPlayEnabled = false;
-    _currentTaskIndex = lastTaskIndex;
-    _currentProgress = 1.0;
-    _elapsedSeconds = lastTaskDuration; // 🔧 修正：正確な完了時間に設定
-  });
-  
-  _stopProgressTimer(); // 🔧 修正：タイマーを確実に停止
-  
-  // 🔧 修正：PlayerScreenに完了状態を通知
-  _onPlayerStateChanged(
-    currentTaskIndex: lastTaskIndex,
-    isPlaying: false,
-    progress: 1.0,
-    elapsedSeconds: lastTaskDuration,
-    isAutoPlayEnabled: false,
-  );
-  
-  // アルバム完了ダイアログを表示
-  Future.delayed(const Duration(milliseconds: 800), () {
-    if (mounted) {
-      _showAlbumCompletionDialog();
-    }
-  });
-  
-  print('✅ 自動再生アルバム完了処理完了');
-}
-
-// 🔧 修正版: 次のタスクがあるかチェック（ライフドリームアルバム対応）
-bool _hasNextTaskFixed() {
-  if (_isPlayingSingleAlbum) {
-    // シングルアルバムの場合：通常のインデックス
-    return _currentTaskIndex < _playingTasks.length - 1;
-  } else {
-    // ライフドリームアルバムの場合：理想像ページ(-1)を考慮
-    if (_currentTaskIndex == -1) {
-      // 理想像ページから最初のタスクへ
-      return _playingTasks.isNotEmpty;
-    } else {
-      // タスクから次のタスクへ
-      return _currentTaskIndex < _playingTasks.length - 1;
-    }
-  }
-}
-
-// 🔧 修正版: 次のタスクを取得（ライフドリームアルバム対応）
-TaskItem? _getNextTaskFixed() {
-  if (!_hasNextTaskFixed()) return null;
-  
-  if (_isPlayingSingleAlbum) {
-    // シングルアルバムの場合：通常のインデックス
-    return _playingTasks[_currentTaskIndex + 1];
-  } else {
-    // ライフドリームアルバムの場合：理想像ページ(-1)を考慮
-    if (_currentTaskIndex == -1) {
-      // 理想像ページから最初のタスクへ
-      return _playingTasks.isNotEmpty ? _playingTasks[0] : null;
-    } else {
-      // 現在のタスクから次のタスクへ
-      final nextIndex = _currentTaskIndex + 1;
-      return nextIndex < _playingTasks.length ? _playingTasks[nextIndex] : null;
-    }
-  }
-}
-
-  // 🔧 修正版: 総経過時間の計算
-int _calculateTotalElapsedMinutes() {
-  int totalMinutes = 0;
-  
-  if (_isPlayingSingleAlbum) {
-    // シングルアルバムの場合
-    for (int i = 0; i <= _currentTaskIndex && i < _playingTasks.length; i++) {
-      totalMinutes += _playingTasks[i].duration;
-    }
-  } else {
-    // ライフドリームアルバムの場合：理想像ページ(-1)を考慮
-    if (_currentTaskIndex == -1) {
-      totalMinutes = 0; // 理想像ページでは時間なし
-    } else {
-      for (int i = 0; i <= _currentTaskIndex && i < _playingTasks.length; i++) {
-        totalMinutes += _playingTasks[i].duration;
-      }
-    }
-  }
-  
-  return totalMinutes;
-}
-
-  // 🔧 修正版: 連続完了チェック（簡易版）
-Future<bool> _checkConsecutiveCompletion() async {
-  try {
-    // 簡易的な連続完了判定を実装
-    if (_isPlayingSingleAlbum && _playingSingleAlbum != null) {
-      // シングルアルバムの場合：アルバム名で判定
-      return await _checkAlbumConsecutiveCompletion(_playingSingleAlbum!.albumName);
-    } else {
-      // ライフドリームアルバムの場合：理想像で判定
-      return await _checkAlbumConsecutiveCompletion(_currentIdealSelf);
-    }
-  } catch (e) {
-    print('❌ 連続完了チェックエラー: $e');
-    return false;
-  }
-}
-
-  // 🔧 修正版: アルバム連続完了の簡易判定
-Future<bool> _checkAlbumConsecutiveCompletion(String albumIdentifier) async {
-  try {
-    // 過去7日間のタスク完了記録を取得
-    final now = DateTime.now();
-    
-    // 簡易的に今日のタスク完了回数をチェック
-    int todayCompletions = 0;
-    for (final task in _playingTasks) {
-      final count = await _taskCompletionService.getTodayTaskSuccesses(task.id);
-      todayCompletions += count;
-    }
-    
-    // 今日複数のタスクが完了している場合は「連続」とみなす
-    return todayCompletions >= _playingTasks.length;
-  } catch (e) {
-    print('❌ アルバム連続完了判定エラー: $e');
-    return false;
-  }
-}
 
   // 🆕 次のタスクがあるかチェック
   bool _hasNextTask() {
@@ -2770,168 +1492,11 @@ Future<bool> _checkAlbumConsecutiveCompletion(String albumIdentifier) async {
     return _playingTasks[_currentTaskIndex + 1];
   }
 
-void _moveToNextTaskAutomatically() {
-  print('🔄 _moveToNextTaskAutomatically開始');
-  print('🔄 移動前 - currentTaskIndex: $_currentTaskIndex, isPlayingSingleAlbum: $_isPlayingSingleAlbum');
-  
-  // 最後のタスクかチェック
-  final isLastTask = _currentTaskIndex >= _playingTasks.length - 1;
-  
-  if (isLastTask) {
-    print('🎉 最後のタスクです。アルバム完了処理を実行');
-    _completeAllTasksInAutoPlay();
-    return;
-  }
-  
-  // 次のタスクへ移動
-  int newTaskIndex;
-  int newPageIndex;
-  
-  if (_isPlayingSingleAlbum) {
-    newTaskIndex = _currentTaskIndex + 1;
-    newPageIndex = newTaskIndex;
-  } else {
-    newTaskIndex = _currentTaskIndex + 1;
-    newPageIndex = newTaskIndex + 1;
-  }
-  
-  print('🔄 移動先 - newTaskIndex: $newTaskIndex, newPageIndex: $newPageIndex');
-  
-  setState(() {
-    _currentTaskIndex = newTaskIndex;
-    _forcePlayerPageIndex = newPageIndex;
-    _elapsedSeconds = 0;
-    _currentProgress = 0.0;
-    _isPlaying = true;
-    _isAutoPlayEnabled = true;
-    _taskStartTime = DateTime.now();
-    _pauseStartTime = null;
-    _totalPausedSeconds = 0;
-  });
-  
-  // PlayerScreenに状態変更を通知
-  _onPlayerStateChanged(
-    currentTaskIndex: _currentTaskIndex,
-    isPlaying: true,
-    progress: 0.0,
-    elapsedSeconds: 0,
-    isAutoPlayEnabled: true,
-    forcePageChange: _forcePlayerPageIndex,
-  );
-  
-  // 🔧 修正：新しいタスクの通知をスケジュール
-  print('🔔 新しいタスクの通知をスケジュール中...');
-  _scheduleCurrentTaskAutoPlayNotification();
-  
-  _startProgressTimer();
-  
-  print('✅ 自動再生: 次のタスクに移動完了 (タスク${_currentTaskIndex + 1})');
-}
 
-// 🆕 新しいメソッド：現在のタスクの自動再生通知をスケジュール
-Future<void> _scheduleCurrentTaskAutoPlayNotification() async {
-  print('🔔 _scheduleCurrentTaskAutoPlayNotification開始');
-  
-  if (_currentTaskIndex < 0 || _currentTaskIndex >= _playingTasks.length) {
-    print('❌ タスクインデックス範囲外: $_currentTaskIndex');
-    return;
-  }
-  
-  final currentTask = _playingTasks[_currentTaskIndex];
-  final taskTotalDuration = currentTask.duration * 60; // タスクの総時間
-  final remainingSeconds = taskTotalDuration - _elapsedSeconds; // 🔧 修正：残り時間を計算
-  final isLastTask = _currentTaskIndex >= _playingTasks.length - 1;
-  
-  print('🔔 タスク詳細: index=$_currentTaskIndex, 総時間=${taskTotalDuration}秒, 経過=${_elapsedSeconds}秒, 残り=${remainingSeconds}秒, isLast=$isLastTask');
-  
-  // 🔧 修正：残り時間が0以下の場合はスケジュールしない
-  if (remainingSeconds <= 0) {
-    print('⚠️ 残り時間が0以下のため通知スケジュールをスキップ');
-    return;
-  }
-  
-  try {
-    if (isLastTask) {
-      print('🔔 最後のタスク: アルバム完了通知をスケジュール');
-      await _scheduleAutoPlayAlbumCompletionNotification(remainingSeconds);
-    } else {
-      print('🔔 中間タスク: 切り替え通知をスケジュール');
-      final nextTask = _playingTasks[_currentTaskIndex + 1];
-      await _scheduleAutoPlayTaskTransitionNotification(
-        currentTask, 
-        nextTask, 
-        remainingSeconds // 🔧 修正：残り時間を使用
-      );
-    }
-    
-    print('✅ タスク${_currentTaskIndex + 1}の自動再生通知をスケジュール完了: ${remainingSeconds}秒後');
-  } catch (e) {
-    print('❌ 自動再生通知スケジュールエラー: $e');
-  }
-}
 
-// 🆕 新しいメソッド：タスク切り替え通知のスケジュール
-Future<void> _scheduleAutoPlayTaskTransitionNotification(
-  TaskItem currentTask, 
-  TaskItem nextTask, 
-  int delaySeconds
-) async {
-  // 🔧 修正：既存の通知をキャンセル
-  final notificationId = 30000 + _currentTaskIndex;
-  await _notificationService.cancelNotification(notificationId);
-  
-  final payload = [
-    'mode=AUTO_PLAY_TRANSITION',
-    'completedTaskIndex=$_currentTaskIndex',
-    'nextTaskIndex=${_currentTaskIndex + 1}',
-    'currentTaskId=${currentTask.id}',
-    'nextTaskId=${nextTask.id}',
-    'albumName=${_isPlayingSingleAlbum && _playingSingleAlbum != null ? _playingSingleAlbum!.albumName : _currentIdealSelf}',
-    'isSingleAlbum=$_isPlayingSingleAlbum',
-    'timestamp=${DateTime.now().millisecondsSinceEpoch}',
-  ].join('&');
-  
-  await _notificationService.scheduleDelayedNotification(
-    id: notificationId,
-    title: '🔄 タスク切り替え',
-    body: '\"${currentTask.title}\"完了！\n次は「${nextTask.title}」を開始します',
-    delay: Duration(seconds: delaySeconds),
-    payload: payload,
-    withActions: false,
-  );
-  
-  print('🔔 タスク切り替え通知スケジュール: ${currentTask.title} → ${nextTask.title} (残り${delaySeconds}秒後)');
-}
 
-// 🆕 新しいメソッド：アルバム完了通知のスケジュール
-Future<void> _scheduleAutoPlayAlbumCompletionNotification(int delaySeconds) async {
-  // 🔧 修正：既存の通知をキャンセル
-  final notificationId = 31000;
-  await _notificationService.cancelNotification(notificationId);
-  
-  final albumName = _isPlayingSingleAlbum && _playingSingleAlbum != null 
-      ? _playingSingleAlbum!.albumName 
-      : _currentIdealSelf;
-  
-  final payload = [
-    'mode=AUTO_PLAY_ALBUM_COMPLETED',
-    'albumName=${Uri.encodeComponent(albumName)}',
-    'totalTasks=${_playingTasks.length}',
-    'isSingleAlbum=$_isPlayingSingleAlbum',
-    'timestamp=${DateTime.now().millisecondsSinceEpoch}',
-  ].join('&');
-  
-  await _notificationService.scheduleDelayedNotification(
-    id: notificationId,
-    title: '🎉 アルバム完了！',
-    body: '「$albumName」のすべてのタスクが完了しました。\n結果を報告してください。',
-    delay: Duration(seconds: delaySeconds),
-    payload: payload,
-    withActions: true,
-  );
-  
-  print('🔔 アルバム完了通知スケジュール: $albumName (残り${delaySeconds}秒後)');
-}
+
+
 
 // 🔧 修正版: 通知用の現在のタスク番号を取得
 int _getCurrentTaskNumberForNotification() {
@@ -3093,64 +1658,64 @@ int _getCurrentTaskNumberForNotification() {
   print('🔧 保持されたカウント: $_todayTaskCompletions');
 }
 
-  Future<void> _recordTaskCompletionInApp(TaskItem task, String albumName, int elapsedSeconds, bool wasSuccessful) async {
+Future<void> _recordTaskCompletionInApp(
+  TaskItem task,
+  String albumName,
+  int elapsedSeconds,
+  bool wasSuccessful,
+) async {
   try {
-    final albumType = _isPlayingSingleAlbum ? 'single' : 'life_dream';
-    final albumId = _isPlayingSingleAlbum && _playingSingleAlbum != null 
-        ? _playingSingleAlbum!.id 
-        : null;
+    if (wasSuccessful) {
+      await _audioService.playAchievementSound();
+    } else {
+      await _audioService.playNotificationSound();
+    }
 
     await _taskCompletionService.recordTaskCompletion(
       taskId: task.id,
       taskTitle: task.title,
       wasSuccessful: wasSuccessful,
       elapsedSeconds: elapsedSeconds,
-      albumType: albumType,
+      albumType: _isPlayingSingleAlbum ? 'single' : 'life_dream',
       albumName: albumName,
-      albumId: albumId,
+      albumId: _isPlayingSingleAlbum && _playingSingleAlbum != null 
+          ? _playingSingleAlbum!.id 
+          : null,
     );
-    
+
     if (wasSuccessful) {
-      await _audioService.playAchievementSound();
-      
-      // 🔧 修正: カウントを即座に更新
       setState(() {
         _todayTaskCompletions[task.id] = (_todayTaskCompletions[task.id] ?? 0) + 1;
       });
       
-      print('✅ タスク完了カウント更新: ${task.title} → ${_todayTaskCompletions[task.id]}');
-      
-      await _notifyNewTaskCompletion();
-    } else {
-      await _audioService.playNotificationSound();
+      // SharedPreferences更新
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final currentCount = prefs.getInt('new_task_completion_count') ?? 0;
+        await prefs.setInt('new_task_completion_count', currentCount + 1);
+        await prefs.setInt('last_task_completion_timestamp', DateTime.now().millisecondsSinceEpoch);
+        print('新規タスク完了を通知: ${currentCount + 1}個目');
+      } catch (e) {
+        print('新規タスク完了通知エラー: $e');
+      }
     }
-    
-    // 🔧 重要：現在のカウントをバックアップ
-    final currentCounts = Map<String, int>.from(_todayTaskCompletions);
-    
-    // データ再読み込み
+
     await _loadUserData();
-    
-    // 🔧 重要：再読み込み後にシングルアルバムのカウントを復元
-    if (_isPlayingSingleAlbum) {
-      setState(() {
-        // ライフドリームアルバムのカウントに、シングルアルバムのカウントをマージ
-        _todayTaskCompletions = {
-          ..._todayTaskCompletions,
-          ...currentCounts,
-        };
-      });
-      
-      print('✅ シングルアルバムカウント復元: $_todayTaskCompletions');
-    }
-    
-    print('✅ タスク完了記録完了: ${task.title} (成功: $wasSuccessful)');
+
   } catch (e) {
-    print('❌ アプリ内タスク完了記録エラー: $e');
+    print('❌ タスク完了記録エラー: $e');
+    
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('❌ 記録の保存に失敗しました'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
   }
 }
-  
-  // main_wrapper.dart の _buildCurrentScreen メソッド
 
 Widget _buildCurrentScreen() {
   final screenHeight = MediaQuery.of(context).size.height;
@@ -3462,7 +2027,6 @@ Widget _buildPlayerScreen() {
       initialTaskIndex: _currentTaskIndex,
       initialIsPlaying: _isPlaying,
       initialElapsedSeconds: _elapsedSeconds,
-      initialAutoPlayEnabled: _isAutoPlayEnabled,
       initialProgress: _currentProgress,
       forcePageIndex: _forcePlayerPageIndex,
       todayTaskCompletions: _todayTaskCompletions,
@@ -3537,7 +2101,7 @@ void _showAlbumCompletionDialog() {
   );
 }
 
-// 全タスクの完了記録
+// 既存メソッドの修正（末尾のみ変更）
 Future<void> _recordAllTasksCompletion(bool allCompleted) async {
   try {
     if (allCompleted) {
@@ -3576,10 +2140,7 @@ Future<void> _recordAllTasksCompletion(bool allCompleted) async {
     
     _resetPlayerAfterCompletion();
     
-    // 🆕 重要：ホーム画面のデータを更新
     await _loadUserData();
-    
-    // 🆕 追加：ホーム画面に通知を送る
     await _notifyHomeScreenToRefresh();
     
   } catch (e) {
@@ -3636,38 +2197,30 @@ Future<void> _checkTaskCompletionNotification() async {
 
 
 
-// 🆕 新しいメソッド：報告完了後のプレイヤーリセット
+// 既存メソッドの修正
 void _resetPlayerAfterCompletion() {
   print('🔄 報告完了後のプレイヤーリセット開始');
   
   setState(() {
-    // プレイヤー状態をリセット
     _isPlaying = false;
-    _isAutoPlayEnabled = false;
     _currentProgress = 0.0;
     _elapsedSeconds = 0;
-    _currentTaskIndex = _isPlayingSingleAlbum ? 0 : -1; // 理想像ページまたは最初のタスクに戻す
+    _currentTaskIndex = _isPlayingSingleAlbum ? 0 : -1;
     
-    // タイマー関連をリセット
     _taskStartTime = null;
     _pauseStartTime = null;
     _totalPausedSeconds = 0;
-    _isAutoPlayInProgress = false;
     
-    // ページインデックスをリセット
-    _forcePlayerPageIndex = _isPlayingSingleAlbum ? 0 : 0; // 最初のページに戻す
+    _forcePlayerPageIndex = _isPlayingSingleAlbum ? 0 : 0;
   });
   
-  // タイマーを停止
   _stopProgressTimer();
   
-  // PlayerScreenに リセット状態を通知
   _onPlayerStateChanged(
     currentTaskIndex: _isPlayingSingleAlbum ? 0 : -1,
     isPlaying: false,
     progress: 0.0,
     elapsedSeconds: 0,
-    isAutoPlayEnabled: false,
     forcePageChange: _isPlayingSingleAlbum ? 0 : 0,
   );
   
@@ -3933,7 +2486,7 @@ Widget _buildMiniPlayerWithDrag() {
         margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
-          color: Color.lerp(_currentAlbumColor, Colors.black, 0.7)!,
+          color: Color.lerp(_currentAlbumColor, Colors.black, 0.75)!,
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
@@ -4083,7 +2636,7 @@ Widget _buildMiniPlayerAlbumCover() {
 
   Widget _buildMiniPlayer() {
   final miniPlayerOpacity = (_playerDragOffset - 0.9) / 0.1;
-final clampedOpacity = miniPlayerOpacity.clamp(0.0, 1.0);
+  final clampedOpacity = miniPlayerOpacity.clamp(0.0, 1.0);
   
   if (clampedOpacity < 0.01) {
     return const SizedBox.shrink();
@@ -4213,49 +2766,21 @@ final clampedOpacity = miniPlayerOpacity.clamp(0.0, 1.0);
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    if (_isAutoPlayEnabled)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF1DB954).withOpacity(0.8),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.play_arrow,
-                              color: Colors.white,
-                              size: 10,
-                            ),
-                            SizedBox(width: 2),
-                            Text(
-                              'Auto',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 9,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    else
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: currentTask.color.withOpacity(0.3),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          '${_currentTaskIndex + 1}/${_playingTasks.length}',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w500,
-                          ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: currentTask.color.withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        '${_currentTaskIndex + 1}/${_playingTasks.length}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 2),
@@ -4339,32 +2864,29 @@ void _closePlayerWithAnimation() {
 
 
   Widget _buildFullWidthProgressBar() {
-    if (_currentTaskIndex == -1) {
-      return Container(
-        width: double.infinity,
-        height: 3,
-        color: Colors.white.withOpacity(0.1),
-      );
-    }
-    
-    if (_playingTasks.isEmpty || _currentTaskIndex < 0 || _currentTaskIndex >= _playingTasks.length) {
-      return const SizedBox.shrink();
-    }
-
+  if (_currentTaskIndex == -1) {
     return Container(
       width: double.infinity,
       height: 3,
-      color: Colors.transparent,
-      child: LinearProgressIndicator(
-        value: _currentProgress.clamp(0.0, 1.0),
-        backgroundColor: Colors.white.withOpacity(0.2),
-        valueColor: AlwaysStoppedAnimation<Color>(
-          _isAutoPlayEnabled ? const Color(0xFF1DB954) : Colors.white
-        ),
-      ),
+      color: Colors.white.withOpacity(0.1),
     );
   }
+  
+  if (_playingTasks.isEmpty || _currentTaskIndex < 0 || _currentTaskIndex >= _playingTasks.length) {
+    return const SizedBox.shrink();
+  }
 
+  return Container(
+    width: double.infinity,
+    height: 3,
+    color: Colors.transparent,
+    child: LinearProgressIndicator(
+      value: _currentProgress.clamp(0.0, 1.0),
+      backgroundColor: Colors.white.withOpacity(0.2),
+      valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+    ),
+  );
+}
   Widget _buildCurrentPlayingAlbumCover({double size = 48}) {
     return Container(
       width: size,
@@ -4561,6 +3083,7 @@ Future<void> _initializeNotificationService() async {
   }
 }
 
+// 既存メソッドの修正（簡素化）
 Future<void> _handleNotificationResponse(NotificationResponse response) async {
   if (response.payload == null) return;
   
@@ -4574,393 +3097,13 @@ Future<void> _handleNotificationResponse(NotificationResponse response) async {
   
   final mode = params['mode'] ?? '';
   
-  if (mode == 'AUTO_PLAY_TRANSITION') {
-    await _handleAutoPlayTransitionNotification(params);
-  } else if (mode == 'AUTO_PLAY_ALBUM_COMPLETED') {
-    await _handleAutoPlayAlbumCompletedNotification(params);
-  } else if (mode == 'AUTO_PLAY_TASK') {
-    await _handleAutoPlayTaskNotification(params);
-  } else if (mode == 'NORMAL') {
+  // ✅ 簡素化：通常モードのみ
+  if (mode == 'NORMAL') {
     await _handleNormalModeNotification(params);
   }
 }
 
-// 🆕 新しいメソッド：自動再生タスク切り替え通知の処理
-Future<void> _handleAutoPlayTransitionNotification(Map<String, String> params) async {
-  try {
-    _isNotificationReturning = true;
-    
-    final nextTaskIndex = int.tryParse(params['nextTaskIndex'] ?? '') ?? 0;
-    final pageIndex = _isPlayingSingleAlbum ? nextTaskIndex : nextTaskIndex + 1;
-    
-    // 次のタスクを開始状態に設定
-    setState(() {
-      _currentTaskIndex = nextTaskIndex;
-      _forcePlayerPageIndex = pageIndex;
-      _elapsedSeconds = 0;
-      _currentProgress = 0.0;
-      _isPlaying = true;
-      _isAutoPlayEnabled = true;
-      _isPlayerScreenVisible = true;
-      _taskStartTime = DateTime.now();
-      _pauseStartTime = null;
-      _totalPausedSeconds = 0;
-    });
-    
-    _startProgressTimer();
-    
-    _onPlayerStateChanged(
-      currentTaskIndex: nextTaskIndex,
-      isPlaying: true,
-      progress: 0.0,
-      elapsedSeconds: 0,
-      isAutoPlayEnabled: true,
-      forcePageChange: pageIndex,
-    );
-    
-    print('✅ タスク切り替え通知処理完了: タスク${nextTaskIndex + 1}を開始');
-  } catch (e) {
-    print('❌ タスク切り替え通知処理エラー: $e');
-  }
-}
-
-
-Future<void> _handleAutoPlayTaskNotification(Map<String, String> params) async {
-  try {
-    print('自動再生タスク通知処理開始');
-    
-    final completedTaskIndex = int.tryParse(params['completedTaskIndex'] ?? '') ?? 0;
-    final nextTaskIndex = int.tryParse(params['nextTaskIndex'] ?? '') ?? 0;
-    final isLastTask = params['isLastTask'] == 'true';
-    final shouldContinueAutoPlay = params['shouldContinueAutoPlay'] == 'true';
-    
-    _isNotificationReturning = true;
-    
-    // 完了したタスクを記録
-    if (completedTaskIndex >= 0 && completedTaskIndex < _playingTasks.length) {
-      final completedTask = _playingTasks[completedTaskIndex];
-      
-      await _taskCompletionService.recordTaskCompletion(
-        taskId: completedTask.id,
-        taskTitle: completedTask.title,
-        wasSuccessful: true,
-        elapsedSeconds: completedTask.duration * 60,
-        albumType: _isPlayingSingleAlbum ? 'single' : 'life_dream',
-        albumName: _isPlayingSingleAlbum && _playingSingleAlbum != null 
-            ? _playingSingleAlbum!.albumName 
-            : _currentIdealSelf,
-        albumId: _isPlayingSingleAlbum && _playingSingleAlbum != null 
-            ? _playingSingleAlbum!.id 
-            : null,
-      );
-      
-      setState(() {
-        _todayTaskCompletions[completedTask.id] = (_todayTaskCompletions[completedTask.id] ?? 0) + 1;
-      });
-    }
-    
-    if (isLastTask) {
-      // 最後のタスク完了
-      await _handleAutoPlayAlbumCompletion(completedTaskIndex);
-    } else if (shouldContinueAutoPlay && nextTaskIndex < _playingTasks.length) {
-      // 次のタスクを自動開始
-      final pageIndex = _isPlayingSingleAlbum ? nextTaskIndex : nextTaskIndex + 1;
-      
-      setState(() {
-        _currentTaskIndex = nextTaskIndex;
-        _forcePlayerPageIndex = pageIndex;
-        _elapsedSeconds = 0;
-        _currentProgress = 0.0;
-        _isPlaying = true;  // 重要：自動再生継続
-        _isAutoPlayEnabled = true;
-        _isPlayerScreenVisible = false;  // バックグラウンドの場合は表示しない
-        
-        // タスク開始時刻を記録
-        _taskStartTime = DateTime.now();
-        _pauseStartTime = null;
-        _totalPausedSeconds = 0;
-      });
-      
-      // プログレスタイマーを開始（アプリがフォアグラウンドの場合のみ）
-      if (!_isPlayerScreenVisible) {
-        // バックグラウンドで次のタスクの通知をスケジュール
-        _scheduleAutoPlayTaskNotifications();
-      } else {
-        _startProgressTimer();
-      }
-      
-      print('自動再生: タスク${nextTaskIndex}を開始しました');
-    }
-    
-  } catch (e) {
-    print('自動再生タスク通知処理エラー: $e');
-  }
-}
-// タスク切り替えの実行
-Future<void> _executeTaskTransition(int completedTaskIndex, int nextTaskIndex, int sessionStartTime) async {
-  try {
-    // 完了したタスクを記録
-    if (completedTaskIndex >= 0 && completedTaskIndex < _playingTasks.length) {
-      final completedTask = _playingTasks[completedTaskIndex];
-      
-      await _taskCompletionService.recordTaskCompletion(
-        taskId: completedTask.id,
-        taskTitle: completedTask.title,
-        wasSuccessful: true,
-        elapsedSeconds: completedTask.duration * 60,
-        albumType: _isPlayingSingleAlbum ? 'single' : 'life_dream',
-        albumName: _isPlayingSingleAlbum && _playingSingleAlbum != null 
-            ? _playingSingleAlbum!.albumName 
-            : _currentIdealSelf,
-        albumId: _isPlayingSingleAlbum && _playingSingleAlbum != null 
-            ? _playingSingleAlbum!.id 
-            : null,
-      );
-      
-      setState(() {
-        _todayTaskCompletions[completedTask.id] = (_todayTaskCompletions[completedTask.id] ?? 0) + 1;
-      });
-    }
-    
-    // 次のタスクの状態に設定
-    if (nextTaskIndex < _playingTasks.length) {
-      final pageIndex = _isPlayingSingleAlbum ? nextTaskIndex : nextTaskIndex + 1;
-      
-      setState(() {
-        _currentTaskIndex = nextTaskIndex;
-        _forcePlayerPageIndex = pageIndex;
-        _elapsedSeconds = 0;
-        _currentProgress = 0.0;
-        _isPlaying = true;
-        _isAutoPlayEnabled = true;
-        _isPlayerScreenVisible = true;
-      });
-      
-      _startNewTask();
-      _startProgressTimer();
-      
-      // PlayerScreenに状態を通知
-      _onPlayerStateChanged(
-        currentTaskIndex: nextTaskIndex,
-        isPlaying: true,
-        progress: 0.0,
-        elapsedSeconds: 0,
-        isAutoPlayEnabled: true,
-        forcePageChange: pageIndex,
-      );
-      
-      print('タスク切り替え完了: ${completedTaskIndex} → ${nextTaskIndex}');
-      
-      // 次のタスクの通知もスケジュール
-      await _scheduleAutoPlayTaskNotifications();
-    }
-    
-  } catch (e) {
-    print('タスク切り替え実行エラー: $e');
-  }
-}
-
-// 🆕 自動再生アルバム完了処理
-Future<void> _handleAutoPlayAlbumCompletion(int finalTaskIndex) async {
-  try {
-    _isNotificationReturning = true;
-    
-    // 最後のタスクの完了状態に設定
-    final lastPageIndex = _isPlayingSingleAlbum ? finalTaskIndex : finalTaskIndex + 1;
-    
-    setState(() {
-      _currentTaskIndex = finalTaskIndex;
-      _forcePlayerPageIndex = lastPageIndex;
-      _isPlaying = false;
-      _isAutoPlayEnabled = false;
-      _elapsedSeconds = _playingTasks[finalTaskIndex].duration * 60;
-      _currentProgress = 1.0;
-      _isPlayerScreenVisible = true;
-    });
-    
-    // PlayerScreenに完了状態を通知
-    _onPlayerStateChanged(
-      currentTaskIndex: finalTaskIndex,
-      isPlaying: false,
-      progress: 1.0,
-      elapsedSeconds: _playingTasks[finalTaskIndex].duration * 60,
-      isAutoPlayEnabled: false,
-      forcePageChange: lastPageIndex,
-    );
-    
-    await _loadUserData();
-    
-    // アルバム完了申告ダイアログを表示
-    Future.delayed(const Duration(milliseconds: 1000), () {
-      if (mounted) {
-        _showAlbumCompletionDialog();
-      }
-    });
-    
-    print('✅ 自動再生アルバム完了処理完了');
-    
-  } catch (e) {
-    print('❌ 自動再生アルバム完了処理エラー: $e');
-  }
-}
-
-// 🆕 時刻ベースの状態復元
-Future<void> _handleAutoPlayTaskTransition(int completedTaskIndex, int startTimeMs) async {
-  try {
-    _isNotificationReturning = true;
-    
-    // 開始時刻から現在いるべき状態を計算
-    final startTime = DateTime.fromMillisecondsSinceEpoch(startTimeMs);
-    final elapsedTime = DateTime.now().difference(startTime);
-    
-    // どのタスクにいるべきか計算
-    int currentTaskIndex = -1;
-    int currentElapsedSeconds = 0;
-    int cumulativeSeconds = 0;
-    
-    for (int i = (_isPlayingSingleAlbum ? 0 : -1); i < _playingTasks.length; i++) {
-      final taskDuration = i == -1 ? 0 : _playingTasks[i].duration * 60;
-      
-      if (elapsedTime.inSeconds <= cumulativeSeconds + taskDuration) {
-        currentTaskIndex = i;
-        currentElapsedSeconds = elapsedTime.inSeconds - cumulativeSeconds;
-        break;
-      }
-      
-      cumulativeSeconds += taskDuration;
-    }
-    
-    // 計算結果でアプリ状態を更新
-    final pageIndex = _isPlayingSingleAlbum ? currentTaskIndex : currentTaskIndex + 1;
-    
-    setState(() {
-      _currentTaskIndex = currentTaskIndex;
-      _elapsedSeconds = currentElapsedSeconds;
-      _currentProgress = currentTaskIndex >= 0 && currentTaskIndex < _playingTasks.length
-          ? currentElapsedSeconds / (_playingTasks[currentTaskIndex].duration * 60)
-          : 0.0;
-      _isPlaying = true;
-      _isAutoPlayEnabled = true;
-      _forcePlayerPageIndex = pageIndex;
-      _isPlayerScreenVisible = true;
-    });
-    
-    _startNewTask();
-    _startProgressTimer();
-    
-    // PlayerScreenに状態を通知
-    _onPlayerStateChanged(
-      currentTaskIndex: currentTaskIndex,
-      isPlaying: true,
-      progress: _currentProgress,
-      elapsedSeconds: currentElapsedSeconds,
-      isAutoPlayEnabled: true,
-      forcePageChange: pageIndex,
-    );
-    
-    print('✅ 時刻ベース状態復元完了: タスク${currentTaskIndex + 1}, 経過${currentElapsedSeconds}秒');
-    
-  } catch (e) {
-    print('❌ 時刻ベース状態復元エラー: $e');
-  }
-}
-
-
-
-
-// 自動再生通知の処理
-Future<void> _handleAutoPlayNotification(Map<String, String> params) async {
-  print('🎯 自動再生通知を処理');
-  
-  _isNotificationReturning = true;
-  
-  final taskIndex = int.tryParse(params['taskIndex'] ?? '') ?? 0;
-  final isLastTask = params['isLastTask'] == 'true';
-  final completedTaskIdsStr = params['completedTaskIds'] ?? '';
-  final completedTaskIds = completedTaskIdsStr.split(',').where((id) => id.isNotEmpty).toList();
-  final isSingleAlbum = params['isSingleAlbum'] == 'true';
-  
-  print('📍 タスクインデックス: $taskIndex');
-  print('📍 最後のタスク: $isLastTask');
-  print('📍 完了タスク数: ${completedTaskIds.length}');
-  
-  // 完了タスクを記録
-  for (final taskId in completedTaskIds) {
-    for (final task in _playingTasks) {
-      if (task.id == taskId) {
-        final count = _todayTaskCompletions[task.id] ?? 0;
-        if (count == 0) {
-          await _taskCompletionService.recordTaskCompletion(
-            taskId: task.id,
-            taskTitle: task.title,
-            wasSuccessful: true,
-            elapsedSeconds: task.duration * 60,
-            albumType: isSingleAlbum ? 'single' : 'life_dream',
-            albumName: params['albumName'] ?? _currentIdealSelf,
-            albumId: isSingleAlbum && _playingSingleAlbum != null 
-                ? _playingSingleAlbum!.id 
-                : null,
-          );
-          
-          setState(() {
-            _todayTaskCompletions[task.id] = 1;
-          });
-        }
-        break;
-      }
-    }
-  }
-  
-  if (isLastTask) {
-    // 最後のタスク完了状態
-    final pageIndex = isSingleAlbum ? taskIndex : taskIndex + 1;
-    
-    setState(() {
-      _currentTaskIndex = taskIndex;
-      _forcePlayerPageIndex = pageIndex;
-      _isPlaying = false;
-      _isAutoPlayEnabled = false;
-      _elapsedSeconds = _playingTasks[taskIndex].duration * 60;
-      _currentProgress = 1.0;
-      _isPlayerScreenVisible = true;
-    });
-    
-    // アルバム完了ダイアログ
-    Future.delayed(const Duration(milliseconds: 500), () {
-      if (mounted) _showAlbumCompletionDialog();
-    });
-    
-  } else {
-    // 次のタスク開始状態
-    final nextIndex = taskIndex + 1;
-    final pageIndex = isSingleAlbum ? nextIndex : nextIndex + 1;
-    
-    setState(() {
-      _currentTaskIndex = nextIndex;
-      _forcePlayerPageIndex = pageIndex;
-      _isPlaying = true;
-      _isAutoPlayEnabled = true;
-      _elapsedSeconds = 0;
-      _currentProgress = 0.0;
-      _isPlayerScreenVisible = true;
-    });
-    
-    _startNewTask();
-    _startProgressTimer();
-  }
-  
-  // PlayerScreenに通知
-  _onPlayerStateChanged(
-    currentTaskIndex: _currentTaskIndex,
-    isPlaying: _isPlaying,
-    progress: _currentProgress,
-    elapsedSeconds: _elapsedSeconds,
-    isAutoPlayEnabled: _isAutoPlayEnabled,
-    forcePageChange: _forcePlayerPageIndex,
-  );
-}
-
-// 通常モード通知の処理（既存維持）
+// ✅ そのまま保持（変更なし、約1850行目付近）
 Future<void> _handleNormalModeNotification(Map<String, String> params) async {
   print('📱 通常モード通知を処理');
   
@@ -4976,7 +3119,6 @@ Future<void> _handleNormalModeNotification(Map<String, String> params) async {
     _isPlayerScreenVisible = true;
   });
   
-  // タスク完了ダイアログ
   Future.delayed(const Duration(milliseconds: 500), () {
     if (mounted && taskIndex < _playingTasks.length) {
       _showTaskCompletionDialogInApp(
@@ -4986,440 +3128,6 @@ Future<void> _handleNormalModeNotification(Map<String, String> params) async {
       );
     }
   });
-}
-// 新しいヘルパーメソッド
-Future<void> _setAlbumCompletedState(List<String> completedTasks) async {
-  // 完了タスクを記録
-  for (final taskId in completedTasks) {
-    for (final task in _playingTasks) {
-      if (task.id == taskId) {
-        final count = _todayTaskCompletions[task.id] ?? 0;
-        if (count == 0) {
-          await _recordTaskCompletion(task, true);
-        }
-        break;
-      }
-    }
-  }
-  
-  // 最後のタスクの完了状態に設定
-  final lastIndex = _playingTasks.length - 1;
-  final lastPageIndex = _isPlayingSingleAlbum ? lastIndex : lastIndex + 1;
-  
-  setState(() {
-    _currentTaskIndex = lastIndex;
-    _forcePlayerPageIndex = lastPageIndex;
-    _isPlaying = false;
-    _isAutoPlayEnabled = false;
-    _elapsedSeconds = _playingTasks[lastIndex].duration * 60;
-    _currentProgress = 1.0;
-    _isPlayerScreenVisible = true;
-  });
-  
-  // PlayerScreenに通知
-  _onPlayerStateChanged(
-    currentTaskIndex: lastIndex,
-    isPlaying: false,
-    progress: 1.0,
-    elapsedSeconds: _playingTasks[lastIndex].duration * 60,
-    isAutoPlayEnabled: false,
-    forcePageChange: lastPageIndex,
-  );
-  
-  // ダイアログ表示
-  Future.delayed(const Duration(milliseconds: 1000), () {
-    if (mounted) _showAlbumCompletionDialog();
-  });
-}
-
-Future<void> _setTaskProgressState(int taskIndex, List<String> completedTasks) async {
-  // 完了タスクを記録
-  for (final taskId in completedTasks) {
-    for (final task in _playingTasks) {
-      if (task.id == taskId) {
-        final count = _todayTaskCompletions[task.id] ?? 0;
-        if (count == 0) {
-          await _recordTaskCompletion(task, true);
-        }
-        break;
-      }
-    }
-  }
-  
-  // 次のタスクの開始状態に設定
-  final nextIndex = taskIndex < _playingTasks.length - 1 ? taskIndex + 1 : taskIndex;
-  final pageIndex = _isPlayingSingleAlbum ? nextIndex : nextIndex + 1;
-  
-  setState(() {
-    _currentTaskIndex = nextIndex;
-    _forcePlayerPageIndex = pageIndex;
-    _isPlaying = true;
-    _isAutoPlayEnabled = true;
-    _elapsedSeconds = 0;
-    _currentProgress = 0.0;
-    _isPlayerScreenVisible = true;
-  });
-  
-  _startNewTask();
-  _startProgressTimer();
-  
-  // PlayerScreenに通知
-  _onPlayerStateChanged(
-    currentTaskIndex: nextIndex,
-    isPlaying: true,
-    progress: 0.0,
-    elapsedSeconds: 0,
-    isAutoPlayEnabled: true,
-    forcePageChange: pageIndex,
-  );
-}
-
-Future<void> _recordTaskCompletion(TaskItem task, bool wasSuccessful) async {
-  try {
-    final albumType = _isPlayingSingleAlbum ? 'single' : 'life_dream';
-    final albumId = _isPlayingSingleAlbum && _playingSingleAlbum != null 
-        ? _playingSingleAlbum!.id 
-        : null;
-    final albumName = _isPlayingSingleAlbum && _playingSingleAlbum != null 
-        ? _playingSingleAlbum!.albumName 
-        : _currentIdealSelf;
-
-    await _taskCompletionService.recordTaskCompletion(
-      taskId: task.id,
-      taskTitle: task.title,
-      wasSuccessful: wasSuccessful,
-      elapsedSeconds: task.duration * 60,
-      albumType: albumType,
-      albumName: albumName,
-      albumId: albumId,
-    );
-    
-    // 既存メソッドの変更 - 以下の部分のみ変更
-if (wasSuccessful) {
-  await _audioService.playAchievementSound();
-  setState(() {
-    _todayTaskCompletions[task.id] = (_todayTaskCompletions[task.id] ?? 0) + 1;
-  });
-  
-  // この行を追加
-  await _notifyChartsScreenOfCompletion();
-} else {
-  await _audioService.playNotificationSound();
-}
-    
-    print('✅ タスク完了記録: ${task.title} (成功: $wasSuccessful)');
-  } catch (e) {
-    print('❌ タスク完了記録エラー: $e');
-  }
-}
-
-// main_wrapper.dart に追加
-
-Future<void> _handleDetailedBackgroundAlbumCompletion(Map<String, String> payloadData) async {
-  try {
-    print('🎉 詳細バックグラウンドアルバム完了処理開始');
-    
-    _isNotificationReturning = true;
-    
-    // ペイロードから完全な状態を復元
-    final completedTaskIdsStr = payloadData['completedTaskIds'] ?? '';
-    final completedTaskIds = completedTaskIdsStr.split(',').where((id) => id.isNotEmpty).toList();
-    
-    // 最後のタスクのインデックスと状態を設定
-    final lastTaskIndex = _playingTasks.length - 1;
-    final lastPageIndex = _isPlayingSingleAlbum ? lastTaskIndex : lastTaskIndex + 1;
-    
-    // すべての完了タスクを記録（重複記録を防ぐ）
-    for (final taskId in completedTaskIds) {
-      final taskIndex = _playingTasks.indexWhere((t) => t.id == taskId);
-      if (taskIndex >= 0) {
-        final task = _playingTasks[taskIndex];
-        
-        // 今日の完了回数をチェックして重複を防ぐ
-        final currentCount = _todayTaskCompletions[task.id] ?? 0;
-        if (currentCount == 0) {
-          await _taskCompletionService.recordTaskCompletion(
-            taskId: task.id,
-            taskTitle: task.title,
-            wasSuccessful: true,
-            elapsedSeconds: task.duration * 60,
-            albumType: _isPlayingSingleAlbum ? 'single' : 'life_dream',
-            albumName: _isPlayingSingleAlbum && _playingSingleAlbum != null 
-                ? _playingSingleAlbum!.albumName 
-                : _currentIdealSelf,
-            albumId: _isPlayingSingleAlbum && _playingSingleAlbum != null 
-                ? _playingSingleAlbum!.id 
-                : null,
-          );
-          
-          setState(() {
-            _todayTaskCompletions[task.id] = 1;
-          });
-        }
-      }
-    }
-    
-    // アプリ状態を完全な最終状態に設定
-    setState(() {
-      _isPlaying = false;
-      _isAutoPlayEnabled = false;
-      _currentTaskIndex = lastTaskIndex;
-      _forcePlayerPageIndex = lastPageIndex;
-      _elapsedSeconds = _playingTasks[lastTaskIndex].duration * 60;
-      _currentProgress = 1.0;
-      _isPlayerScreenVisible = true;
-    });
-    
-    // PlayerScreenに完了状態を通知
-    _onPlayerStateChanged(
-      currentTaskIndex: lastTaskIndex,
-      isPlaying: false,
-      progress: 1.0,
-      elapsedSeconds: _playingTasks[lastTaskIndex].duration * 60,
-      isAutoPlayEnabled: false,
-      forcePageChange: lastPageIndex,
-    );
-    
-    await _loadUserData();
-    
-    // アルバム完了ダイアログを表示
-    Future.delayed(const Duration(milliseconds: 1000), () {
-      if (mounted) {
-        _showAlbumCompletionDialog();
-      }
-    });
-    
-    print('✅ 詳細バックグラウンドアルバム完了処理完了');
-    
-  } catch (e) {
-    print('❌ 詳細バックグラウンドアルバム完了処理エラー: $e');
-  }
-}
-
-Future<void> _handleDetailedBackgroundAutoPlayProgress(Map<String, String> payloadData) async {
-  try {
-    print('🔄 詳細バックグラウンド自動再生進行処理開始');
-    
-    _isNotificationReturning = true;
-    
-    // ペイロードから状態を復元
-    final currentTaskIndex = int.tryParse(payloadData['currentTaskIndex'] ?? '') ?? 0;
-    final completedTaskIdsStr = payloadData['completedTaskIds'] ?? '';
-    final completedTaskIds = completedTaskIdsStr.split(',').where((id) => id.isNotEmpty).toList();
-    
-    // 完了済みタスクを記録（重複記録を防ぐ）
-    for (final taskId in completedTaskIds) {
-      final taskIndex = _playingTasks.indexWhere((t) => t.id == taskId);
-      if (taskIndex >= 0 && taskIndex < currentTaskIndex) {
-        final task = _playingTasks[taskIndex];
-        
-        final currentCount = _todayTaskCompletions[task.id] ?? 0;
-        if (currentCount == 0) {
-          await _taskCompletionService.recordTaskCompletion(
-            taskId: task.id,
-            taskTitle: task.title,
-            wasSuccessful: true,
-            elapsedSeconds: task.duration * 60,
-            albumType: _isPlayingSingleAlbum ? 'single' : 'life_dream',
-            albumName: _isPlayingSingleAlbum && _playingSingleAlbum != null 
-                ? _playingSingleAlbum!.albumName 
-                : _currentIdealSelf,
-            albumId: _isPlayingSingleAlbum && _playingSingleAlbum != null 
-                ? _playingSingleAlbum!.id 
-                : null,
-          );
-          
-          setState(() {
-            _todayTaskCompletions[task.id] = 1;
-          });
-        }
-      }
-    }
-    
-    // 現在のタスクの正しい状態に設定
-    final pageIndex = _isPlayingSingleAlbum ? currentTaskIndex : currentTaskIndex + 1;
-    
-    setState(() {
-      _currentTaskIndex = currentTaskIndex;
-      _forcePlayerPageIndex = pageIndex;
-      _elapsedSeconds = 0;
-      _currentProgress = 0.0;
-      _isPlaying = true;
-      _isAutoPlayEnabled = true;
-      _isPlayerScreenVisible = true;
-    });
-    
-    _startNewTask();
-    _startProgressTimer();
-    
-    _onPlayerStateChanged(
-      currentTaskIndex: currentTaskIndex,
-      isPlaying: true,
-      progress: 0.0,
-      elapsedSeconds: 0,
-      isAutoPlayEnabled: true,
-      forcePageChange: pageIndex,
-    );
-    
-    await _loadUserData();
-    
-    print('✅ 詳細バックグラウンド自動再生進行処理完了');
-    
-  } catch (e) {
-    print('❌ 詳細バックグラウンド自動再生進行処理エラー: $e');
-  }
-}
-
-// main_wrapper.dart の _handleBackgroundAlbumCompletionNotificationTap を修正
-
-Future<void> _handleBackgroundAlbumCompletionNotificationTap(Map<String, String> payloadData) async {
-  try {
-    print('🎉 バックグラウンドアルバム完了通知処理開始');
-    
-    _isNotificationReturning = true;
-    
-    // ペイロードから完全な状態を復元
-    final currentTaskIndex = int.tryParse(payloadData['currentTaskIndex'] ?? '') ?? _playingTasks.length - 1;
-    final totalElapsedSeconds = int.tryParse(payloadData['totalElapsedSeconds'] ?? '0') ?? 0;
-    final completedTaskIdsStr = payloadData['completedTaskIds'] ?? '';
-    final completedTaskIds = completedTaskIdsStr.split(',').where((id) => id.isNotEmpty).toSet();
-    
-    // 最後のタスクが実際に完了した状態に設定
-    final lastTaskIndex = _playingTasks.length - 1;
-    final lastPageIndex = _isPlayingSingleAlbum ? lastTaskIndex : lastTaskIndex + 1;
-    
-    // 完了したタスクを全て記録
-    for (int i = 0; i <= lastTaskIndex; i++) {
-      final task = _playingTasks[i];
-      if (completedTaskIds.contains(task.id)) {
-        // このタスクは既に完了済みとして記録
-        await _taskCompletionService.recordTaskCompletion(
-          taskId: task.id,
-          taskTitle: task.title,
-          wasSuccessful: true,
-          elapsedSeconds: task.duration * 60,
-          albumType: _isPlayingSingleAlbum ? 'single' : 'life_dream',
-          albumName: _isPlayingSingleAlbum && _playingSingleAlbum != null 
-              ? _playingSingleAlbum!.albumName 
-              : _currentIdealSelf,
-          albumId: _isPlayingSingleAlbum && _playingSingleAlbum != null 
-              ? _playingSingleAlbum!.id 
-              : null,
-        );
-        
-        setState(() {
-          _todayTaskCompletions[task.id] = (_todayTaskCompletions[task.id] ?? 0) + 1;
-        });
-      }
-    }
-    
-    // アプリ状態を完全な最終状態に設定
-    setState(() {
-      _isPlaying = false;
-      _isAutoPlayEnabled = false;
-      _currentTaskIndex = lastTaskIndex;
-      _forcePlayerPageIndex = lastPageIndex;
-      _elapsedSeconds = _playingTasks[lastTaskIndex].duration * 60;  // 最後のタスクの完了時間
-      _currentProgress = 1.0;
-      _isPlayerScreenVisible = true;
-    });
-    
-    // PlayerScreenに完了状態を通知
-    _onPlayerStateChanged(
-      currentTaskIndex: lastTaskIndex,
-      isPlaying: false,
-      progress: 1.0,
-      elapsedSeconds: _playingTasks[lastTaskIndex].duration * 60,
-      isAutoPlayEnabled: false,
-      forcePageChange: lastPageIndex,
-    );
-    
-    await _loadUserData();
-    
-    // アルバム完了ダイアログを表示
-    Future.delayed(const Duration(milliseconds: 500), () {
-      if (mounted) {
-        _showAlbumCompletionDialog();
-      }
-    });
-    
-  } catch (e) {
-    print('❌ バックグラウンドアルバム完了通知処理エラー: $e');
-  }
-}
-
-
-
-// main_wrapper.dart の _handleBackgroundAutoPlayProgressNotificationTap を修正
-
-Future<void> _handleBackgroundAutoPlayProgressNotificationTap(Map<String, String> payloadData) async {
-  try {
-    _isNotificationReturning = true;
-    
-    // ペイロードから状態を復元
-    final currentTaskIndex = int.tryParse(payloadData['currentTaskIndex'] ?? '') ?? 0;
-    final totalElapsedSeconds = int.tryParse(payloadData['totalElapsedSeconds'] ?? '0') ?? 0;
-    final completedTaskIdsStr = payloadData['completedTaskIds'] ?? '';
-    final completedTaskIds = completedTaskIdsStr.split(',').where((id) => id.isNotEmpty).toSet();
-    
-    // 完了済みタスクを記録
-    for (final taskId in completedTaskIds) {
-      final task = _playingTasks.firstWhere(
-        (t) => t.id == taskId,
-        orElse: () => throw StateError('Task not found'),
-      );
-      
-      if (!_todayTaskCompletions.containsKey(taskId) || _todayTaskCompletions[taskId] == 0) {
-        await _taskCompletionService.recordTaskCompletion(
-          taskId: task.id,
-          taskTitle: task.title,
-          wasSuccessful: true,
-          elapsedSeconds: task.duration * 60,
-          albumType: _isPlayingSingleAlbum ? 'single' : 'life_dream',
-          albumName: _isPlayingSingleAlbum && _playingSingleAlbum != null 
-              ? _playingSingleAlbum!.albumName 
-              : _currentIdealSelf,
-          albumId: _isPlayingSingleAlbum && _playingSingleAlbum != null 
-              ? _playingSingleAlbum!.id 
-              : null,
-        );
-        
-        setState(() {
-          _todayTaskCompletions[task.id] = 1;
-        });
-      }
-    }
-    
-    // 現在のタスクの正しい状態に設定
-    final pageIndex = _isPlayingSingleAlbum ? currentTaskIndex : currentTaskIndex + 1;
-    
-    setState(() {
-      _currentTaskIndex = currentTaskIndex;
-      _forcePlayerPageIndex = pageIndex;
-      _elapsedSeconds = 0;  // 現在のタスクは開始直後
-      _currentProgress = 0.0;
-      _isPlaying = true;
-      _isAutoPlayEnabled = true;
-      _isPlayerScreenVisible = true;
-    });
-    
-    _startNewTask();
-    _startProgressTimer();
-    
-    _onPlayerStateChanged(
-      currentTaskIndex: currentTaskIndex,
-      isPlaying: true,
-      progress: 0.0,
-      elapsedSeconds: 0,
-      isAutoPlayEnabled: true,
-      forcePageChange: pageIndex,
-    );
-    
-    await _loadUserData();
-    
-  } catch (e) {
-    print('❌ バックグラウンド進行通知処理エラー: $e');
-  }
 }
 
 Future<void> _handleNormalNotification(Map<String, String> params) async {
@@ -5448,104 +3156,9 @@ Future<void> _handleNormalNotification(Map<String, String> params) async {
   });
 }
 
-// バックグラウンドタスク完了通知タップ処理（通常モード用）
-Future<void> _handleBackgroundTaskCompletedNotificationTap(Map<String, String> payloadData) async {
-  try {
-    print('🔧 バックグラウンドタスク完了通知処理開始');
-    
-    // 通知からの復帰フラグを設定
-    _isNotificationReturning = true;
-    
-    final taskId = payloadData['taskId'];
-    final taskTitle = payloadData['taskTitle'];
-    final albumName = payloadData['albumName'];
-    final albumType = payloadData['albumType'];
-    final albumId = payloadData['albumId'];
-    final elapsedSeconds = int.tryParse(payloadData['elapsedSeconds'] ?? '0') ?? 0;
-    
-    if (taskId == null || taskTitle == null) {
-      print('❌ タスク情報が不足しているため処理をスキップ');
-      return;
-    }
-    
-    // 該当タスクのインデックスを見つける
-    int taskIndex = -1;
-    for (int i = 0; i < _playingTasks.length; i++) {
-      if (_playingTasks[i].id == taskId) {
-        taskIndex = i;
-        break;
-      }
-    }
-    
-    if (taskIndex >= 0) {
-      // 🔧 修正: 正しいページインデックスを計算
-      final pageIndex = _isPlayingSingleAlbum ? taskIndex : taskIndex + 1;
-      
-      // 状態を適切に設定
-      setState(() {
-        _currentTaskIndex = taskIndex;
-        _forcePlayerPageIndex = pageIndex; // 🔧 重要: ページインデックスを設定
-        _elapsedSeconds = elapsedSeconds;
-        _currentProgress = 1.0;
-        _isPlaying = false;
-        _isAutoPlayEnabled = false;
-        _isPlayerScreenVisible = true;
-      });
-      
-      print('🔧 通常モード: 該当タスクの完了状態に設定');
-      print('🔍 設定値: taskIndex=$_currentTaskIndex, pageIndex=$_forcePlayerPageIndex');
-      
-      // PlayerScreenに状態を通知（forcePageChangeを含む）
-      _onPlayerStateChanged(
-        currentTaskIndex: _currentTaskIndex,
-        isPlaying: false,
-        progress: 1.0,
-        elapsedSeconds: elapsedSeconds,
-        isAutoPlayEnabled: false,
-        forcePageChange: _forcePlayerPageIndex, // 🔧 重要: ページ変更を強制
-      );
-    }
-    
-    // 🔧 修正: PlayerScreenの更新完了を待ってからダイアログ表示
-    Future.delayed(const Duration(milliseconds: 500), () {
-      if (mounted) {
-        _showPlayerWithCompletionDialog(
-          taskId: taskId,
-          taskTitle: taskTitle,
-          albumName: albumName ?? '',
-          albumType: albumType ?? 'life_dream',
-          albumId: albumId,
-          elapsedSeconds: elapsedSeconds,
-        );
-      }
-    });
-    
-    print('✅ バックグラウンドタスク完了処理完了');
-    
-  } catch (e) {
-    print('❌ バックグラウンドタスク完了処理エラー: $e');
-  }
-}
 
-// バックグラウンドでのアルバム完了処理
-void _handleBackgroundAlbumCompletion() {
-  setState(() {
-    _isPlaying = false;
-    _isAutoPlayEnabled = false;
-  });
-  
-  // バックグラウンドアルバム完了通知を送信
-  Future.delayed(const Duration(milliseconds: 500), () {
-    _notificationService.showNotification(
-      id: 8000,
-      title: 'Album Complete!',
-      body: '\"${_isPlayingSingleAlbum && _playingSingleAlbum != null ? _playingSingleAlbum!.albumName : _currentIdealSelf}\"のすべてのタスクが完了しました。アプリを開いて結果を確認してください。',
-      payload: 'type=background_album_completed',
-    );
-  });
-  
-  print('✅ バックグラウンドアルバム完了処理完了');
-}
+
+
 
   void _showPlayerWithCompletionDialog({
     required String taskId,

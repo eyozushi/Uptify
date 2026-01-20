@@ -24,6 +24,9 @@ dependencies:
 
   palette_generator: ^0.3.3+3  # 🆕 追加
 
+  camera: ^0.10.5+5  # 🆕 追加
+  path_provider: ^2.1.1  # 🆕 追加
+
 
   # UI Components
   cupertino_icons: ^1.0.6

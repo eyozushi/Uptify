@@ -339,27 +339,28 @@ int _convertTo24Hour(int hour, String period) {
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildHeader(),
-            Expanded(
-              child: _isLoading
-                  ? const Center(
-                      child: CircularProgressIndicator(
-                        color: kAccentColor,
-                      ),
-                    )
-                  : _buildSettingsContent(),
-            ),
-          ],
-        ),
+Widget build(BuildContext context) {
+  return Scaffold(
+    backgroundColor: Colors.black,
+    body: SafeArea(
+      bottom: false,  // 🔧 追加: 下部のSafeAreaを無効化
+      child: Column(
+        children: [
+          _buildHeader(),
+          Expanded(
+            child: _isLoading
+                ? const Center(
+                    child: CircularProgressIndicator(
+                      color: kAccentColor,
+                    ),
+                  )
+                : _buildSettingsContent(),
+          ),
+        ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildHeader() {
     return Container(
@@ -436,7 +437,7 @@ int _convertTo24Hour(int hour, String period) {
 
   Widget _buildSettingsContent() {
   return SingleChildScrollView(
-    padding: const EdgeInsets.all(20),
+    padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),  // 🔧 下部パディングを40に増加
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -455,7 +456,7 @@ int _convertTo24Hour(int hour, String period) {
         // Version（元のまま保持）
         _buildVersionSection(),
         
-        const SizedBox(height: 100),
+        const SizedBox(height: 40),  // 🔧 最後の余白を40に変更
       ],
     ),
   );
@@ -711,14 +712,14 @@ Widget _buildNotificationIntervalSettings() {
       if (_isNotificationEnabled) ...[
         const SizedBox(height: 16),
         
-        // Interval buttons
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
+        // Interval buttons - 均等配置に変更
+        Row(
           children: [
-            _buildIntervalButton(label: '30 min', minutes: 30),
-            _buildIntervalButton(label: '1 hour', minutes: 60),
-            _buildCustomIntervalButton(),
+            Expanded(child: _buildIntervalButton(label: '30 min', minutes: 30)),
+            const SizedBox(width: 8),
+            Expanded(child: _buildIntervalButton(label: '1 hour', minutes: 60)),
+            const SizedBox(width: 8),
+            Expanded(child: _buildCustomIntervalButton()),
           ],
         ),
         
@@ -986,12 +987,6 @@ Widget _buildActiveDaysInline() {
             ? const Color(0xFF1DB954) 
             : const Color(0xFF2A2A2A),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isSelected 
-              ? const Color(0xFF1DB954) 
-              : Colors.white.withOpacity(0.2),
-          width: 1.5,
-        ),
       ),
       child: Text(
         label,
@@ -1012,7 +1007,7 @@ Widget _buildCustomIntervalButton() {
       setState(() {
         _isCustomInterval = true;
         if (_customIntervalController.text.isEmpty) {
-          _customIntervalController.text = '45'; // デフォルト値
+          _customIntervalController.text = '45';
         }
       });
     },
@@ -1023,12 +1018,6 @@ Widget _buildCustomIntervalButton() {
             ? const Color(0xFF1DB954) 
             : const Color(0xFF2A2A2A),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: _isCustomInterval 
-              ? const Color(0xFF1DB954) 
-              : Colors.white.withOpacity(0.2),
-          width: 1.5,
-        ),
       ),
       child: Text(
         'Custom',
@@ -1145,10 +1134,7 @@ Widget _buildTimeDropdown({
     decoration: BoxDecoration(
       color: const Color(0xFF2A2A2A),
       borderRadius: BorderRadius.circular(8),
-      border: Border.all(
-        color: Colors.white.withOpacity(0.1),
-        width: 1,
-      ),
+
     ),
     child: DropdownButtonHideUnderline(
       child: DropdownButton<int>(
@@ -1199,10 +1185,6 @@ Widget _buildPeriodToggle({
     decoration: BoxDecoration(
       color: const Color(0xFF2A2A2A),
       borderRadius: BorderRadius.circular(8),
-      border: Border.all(
-        color: Colors.white.withOpacity(0.1),
-        width: 1,
-      ),
     ),
     child: Row(
       children: [

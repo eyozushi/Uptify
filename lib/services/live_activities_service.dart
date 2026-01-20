@@ -33,7 +33,6 @@ class LiveActivitiesService {
   required int currentTaskIndex,
   required String albumName,
   required String artistName,
-  required bool isAutoPlay,
   required bool isPlayingSingleAlbum,
 }) async {
   if (!_enableLiveActivities) {
@@ -50,7 +49,6 @@ class LiveActivitiesService {
       state: ActivityState.starting,
       currentTaskIndex: currentTaskIndex,
       totalTasks: tasks.length,
-      isAutoPlay: isAutoPlay,
     );
 
     _activityController = StreamController<LiveActivityData>.broadcast();

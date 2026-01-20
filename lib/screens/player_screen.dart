@@ -94,7 +94,6 @@ class PlayerScreen extends StatefulWidget {
   final bool? initialIsPlaying;
   final int? initialElapsedSeconds;
   final double? initialProgress;
-  final bool? initialAutoPlayEnabled;
   final Map<String, int>? todayTaskCompletions;
   final int? forcePageIndex;
   final Function({
@@ -102,7 +101,6 @@ class PlayerScreen extends StatefulWidget {
     bool? isPlaying, 
     double? progress, 
     int? elapsedSeconds,
-    bool? isAutoPlayEnabled,
     int? forcePageChange,
     Color? albumColor,
   })? onStateChanged;
@@ -127,7 +125,6 @@ class PlayerScreen extends StatefulWidget {
     this.initialIsPlaying,
     this.initialElapsedSeconds,
     this.initialProgress,
-    this.initialAutoPlayEnabled,
     this.forcePageIndex,
     this.todayTaskCompletions,
     this.onStateChanged,
@@ -180,10 +177,6 @@ late Animation<double> _progressAnimation;
 double _lastProgressValue = 0.0;
   late Animation<Offset> _slideAnimation;
 
-  bool _isAutoPlayEnabled = false;
-  late AnimationController _autoPlayController;
-  late Animation<double> _autoPlaySlideAnimation;
-  late Animation<Color?> _autoPlayColorAnimation;
 
   final DataService _dataService = DataService();
   final TaskCompletionService _taskCompletionService = TaskCompletionService();
@@ -222,12 +215,6 @@ void initState() {
     _extractColorsFromImage();
   });
   
-  if (widget.initialAutoPlayEnabled != null) {
-    _isAutoPlayEnabled = widget.initialAutoPlayEnabled!;
-    if (_isAutoPlayEnabled) {
-      _autoPlayController.forward();
-    }
-  }
   
   if (widget.todayTaskCompletions != null) {
     _todayTaskCompletions = Map.from(widget.todayTaskCompletions!);
@@ -364,10 +351,6 @@ void didUpdateWidget(PlayerScreen oldWidget) {
     needsUpdate = true;
   }
   
-  if (widget.initialAutoPlayEnabled != null && 
-      widget.initialAutoPlayEnabled != oldWidget.initialAutoPlayEnabled) {
-    needsUpdate = true;
-  }
   
   if (widget.initialIsPlaying != null && 
       widget.initialIsPlaying != oldWidget.initialIsPlaying) {
@@ -391,10 +374,6 @@ void didUpdateWidget(PlayerScreen oldWidget) {
         _todayTaskCompletions = Map.from(widget.todayTaskCompletions!);
       }
       
-      if (widget.initialAutoPlayEnabled != null && 
-          widget.initialAutoPlayEnabled != oldWidget.initialAutoPlayEnabled) {
-        _isAutoPlayEnabled = widget.initialAutoPlayEnabled!;
-      }
       
       if (widget.initialIsPlaying != null && 
           widget.initialIsPlaying != oldWidget.initialIsPlaying) {
@@ -412,14 +391,6 @@ void didUpdateWidget(PlayerScreen oldWidget) {
       }
     });
     
-    if (widget.initialAutoPlayEnabled != null && 
-        widget.initialAutoPlayEnabled != oldWidget.initialAutoPlayEnabled) {
-      if (_isAutoPlayEnabled) {
-        _autoPlayController.forward();
-      } else {
-        _autoPlayController.reverse();
-      }
-    }
 
     // 🔧 修正: 進捗アニメーションの更新（リセット時は即座に0.0）
     if (widget.initialProgress != null && 
@@ -541,18 +512,6 @@ void _animateToPage(int newIndex) {
       
       // 🔧 追加：アニメーション完了後に通知
       if (_isInitializationComplete && !_isForcePageChange) {
-        if (_isAutoPlayEnabled) {
-          setState(() {
-            _isAutoPlayEnabled = false;
-          });
-          _autoPlayController.reverse();
-          
-          if (widget.onStateChanged != null) {
-            widget.onStateChanged!(
-              isAutoPlayEnabled: false,
-            );
-          }
-        }
         
         if (widget.onStateChanged != null) {
           final taskIndex = widget.isPlayingSingleAlbum ? newIndex : (newIndex > 0 ? newIndex - 1 : -1);
@@ -625,27 +584,6 @@ void _resetPosition() {
     end: Offset.zero,
   ).animate(CurvedAnimation(
     parent: _slideController,
-    curve: Curves.easeInOut,
-  ));
-
-  _autoPlayController = AnimationController(
-    duration: const Duration(milliseconds: 300),
-    vsync: this,
-  );
-
-  _autoPlaySlideAnimation = Tween<double>(
-    begin: 0.0,
-    end: 1.0,
-  ).animate(CurvedAnimation(
-    parent: _autoPlayController,
-    curve: Curves.easeInOut,
-  ));
-
-  _autoPlayColorAnimation = ColorTween(
-    begin: Colors.white,
-    end: const Color(0xFF1DB954),
-  ).animate(CurvedAnimation(
-    parent: _autoPlayController,
     curve: Curves.easeInOut,
   ));
   
@@ -908,8 +846,7 @@ if (widget.onAlbumColorChanged != null) {
 
   @override
 void dispose() {
-  _slideController.dispose();
-  _autoPlayController.dispose();
+  _slideController.dispose();  
   _swipeController.dispose();
   _contentScrollController.dispose(); // 🔧 追加
   _progressAnimationController.dispose(); 
@@ -917,27 +854,6 @@ void dispose() {
   super.dispose();
 }
 
-  // 自動再生ボタンの処理（ユーザー操作のみ通知）
-void _toggleAutoPlay() {
-  setState(() {
-    _isAutoPlayEnabled = !_isAutoPlayEnabled;
-  });
-
-  if (_isAutoPlayEnabled) {
-    _autoPlayController.forward();
-    print('🔄 PlayerScreen: ユーザーが自動再生を有効化');
-  } else {
-    _autoPlayController.reverse();
-    print('⏸️ PlayerScreen: ユーザーが自動再生を無効化');
-  }
-  
-  // ユーザーの直接操作なので通知
-  if (widget.onStateChanged != null) {
-    widget.onStateChanged!(
-      isAutoPlayEnabled: _isAutoPlayEnabled,
-    );
-  }
-}
 
   void _togglePlayPause() {
   // 🔧 修正：理想像ページでは何もしない
@@ -1025,17 +941,13 @@ void _toggleAutoPlay() {
     _elapsedSeconds = 0;
     _currentProgress = 0.0;
     _isPlaying = false;
-    _isAutoPlayEnabled = false;
   });
-  
-  _autoPlayController.reverse();
   
   if (widget.onStateChanged != null) {
     widget.onStateChanged!(
       isPlaying: false,
       progress: 0.0,
-      elapsedSeconds: 0,
-      isAutoPlayEnabled: false,
+      elapsedSeconds: 0,      
     );
   }
   
@@ -1876,8 +1788,6 @@ Future<List<Map<String, dynamic>>> _getTodayTaskExecutions() async {
                   
                   const Spacer(),
                   
-                  // 右端：自動再生ボタン
-                  _buildAutoPlayButton(),
                 ],
               ),
             ),
@@ -2019,72 +1929,6 @@ Row(
         );
       }
     }
-  }
-
-  Widget _buildAutoPlayButton() {
-    return GestureDetector(
-      onTap: _toggleAutoPlay,
-      child: AnimatedBuilder(
-        animation: _autoPlayController,
-        builder: (context, child) {
-          return Container(
-            width: 48,
-            height: 28,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              color: _autoPlayColorAnimation.value ?? Colors.white,
-              border: Border.all(
-                color: Colors.white.withOpacity(0.3),
-                width: 1,
-              ),
-              boxShadow: _isAutoPlayEnabled ? [
-                BoxShadow(
-                  color: const Color(0xFF1DB954).withOpacity(0.3),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ] : null,
-            ),
-            child: Stack(
-              children: [
-                AnimatedPositioned(
-                  duration: const Duration(milliseconds: 300),
-                  curve: Curves.easeInOut,
-                  left: _isAutoPlayEnabled ? 22 : 2,
-                  top: 2,
-                  child: Container(
-                    width: 24,
-                    height: 24,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Color.lerp(_dominantColor, Colors.black, 0.6)!,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
-                          blurRadius: 3,
-                          offset: const Offset(0, 1),
-                        ),
-                      ],
-                    ),
-                    child: Center(
-                      child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 200),
-                        child: Icon(
-                          _isAutoPlayEnabled ? Icons.play_arrow : Icons.stop,
-                          key: ValueKey(_isAutoPlayEnabled),
-                          size: 14,
-                          color: _isAutoPlayEnabled ? const Color(0xFF1DB954) : Colors.white,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
-    );
   }
 
   // 🆕 新規メソッド: アシストボタンの構築
