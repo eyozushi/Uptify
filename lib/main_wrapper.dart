@@ -631,6 +631,8 @@ Future<void> _initializeAudioService() async {
     
     await _loadUserData();
     
+    // 🆕 追加: 古いReality Remaster写真をクリーンアップ
+    await _dataService.cleanupOldRealityRemasterPhotos();
     
     await minDisplayTime;
     
@@ -648,13 +650,20 @@ Future<void> _initializeAudioService() async {
   } catch (e) {
     await Future.delayed(const Duration(seconds: 1));
     await _loadUserData();
+    
+    // 🆕 追加: エラー時もクリーンアップを試行
+    try {
+      await _dataService.cleanupOldRealityRemasterPhotos();
+    } catch (cleanupError) {
+      print('❌ クリーンアップエラー: $cleanupError');
+    }
+    
     setState(() {
       _shouldShowOnboarding = false;
       _isCheckingFirstLaunch = false;
     });
   }
 }
-
   Future<void> _onOnboardingCompleted() async {
     await _loadUserData();
     setState(() {

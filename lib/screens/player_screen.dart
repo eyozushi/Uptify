@@ -8,7 +8,8 @@ import 'dart:math' as math;
 import 'package:flutter/gestures.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/task_item.dart';
-import '../models/lyric_note_item.dart';  // 🔧 追加：この行を追加
+import '../models/lyric_note_item.dart';
+import '../models/reality_remaster_photo.dart';
 import '../services/data_service.dart';
 import '../services/task_completion_service.dart';
 import '../services/audio_service.dart';
@@ -17,6 +18,7 @@ import 'settings_screen.dart';
 import 'album_detail_screen.dart';
 import 'package:palette_generator/palette_generator.dart';
 import '../widgets/lyric_notes_widget.dart';
+import 'reality_remaster_camera_screen.dart';
 
 
 // カスタムの太いプラスアイコンを描画するクラス
@@ -161,6 +163,9 @@ class _PlayerScreenState extends State<PlayerScreen> with TickerProviderStateMix
 
   bool _shouldPassGestureToParent = false; // 🔧 追加
 
+  // 🆕 Reality Remaster関連
+  Map<String, RealityRemasterPhoto?> _realityRemasterPhotos = {};
+
 
   
   late AnimationController _swipeController;
@@ -214,6 +219,10 @@ void initState() {
   WidgetsBinding.instance.addPostFrameCallback((_) {
     _extractColorsFromImage();
   });
+
+  _loadRealityRemasterPhotos();
+
+  _cleanupOldPhotosIfNeeded();
   
   
   if (widget.todayTaskCompletions != null) {
@@ -314,6 +323,210 @@ Future<void> _loadTaskLyricNotes() async {
     print('❌ Lyric Notes読み込みエラー: $e');
   }
 }
+
+// 🆕 Reality Remaster写真を読み込み
+  Future<void> _loadRealityRemasterPhotos() async {
+    try {
+      final photos = <String, RealityRemasterPhoto?>{};
+      
+      for (final task in _tasks) {
+        final photo = await _dataService.getRealityRemasterPhoto(task.id);
+        photos[task.id] = photo;
+      }
+      
+      if (mounted) {
+        setState(() {
+          _realityRemasterPhotos = photos;
+        });
+      }
+      
+      print('✅ Reality Remaster写真読み込み完了: ${photos.length}件');
+    } catch (e) {
+      print('❌ Reality Remaster写真読み込みエラー: $e');
+    }
+  }
+
+  // 🆕 古い写真をクリーンアップ（必要な場合のみ）
+  Future<void> _cleanupOldPhotosIfNeeded() async {
+    try {
+      // 前回のクリーンアップ日時をチェック
+      final prefs = await SharedPreferences.getInstance();
+      final lastCleanupString = prefs.getString('reality_remaster_last_cleanup');
+      
+      final now = DateTime.now();
+      DateTime? lastCleanup;
+      
+      if (lastCleanupString != null) {
+        lastCleanup = DateTime.tryParse(lastCleanupString);
+      }
+      
+      // 前回のクリーンアップが今日でない場合のみ実行
+      if (lastCleanup == null || !_isSameDay(lastCleanup, now)) {
+        print('🔄 Reality Remaster自動クリーンアップ実行...');
+        await _dataService.cleanupOldRealityRemasterPhotos();
+        await prefs.setString('reality_remaster_last_cleanup', now.toIso8601String());
+        
+        // クリーンアップ後、再読み込み
+        await _loadRealityRemasterPhotos();
+      }
+    } catch (e) {
+      print('❌ 自動クリーンアップチェックエラー: $e');
+    }
+  }
+  
+  // 🆕 同じ日かどうか判定
+  bool _isSameDay(DateTime date1, DateTime date2) {
+    return date1.year == date2.year &&
+           date1.month == date2.month &&
+           date1.day == date2.day;
+  }
+
+  // 🆕 Reality Remasterカメラを開く
+  Future<void> _openRealityRemasterCamera() async {
+    // 理想像ページでは使用不可
+    if (_currentIndex == 0 && !widget.isPlayingSingleAlbum) {
+      return;
+    }
+    
+    final actualTaskIndex = widget.isPlayingSingleAlbum ? _currentIndex : _currentIndex - 1;
+    if (actualTaskIndex < 0 || actualTaskIndex >= _tasks.length) {
+      return;
+    }
+    
+    final currentTask = _tasks[actualTaskIndex];
+    
+    final result = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (context) => RealityRemasterCameraScreen(
+          taskId: currentTask.id,
+          albumId: widget.playingSingleAlbumId,
+          isSingleAlbum: widget.isPlayingSingleAlbum,
+        ),
+        fullscreenDialog: true,
+      ),
+    );
+    
+    // 写真が保存された場合、再読み込み
+    if (result == true) {
+      await _loadRealityRemasterPhotos();
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: 12),
+                Text(
+                  'Reality Remastered!',
+                  style: TextStyle(fontFamily: 'Hiragino Sans'),
+                ),
+              ],
+            ),
+            backgroundColor: Color(0xFF1DB954),
+            behavior: SnackBarBehavior.floating,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+  }
+
+  // 🆕 理想に戻す（Reality Remaster写真を削除）
+  Future<void> _resetToIdeal() async {
+    // 理想像ページでは使用不可
+    if (_currentIndex == 0 && !widget.isPlayingSingleAlbum) {
+      return;
+    }
+    
+    final actualTaskIndex = widget.isPlayingSingleAlbum ? _currentIndex : _currentIndex - 1;
+    if (actualTaskIndex < 0 || actualTaskIndex >= _tasks.length) {
+      return;
+    }
+    
+    final currentTask = _tasks[actualTaskIndex];
+    
+    // 確認ダイアログ
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF282828),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: const Text(
+          'Reset to Ideal',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            fontFamily: 'Hiragino Sans',
+          ),
+        ),
+        content: const Text(
+          'Return to the original ideal image?',
+          style: TextStyle(
+            color: Colors.white70,
+            fontSize: 14,
+            fontFamily: 'Hiragino Sans',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(
+                color: Colors.white70,
+                fontFamily: 'Hiragino Sans',
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text(
+              'Reset',
+              style: TextStyle(
+                color: Color(0xFF1DB954),
+                fontWeight: FontWeight.w600,
+                fontFamily: 'Hiragino Sans',
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    
+    if (confirmed != true) return;
+    
+    try {
+      await _dataService.deleteRealityRemasterPhoto(currentTask.id);
+      await _loadRealityRemasterPhotos();
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.refresh, color: Colors.white),
+                SizedBox(width: 12),
+                Text(
+                  'Reset to Ideal',
+                  style: TextStyle(fontFamily: 'Hiragino Sans'),
+                ),
+              ],
+            ),
+            backgroundColor: Color(0xFF1DB954),
+            behavior: SnackBarBehavior.floating,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      print('❌ 理想に戻すエラー: $e');
+    }
+  }
+
   @override
 void didUpdateWidget(PlayerScreen oldWidget) {
   super.didUpdateWidget(oldWidget);
@@ -1390,13 +1603,36 @@ Widget _buildPositionedJacket({
 Widget _buildAlbumCover(int index, double size) {
   Widget imageWidget;
   
-  if (widget.isPlayingSingleAlbum) {
+  // 🆕 追加: Reality Remaster写真があるか確認
+  RealityRemasterPhoto? remasterPhoto;
+  
+  if (index == 0 && !widget.isPlayingSingleAlbum) {
+    // 理想像ページ: Reality Remasterなし
+    remasterPhoto = null;
+  } else {
+    // タスクページ: Reality Remaster写真をチェック
+    final actualTaskIndex = widget.isPlayingSingleAlbum ? index : index - 1;
+    if (actualTaskIndex >= 0 && actualTaskIndex < _tasks.length) {
+      final taskId = _tasks[actualTaskIndex].id;
+      remasterPhoto = _realityRemasterPhotos[taskId];
+    }
+  }
+  
+  // 🆕 追加: Reality Remaster写真があればそれを表示
+  if (remasterPhoto != null) {
+    imageWidget = Image.memory(
+      remasterPhoto.imageBytes,
+      width: size,
+      height: size,
+      fit: BoxFit.cover,
+    );
+  } else if (widget.isPlayingSingleAlbum) {
     if (widget.albumCoverImage != null) {
       imageWidget = Image.memory(
         widget.albumCoverImage!,
         width: size,
         height: size,
-        fit: BoxFit.cover, // 🔧 正方形内で画像を表示
+        fit: BoxFit.cover,
       );
     } else {
       imageWidget = _buildDefaultAlbumCover(size, isSingle: true);
@@ -1421,7 +1657,6 @@ Widget _buildAlbumCover(int index, double size) {
     }
   }
   
-  // 🔧 確実に正方形を保証
   return SizedBox(
     width: size,
     height: size,
@@ -1749,108 +1984,121 @@ Future<List<Map<String, dynamic>>> _getTodayTaskExecutions() async {
 }
 
  Widget _buildControls() {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final coverSize = screenWidth - 60;
-    
-    // 🔧 現在のタスクを取得
-    TaskItem? currentTask;
-    if (_currentIndex > 0 || widget.isPlayingSingleAlbum) {
-      final actualTaskIndex = widget.isPlayingSingleAlbum ? _currentIndex : _currentIndex - 1;
-      if (actualTaskIndex >= 0 && actualTaskIndex < _tasks.length) {
-        currentTask = _tasks[actualTaskIndex];
-      }
+  final screenWidth = MediaQuery.of(context).size.width;
+  final coverSize = screenWidth - 60;
+  
+  // 現在のタスクを取得
+  TaskItem? currentTask;
+  if (_currentIndex > 0 || widget.isPlayingSingleAlbum) {
+    final actualTaskIndex = widget.isPlayingSingleAlbum ? _currentIndex : _currentIndex - 1;
+    if (actualTaskIndex >= 0 && actualTaskIndex < _tasks.length) {
+      currentTask = _tasks[actualTaskIndex];
     }
-    
-    // 🔧 アシストボタンが有効かチェック
-    final bool isAssistButtonEnabled = currentTask?.assistUrl != null && 
-                                       currentTask!.assistUrl!.isNotEmpty;
-    
-    return SizedBox(
-      width: screenWidth,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          // 🔧 左右のボタン配置（ジャケット幅に合わせる）
-          Center(
-            child: SizedBox(
-              width: coverSize,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  // 左端：シャッフルボタン → アシストボタンに変更
-                  _buildAssistButton(
-                    isEnabled: isAssistButtonEnabled,
-                    onTap: isAssistButtonEnabled
-                        ? () => _launchAssistUrl(currentTask!.assistUrl!)
-                        : null,
-                  ),
-                  
-                  const Spacer(),
-                  
-                ],
-              ),
+  }
+  
+  // アシストボタンが有効かチェック
+  final bool isAssistButtonEnabled = currentTask?.assistUrl != null && 
+                                     currentTask!.assistUrl!.isNotEmpty;
+  
+  // 🆕 追加: Reality Remasterボタンが有効かチェック
+  final bool isRealityRemasterEnabled = currentTask != null;
+  
+  // 🆕 追加: 理想に戻すボタンが有効かチェック
+  final bool hasRealityRemaster = currentTask != null && 
+                                   _realityRemasterPhotos[currentTask.id] != null;
+  
+  return SizedBox(
+    width: screenWidth,
+    child: Stack(
+      alignment: Alignment.center,
+      children: [
+        Center(
+          child: SizedBox(
+            width: coverSize,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // 左端: アシストボタン
+                _buildAssistButton(
+                  isEnabled: isAssistButtonEnabled,
+                  onTap: isAssistButtonEnabled
+                      ? () => _launchAssistUrl(currentTask!.assistUrl!)
+                      : null,
+                ),
+                
+                const Spacer(),
+                
+                // 🆕 追加: 右端: Reality Remasterボタン or 理想に戻すボタン
+                hasRealityRemaster
+                    ? _buildResetToIdealButton(onTap: _resetToIdeal)
+                    : _buildRealityRemasterButton(
+                        isEnabled: isRealityRemasterEnabled,
+                        onTap: isRealityRemasterEnabled ? _openRealityRemasterCamera : null,
+                      ),
+              ],
             ),
           ),
-          
-          // 中央：再生ボタンとその左右のスキップ・戻るボタン
-Row(
-  mainAxisAlignment: MainAxisAlignment.center,
-  crossAxisAlignment: CrossAxisAlignment.center,
-  children: [
-    // 🔧 修正：戻るボタン（適度な丸み）
-    _buildControlButton(
-      icon: Icons.skip_previous_rounded,  // 🔧 変更：_rounded に戻す
-      onTap: () {
-        if (_currentIndex > 0) {
-          _animateToPage(_currentIndex - 1);
-        }
-      },
-      size: 40,
-      color: Colors.white,
-    ),
-    
-    const SizedBox(width: 24),
-    
-    // 再生ボタン（中央）
-    GestureDetector(
-      onTap: _togglePlayPause,
-      child: Container(
-        width: 64,
-        height: 64,
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          shape: BoxShape.circle,
         ),
-        alignment: Alignment.center,
-        child: Icon(
-          _getPlayPauseIcon(),
-          color: Color.lerp(_dominantColor, Colors.black, 0.6)!,
-          size: 45,
+        
+        // 中央: 再生ボタンとその左右のスキップ・戻るボタン
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // 戻るボタン
+            _buildControlButton(
+              icon: Icons.skip_previous_rounded,
+              onTap: () {
+                if (_currentIndex > 0) {
+                  _animateToPage(_currentIndex - 1);
+                }
+              },
+              size: 40,
+              color: Colors.white,
+            ),
+            
+            const SizedBox(width: 24),
+            
+            // 再生ボタン
+            GestureDetector(
+              onTap: _togglePlayPause,
+              child: Container(
+                width: 64,
+                height: 64,
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                ),
+                alignment: Alignment.center,
+                child: Icon(
+                  _getPlayPauseIcon(),
+                  color: Color.lerp(_dominantColor, Colors.black, 0.6)!,
+                  size: 45,
+                ),
+              ),
+            ),
+            
+            const SizedBox(width: 24),
+            
+            // スキップボタン
+            _buildControlButton(
+              icon: Icons.skip_next_rounded,
+              onTap: () {
+                final maxIndex = widget.isPlayingSingleAlbum ? _tasks.length - 1 : _tasks.length;
+                if (_currentIndex < maxIndex) {
+                  _animateToPage(_currentIndex + 1);
+                }
+              },
+              size: 40,
+              color: Colors.white,
+            ),
+          ],
         ),
-      ),
+      ],
     ),
-    
-    const SizedBox(width: 24),
-    
-    // 🔧 修正：スキップボタン（適度な丸み）
-    _buildControlButton(
-      icon: Icons.skip_next_rounded,  // 🔧 変更：_rounded に戻す
-      onTap: () {
-        final maxIndex = widget.isPlayingSingleAlbum ? _tasks.length - 1 : _tasks.length;
-        if (_currentIndex < maxIndex) {
-          _animateToPage(_currentIndex + 1);
-        }
-      },
-      size: 40,
-      color: Colors.white,
-    ),
-  ],
-),
-        ],
-      ),
-    );
-  }
+  );
+}
 
 // 🔧 修正版: アシストURLを起動
   Future<void> _launchAssistUrl(String url) async {
@@ -1963,6 +2211,37 @@ Row(
     ),
   );
 }
+
+// 🆕 Reality Remasterボタン
+  Widget _buildRealityRemasterButton({
+    required bool isEnabled,
+    required VoidCallback? onTap,
+  }) {
+    return GestureDetector(
+      onTap: isEnabled ? onTap : null,
+      child: Icon(
+        Icons.camera_alt,
+        color: isEnabled 
+            ? Colors.white 
+            : Colors.white.withOpacity(0.3),
+        size: 26,
+      ),
+    );
+  }
+  
+  // 🆕 理想に戻すボタン
+  Widget _buildResetToIdealButton({
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: const Icon(
+        Icons.refresh,
+        color: Color(0xFF1DB954),
+        size: 26,
+      ),
+    );
+  }
 
   
 

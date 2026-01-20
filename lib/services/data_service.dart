@@ -4,12 +4,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 import '../models/task_item.dart';
-import '../models/single_album.dart'; // 🎵 追加
+import '../models/single_album.dart';
 import '../models/notification_config.dart';
 import '../models/task_completion.dart';
 import '../models/achievement_record.dart';
-import '../models/lyric_note_item.dart';  // 🆕 追加
+import '../models/reality_remaster_photo.dart';
+import '../models/lyric_note_item.dart'; 
 import '../services/achievement_service.dart';
+import 'reality_remaster_service.dart';
 
 class DataService {
   static const String _keyUserData = 'user_data';
@@ -19,6 +21,8 @@ class DataService {
   static const String _keyIdealImageBytes = 'ideal_image_bytes'; // 顔写真（プロフィール画像）
   static const String _keySingleAlbums = 'single_albums'; // 🎵 追加
   static const String _keyNotificationConfig = 'notification_config';
+
+  final RealityRemasterService _realityRemasterService = RealityRemasterService();  // 🆕 追加
 
   // 🔔 新機能: AchievementServiceのインスタンス
   final AchievementService _achievementService = AchievementService();
@@ -715,5 +719,32 @@ Future<void> updateSingleAlbumTaskLyricNote({
     notes: notes,
   );
 }
+
+// 🆕 Reality Remaster関連メソッド
+  
+  /// Reality Remaster写真を保存
+  Future<void> saveRealityRemasterPhoto(RealityRemasterPhoto photo) async {
+    await _realityRemasterService.savePhoto(photo);
+  }
+  
+  /// Reality Remaster写真を取得
+  Future<RealityRemasterPhoto?> getRealityRemasterPhoto(String taskId) async {
+    return await _realityRemasterService.getPhoto(taskId);
+  }
+  
+  /// Reality Remaster写真を削除（理想に戻す）
+  Future<void> deleteRealityRemasterPhoto(String taskId) async {
+    await _realityRemasterService.deletePhoto(taskId);
+  }
+  
+  /// 古いReality Remaster写真をクリーンアップ
+  Future<void> cleanupOldRealityRemasterPhotos() async {
+    await _realityRemasterService.cleanupOldPhotos();
+  }
+  
+  /// Reality Remaster写真IDを生成
+  String generateRealityRemasterPhotoId() {
+    return _realityRemasterService.generatePhotoId();
+  }
 
 }
