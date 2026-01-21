@@ -178,16 +178,38 @@ class _RealityRemasterCameraScreenState extends State<RealityRemasterCameraScree
     return _buildCameraScreen();
   }
 
-  // 🆕 カメラ画面
+  // 🔧 修正: カメラ画面
   Widget _buildCameraScreen() {
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // カメラプレビュー
+          // 🔧 修正: カメラプレビュー（正方形）
           if (_isInitialized && _cameraController != null)
-            Positioned.fill(
-              child: CameraPreview(_cameraController!),
+            Center(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final screenWidth = MediaQuery.of(context).size.width;
+                  
+                  return SizedBox(
+                    width: screenWidth,
+                    height: screenWidth, // 正方形
+                    child: ClipRect(
+                      child: OverflowBox(
+                        alignment: Alignment.center,
+                        child: FittedBox(
+                          fit: BoxFit.cover,
+                          child: SizedBox(
+                            width: screenWidth,
+                            height: screenWidth / _cameraController!.value.aspectRatio,
+                            child: CameraPreview(_cameraController!),
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
             )
           else
             const Center(
@@ -209,7 +231,7 @@ class _RealityRemasterCameraScreenState extends State<RealityRemasterCameraScree
                 fontSize: 18,
                 fontWeight: FontWeight.w800,
                 fontFamily: 'Hiragino Sans',
-                letterSpacing: -1.0, 
+                letterSpacing: -1.0,
               ),
             ),
           ),
@@ -237,7 +259,6 @@ class _RealityRemasterCameraScreenState extends State<RealityRemasterCameraScree
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: Color(0xFF1DB954),
-                      
                       border: Border.all(
                         color: Colors.white,
                         width: 2,
