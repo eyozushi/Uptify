@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:typed_data';
+import 'package:image/image.dart' as img;
 import '../models/reality_remaster_photo.dart';
 import '../services/data_service.dart';
 
@@ -44,7 +45,6 @@ class _RealityRemasterCameraScreenState extends State<RealityRemasterCameraScree
     super.dispose();
   }
 
-  // 🆕 カメラ初期化
   Future<void> _initializeCamera() async {
     try {
       _cameras = await availableCameras();
@@ -71,7 +71,6 @@ class _RealityRemasterCameraScreenState extends State<RealityRemasterCameraScree
     }
   }
 
-  // 🆕 カメラ切り替え
   Future<void> _toggleCamera() async {
     if (_cameras == null || _cameras!.length < 2) return;
     
@@ -83,7 +82,6 @@ class _RealityRemasterCameraScreenState extends State<RealityRemasterCameraScree
     await _initializeCamera();
   }
 
-  // 🆕 写真撮影
   Future<void> _takePicture() async {
     if (_cameraController == null || !_cameraController!.value.isInitialized) {
       return;
@@ -97,8 +95,11 @@ class _RealityRemasterCameraScreenState extends State<RealityRemasterCameraScree
       final XFile image = await _cameraController!.takePicture();
       final bytes = await image.readAsBytes();
       
+      // 正方形にクロップ
+      final croppedBytes = await _cropToSquare(bytes);
+      
       setState(() {
-        _capturedImageBytes = bytes;
+        _capturedImageBytes = croppedBytes;
         _isProcessing = false;
       });
     } catch (e) {
@@ -109,7 +110,6 @@ class _RealityRemasterCameraScreenState extends State<RealityRemasterCameraScree
     }
   }
 
-  // 🆕 ギャラリーから選択
   Future<void> _pickFromGallery() async {
     setState(() {
       _isProcessing = true;
@@ -125,8 +125,9 @@ class _RealityRemasterCameraScreenState extends State<RealityRemasterCameraScree
 
       if (image != null) {
         final bytes = await image.readAsBytes();
+        final croppedBytes = await _cropToSquare(bytes);
         setState(() {
-          _capturedImageBytes = bytes;
+          _capturedImageBytes = croppedBytes;
         });
       }
     } catch (e) {
@@ -138,7 +139,25 @@ class _RealityRemasterCameraScreenState extends State<RealityRemasterCameraScree
     }
   }
 
-  // 🆕 Reality Remasterをリリース
+  // 🆕 画像を正方形にクロップ
+  Future<Uint8List> _cropToSquare(Uint8List bytes) async {
+    final image = img.decodeImage(bytes);
+    if (image == null) return bytes;
+
+    final size = image.width < image.height ? image.width : image.height;
+    final offsetX = (image.width - size) ~/ 2;
+    final offsetY = (image.height - size) ~/ 2;
+
+    final cropped = img.copyCrop(image,
+      x: offsetX,
+      y: offsetY,
+      width: size,
+      height: size,
+    );
+
+    return Uint8List.fromList(img.encodeJpg(cropped, quality: 85));
+  }
+
   Future<void> _releaseRealityRemaster() async {
     if (_capturedImageBytes == null) return;
 
@@ -159,7 +178,7 @@ class _RealityRemasterCameraScreenState extends State<RealityRemasterCameraScree
       await _dataService.saveRealityRemasterPhoto(photo);
 
       if (mounted) {
-        Navigator.of(context).pop(true); // true = 写真が保存された
+        Navigator.of(context).pop(true);
       }
     } catch (e) {
       print('❌ Reality Remasterリリースエラー: $e');
@@ -178,141 +197,136 @@ class _RealityRemasterCameraScreenState extends State<RealityRemasterCameraScree
     return _buildCameraScreen();
   }
 
-  // 🔧 修正: カメラ画面
   Widget _buildCameraScreen() {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: Stack(
-        children: [
-          // 🔧 修正: カメラプレビュー（正方形）
-          if (_isInitialized && _cameraController != null)
-            Center(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final screenWidth = MediaQuery.of(context).size.width;
-                  
-                  return SizedBox(
-                    width: screenWidth,
-                    height: screenWidth, // 正方形
-                    child: ClipRect(
-                      child: OverflowBox(
-                        alignment: Alignment.center,
-                        child: FittedBox(
-                          fit: BoxFit.cover,
-                          child: SizedBox(
-                            width: screenWidth,
-                            height: screenWidth / _cameraController!.value.aspectRatio,
-                            child: CameraPreview(_cameraController!),
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                },
+  return Scaffold(
+    backgroundColor: Colors.black,
+    body: Stack(
+      children: [
+        // カメラプレビュー（16:9のまま全画面表示）
+        if (_isInitialized && _cameraController != null)
+          Positioned.fill(
+            child: CameraPreview(_cameraController!),
+          )
+        else
+          const Center(
+            child: CircularProgressIndicator(
+              color: Colors.white,
+            ),
+          ),
+
+        // 上下の黒いオーバーレイ（正方形部分以外を隠す）
+        Positioned.fill(
+          child: Column(
+            children: [
+              // 上部の黒いオーバーレイ
+              Expanded(
+                child: Container(
+                  color: Colors.black.withOpacity(0.7),
+                ),
               ),
-            )
-          else
-            const Center(
+              // 中央の正方形部分（透明）
+              SizedBox(
+                width: MediaQuery.of(context).size.width,
+                height: MediaQuery.of(context).size.width,
+              ),
+              // 下部の黒いオーバーレイ
+              Expanded(
+                child: Container(
+                  color: Colors.black.withOpacity(0.7),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // 上部: タイトル
+        Positioned(
+          top: MediaQuery.of(context).padding.top + 20,
+          left: 0,
+          right: 0,
+          child: const Text(
+            'Remaster Your Ideal',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              fontFamily: 'Hiragino Sans',
+              letterSpacing: -1.0,
+            ),
+          ),
+        ),
+
+        // 下部: コントロール
+        Positioned(
+          bottom: MediaQuery.of(context).padding.bottom + 40,
+          left: 0,
+          right: 0,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _buildControlButton(
+                icon: Icons.photo_library,
+                onTap: _pickFromGallery,
+              ),
+              GestureDetector(
+                onTap: _takePicture,
+                child: Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Color(0xFF1DB954),
+                    border: Border.all(
+                      color: Colors.white,
+                      width: 2,
+                    ),
+                  ),
+                ),
+              ),
+              _buildControlButton(
+                icon: Icons.cameraswitch,
+                onTap: _toggleCamera,
+              ),
+            ],
+          ),
+        ),
+
+        // 閉じるボタン
+        Positioned(
+          top: MediaQuery.of(context).padding.top + 10,
+          left: 10,
+          child: IconButton(
+            icon: const Icon(
+              Icons.close,
+              color: Colors.white,
+              size: 28,
+            ),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ),
+
+        // ローディング
+        if (_isProcessing)
+          Container(
+            color: Colors.black54,
+            child: const Center(
               child: CircularProgressIndicator(
                 color: Colors.white,
               ),
             ),
-
-          // 上部: タイトル
-          Positioned(
-            top: MediaQuery.of(context).padding.top + 20,
-            left: 0,
-            right: 0,
-            child: const Text(
-              'Remaster Your Ideal',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-                fontFamily: 'Hiragino Sans',
-                letterSpacing: -1.0,
-              ),
-            ),
           ),
+      ],
+    ),
+  );
+}
 
-          // 下部: コントロール
-          Positioned(
-            bottom: MediaQuery.of(context).padding.bottom + 40,
-            left: 0,
-            right: 0,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                // ギャラリーボタン
-                _buildControlButton(
-                  icon: Icons.photo_library,
-                  onTap: _pickFromGallery,
-                ),
-
-                // シャッターボタン
-                GestureDetector(
-                  onTap: _takePicture,
-                  child: Container(
-                    width: 80,
-                    height: 80,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Color(0xFF1DB954),
-                      border: Border.all(
-                        color: Colors.white,
-                        width: 2,
-                      ),
-                    ),
-                  ),
-                ),
-
-                // カメラ切り替えボタン
-                _buildControlButton(
-                  icon: Icons.cameraswitch,
-                  onTap: _toggleCamera,
-                ),
-              ],
-            ),
-          ),
-
-          // 閉じるボタン
-          Positioned(
-            top: MediaQuery.of(context).padding.top + 10,
-            left: 10,
-            child: IconButton(
-              icon: const Icon(
-                Icons.close,
-                color: Colors.white,
-                size: 28,
-              ),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-          ),
-
-          // ローディング
-          if (_isProcessing)
-            Container(
-              color: Colors.black54,
-              child: const Center(
-                child: CircularProgressIndicator(
-                  color: Colors.white,
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  // 🔧 修正: プレビュー画面
   Widget _buildPreviewScreen() {
     return Scaffold(
       backgroundColor: Colors.black,
       body: SafeArea(
         child: Column(
           children: [
-            // タイトル
             Padding(
               padding: const EdgeInsets.only(top: 20),
               child: const Text(
@@ -326,8 +340,6 @@ class _RealityRemasterCameraScreenState extends State<RealityRemasterCameraScree
                 ),
               ),
             ),
-
-            // 中央: プレビュー画像
             Expanded(
               child: Center(
                 child: LayoutBuilder(
@@ -353,14 +365,11 @@ class _RealityRemasterCameraScreenState extends State<RealityRemasterCameraScree
                 ),
               ),
             ),
-
-            // 下部: ボタン群
             Padding(
               padding: const EdgeInsets.all(40),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // リリースボタン
                   GestureDetector(
                     onTap: _isProcessing ? null : _releaseRealityRemaster,
                     child: Container(
@@ -393,8 +402,6 @@ class _RealityRemasterCameraScreenState extends State<RealityRemasterCameraScree
                             ),
                     ),
                   ),
-
-                  // 戻るボタン
                   const SizedBox(height: 16),
                   TextButton(
                     onPressed: () {
@@ -420,7 +427,6 @@ class _RealityRemasterCameraScreenState extends State<RealityRemasterCameraScree
     );
   }
 
-  // 🆕 コントロールボタン
   Widget _buildControlButton({
     required IconData icon,
     required VoidCallback onTap,
