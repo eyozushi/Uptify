@@ -1,0 +1,12 @@
+{
+  "current_version": "1.0.0",
+  "min_supported_version": "1.0.0",
+  "show_banner": false,
+  "banner_title": "",
+  "banner_message": "",
+  "banner_button_text": "Update Now",
+  "update_url_ios": "https://apps.apple.com/app/uptify/id123456",
+  "update_url_android": "",
+  "dismissable": true,
+  "priority": "normal"
+}
