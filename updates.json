@@ -1,9 +1,9 @@
 {
-  "current_version": "1.0.0",
+  "current_version": "1.1.0",
   "min_supported_version": "1.0.0",
-  "show_banner": false,
-  "banner_title": "",
-  "banner_message": "",
+  "show_banner": true,
+  "banner_title": "New Update Available! 🎉",
+  "banner_message": "Version 1.1.0 adds amazing new features",
   "banner_button_text": "Update Now",
   "update_url_ios": "https://apps.apple.com/app/uptify/id123456",
   "update_url_android": "",
