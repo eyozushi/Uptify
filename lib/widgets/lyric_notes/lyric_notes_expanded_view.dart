@@ -179,6 +179,80 @@ bool _shouldShowLine(int index) {
   
   return true;
 }
+
+/// Editor での折り返し位置を計算して、改行を挿入したテキストを返す
+/// Editor での折り返し位置を計算して、改行を挿入したテキストを返す
+String _getEditorWrappedText(String text) {
+  if (text.isEmpty) return text;
+  
+  // Editor の横幅を計算（画面幅 - 左右パディング40）
+  final editorWidth = MediaQuery.of(context).size.width - 40;
+  
+  // Editor のフォントスタイルで TextPainter を作成
+  final textPainter = TextPainter(
+    text: TextSpan(
+      text: text,
+      style: GoogleFonts.inter(
+        fontSize: 16,
+        height: 1.3,
+        fontWeight: FontWeight.w400,
+        letterSpacing: 0,
+      ).copyWith(
+        fontFamilyFallback: const ['Hiragino Sans'],
+      ),
+    ),
+    textDirection: TextDirection.ltr,
+    maxLines: null,
+  )..layout(maxWidth: editorWidth);
+  
+  // 各行の折り返し位置を取得
+  final lines = textPainter.computeLineMetrics();
+  
+  if (lines.length <= 1) {
+    return text;
+  }
+  
+  // 🔧 修正：各行の文字範囲を正しく取得
+  final buffer = StringBuffer();
+  int currentOffset = 0;
+  
+  for (int i = 0; i < lines.length; i++) {
+    final line = lines[i];
+    
+    // 次の行の開始位置を取得（現在の行の終了位置）
+    int nextOffset;
+    if (i < lines.length - 1) {
+      // 次の行の先頭位置を取得
+      nextOffset = textPainter.getPositionForOffset(
+        Offset(0, line.baseline + line.height)
+      ).offset;
+    } else {
+      // 最後の行
+      nextOffset = text.length;
+    }
+    
+    // この行のテキストを追加
+    buffer.write(text.substring(currentOffset, nextOffset));
+    
+    if (i < lines.length - 1) {
+      buffer.write('\n');
+    }
+    
+    currentOffset = nextOffset;
+  }
+  
+  return buffer.toString();
+}
+
+/// テキストの実際の行数を取得
+int _getLineCount(String text) {
+  if (text.isEmpty) return 1;
+  
+  // 改行の数を数える
+  final newlineCount = '\n'.allMatches(text).length;
+  return newlineCount + 1; // 改行の数 + 1 = 行数
+}
+
   Widget _buildLine(int index) {
   if (index >= _notes.length) {
     return const SizedBox.shrink();
@@ -187,17 +261,18 @@ bool _shouldShowLine(int index) {
   final note = _notes[index];
   final isExpanded = _expandedStates[index] ?? true;
   
-  // Level 0と Level 1は大きく表示（Spotifyスタイル）
   final fontSize = (note.level == 0 || note.level == 1) ? 24.0 : 18.0;
   final fontWeight = (note.level == 0 || note.level == 1) ? FontWeight.w800 : FontWeight.w700;
-  final lineHeight = fontSize * 1.6;
   
-  // 完了状態に応じて文字色を変更
-final textColor = note.isCompleted ? Colors.white : Colors.grey[900]; // 🔧 修正: Colors.grey[800] → Colors.grey[900]
+  final textColor = note.isCompleted ? Colors.white : Colors.grey[900];
   
-  // Level 2がリスト化されているかを判定
   final hasGrandchildren = _notes.any((n) => n.parentId == note.id && n.level == 3);
   final isLevel2Listified = note.level == 2 && (hasGrandchildren || note.isCollapsed == true);
+  
+  final displayText = _getEditorWrappedText(note.text);
+  final lineCount = _getLineCount(displayText);
+  final lineHeight = fontSize * 1.6;
+  final totalHeight = lineHeight * lineCount;
   
   return Padding(
     padding: const EdgeInsets.only(bottom: 4),
@@ -205,92 +280,84 @@ final textColor = note.isCompleted ? Colors.white : Colors.grey[900]; // 🔧 �
       onTap: () => _toggleLineCompletion(index),
       behavior: HitTestBehavior.opaque,
       child: SizedBox(
-        height: lineHeight,
+        height: totalHeight,
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start, // 🔧 修正: center → start（元に戻す）
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Level 1（親）の矢印
-if (note.level == 1) ...[
-  GestureDetector(
-    onTap: () => _toggleCollapse(index),
-    child: Container(
-      width: 24,
-      height: lineHeight,
-      // 🔧 修正: padding を削除
-      alignment: Alignment.topLeft,
-      child: Text(
-        isExpanded ? '↓' : '→',
-        style: GoogleFonts.inter(
-          color: textColor,
-          fontSize: fontSize,
-          height: 1.6,
-          fontWeight: FontWeight.w700,
-        ).copyWith(
-          fontFamilyFallback: const ['Hiragino Sans'],
-        ),
-      ),
-    ),
-  ),
-  const SizedBox(width: 4),
-],
+            if (note.level == 1) ...[
+              GestureDetector(
+                onTap: () => _toggleCollapse(index),
+                child: Container(
+                  width: 24,
+                  alignment: Alignment.topLeft,
+                  child: Text(
+                    isExpanded ? '↓' : '→',
+                    style: GoogleFonts.inter(
+                      color: textColor,
+                      fontSize: fontSize,
+                      height: 1.6,
+                      fontWeight: FontWeight.w700,
+                    ).copyWith(
+                      fontFamilyFallback: const ['Hiragino Sans'],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+            ],
 
-// Level 2（子）のインデントと矢印
-if (note.level == 2) ...[
-  const SizedBox(width: 24 + 4),
-  
-  if (isLevel2Listified) ...[
-    GestureDetector(
-      onTap: () => _toggleCollapse(index),
-      child: Container(
-        width: 24,
-        height: lineHeight,
-        // 🔧 修正: padding を削除
-        alignment: Alignment.topLeft,
-        child: Text(
-          isExpanded ? '↓' : '→',
-          style: GoogleFonts.inter(
-            color: textColor,
-            fontSize: fontSize,
-            height: 1.6,
-            fontWeight: FontWeight.w700,
-          ).copyWith(
-            fontFamilyFallback: const ['Hiragino Sans'],
-          ),
-        ),
-      ),
-    ),
-    const SizedBox(width: 4),
-  ],
-],
+            if (note.level == 2) ...[
+              const SizedBox(width: 24 + 4),
+              
+              if (isLevel2Listified) ...[
+                GestureDetector(
+                  onTap: () => _toggleCollapse(index),
+                  child: Container(
+                    width: 24,
+                    alignment: Alignment.topLeft,
+                    child: Text(
+                      isExpanded ? '↓' : '→',
+                      style: GoogleFonts.inter(
+                        color: textColor,
+                        fontSize: fontSize,
+                        height: 1.6,
+                        fontWeight: FontWeight.w700,
+                      ).copyWith(
+                        fontFamilyFallback: const ['Hiragino Sans'],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+              ],
+            ],
             
-            // Level 3（孫）のインデント
             if (note.level == 3)
               const SizedBox(width: (24 + 4) * 2),
             
-            // テキスト表示
-            // テキスト表示
-SizedBox(
-  width: 1000, // 最大幅を指定（必要に応じて調整可能）
-  child: Text(
-    note.text,
-    style: GoogleFonts.inter(
-      color: textColor,
-      fontSize: fontSize,
-      height: 1.6,
-      fontWeight: fontWeight,
-    ).copyWith(
-      fontFamilyFallback: const ['Hiragino Sans'],
-    ),
-    softWrap: false, // 折り返しを無効化
-    overflow: TextOverflow.visible, // はみ出しを許可
-  ),
-),
+            // 🔧 修正：Expanded に変更
+            Expanded(
+              child: Text(
+                displayText,
+                style: GoogleFonts.inter(
+                  color: textColor,
+                  fontSize: fontSize,
+                  height: 1.6,
+                  fontWeight: fontWeight,
+                ).copyWith(
+                  fontFamilyFallback: const ['Hiragino Sans'],
+                ),
+                softWrap: false,
+                overflow: TextOverflow.visible,
+              ),
+            ),
           ],
         ),
       ),
     ),
   );
 }
+
 /// 行の完了状態を切り替え（子孫も連動）
 void _toggleLineCompletion(int index) {
   if (index >= _notes.length) return;
@@ -357,25 +424,22 @@ Widget build(BuildContext context) {
                     ),
                   ),
                   
-                  // 中央: タスク名
-                  Center(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 48),
-                      child: Text(
-                        widget.taskTitle,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w900,
-                          fontFamily: 'Hiragino Sans',
-                          letterSpacing: -0.5
-                        ),
-                        textAlign: TextAlign.center,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ),
+                  // 中央: タスク名（自動スクロール）
+Center(
+  child: Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 90),
+    child: AutoScrollText(
+      text: widget.taskTitle,
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 14,
+        fontWeight: FontWeight.w900,
+        fontFamily: 'Hiragino Sans',
+        letterSpacing: -0.5,
+      ),
+    ),
+  ),
+),
                   
                   // 右: 編集ボタン（白ペン・緑円）
                   Align(
@@ -427,16 +491,25 @@ Expanded(
       : SingleChildScrollView(
           controller: _scrollController,
           padding: const EdgeInsets.all(20),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: IntrinsicWidth(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  for (int i = 0; i < _notes.length; i++)
-                    if (_shouldShowLine(i))
-                      _buildLine(i),
-                ],
+          child: ScrollConfiguration(
+            behavior: ScrollConfiguration.of(context).copyWith(
+              physics: const BouncingScrollPhysics(), // 🔧 追加：バウンドを有効化
+            ),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(), // 🔧 追加：横スクロールもバウンド
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: MediaQuery.of(context).size.width - 40 + 200, // 🔧 追加：最大幅を制限（Editor幅 + 余裕200px）
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (int i = 0; i < _notes.length; i++)
+                      if (_shouldShowLine(i))
+                        _buildLine(i),
+                  ],
+                ),
               ),
             ),
           ),
@@ -447,4 +520,140 @@ Expanded(
     ),
   );
 }
+}
+
+// 🆕 自動スクロールテキストウィジェット
+class AutoScrollText extends StatefulWidget {
+  final String text;
+  final TextStyle style;
+  final VoidCallback? onTap;
+  
+  const AutoScrollText({
+    super.key,
+    required this.text,
+    required this.style,
+    this.onTap,
+  });
+
+  @override
+  State<AutoScrollText> createState() => _AutoScrollTextState();
+}
+
+class _AutoScrollTextState extends State<AutoScrollText> with SingleTickerProviderStateMixin {
+  late ScrollController _scrollController;
+  late AnimationController _animationController;
+  bool _needsScroll = false;
+  double _textWidth = 0;
+  double _containerWidth = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController = ScrollController();
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 5),
+    );
+    
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkIfNeedsScroll();
+    });
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    _animationController.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(AutoScrollText oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.text != widget.text) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _checkIfNeedsScroll();
+      });
+    }
+  }
+
+  void _checkIfNeedsScroll() {
+    if (!mounted) return;
+    
+    final textPainter = TextPainter(
+      text: TextSpan(text: widget.text, style: widget.style),
+      textDirection: TextDirection.ltr,
+      maxLines: 1,
+    )..layout();
+    
+    _textWidth = textPainter.width;
+    
+    if (_scrollController.hasClients) {
+      _containerWidth = _scrollController.position.viewportDimension;
+      _needsScroll = _textWidth > _containerWidth;
+      
+      if (_needsScroll) {
+        _startScrollAnimation();
+      } else {
+        _animationController.stop();
+      }
+    }
+  }
+
+  void _startScrollAnimation() {
+    if (!mounted || !_needsScroll) return;
+    
+    final scrollDistance = _textWidth - _containerWidth + 20;
+    final duration = Duration(milliseconds: (scrollDistance * 30).toInt());
+    
+    _animationController.duration = duration;
+    
+    _animationController.addStatusListener((status) {
+      if (!mounted) return;
+      
+      if (status == AnimationStatus.completed) {
+        Future.delayed(const Duration(seconds: 2), () {
+          if (mounted) {
+            _scrollController.jumpTo(0);
+            Future.delayed(const Duration(seconds: 2), () {
+              if (mounted && _needsScroll) {
+                _animationController.forward(from: 0);
+              }
+            });
+          }
+        });
+      }
+    });
+    
+    _animationController.addListener(() {
+      if (mounted && _scrollController.hasClients) {
+        final scrollDistance = _textWidth - _containerWidth + 20;
+        _scrollController.jumpTo(_animationController.value * scrollDistance);
+      }
+    });
+    
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted && _needsScroll) {
+        _animationController.forward();
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: widget.onTap,
+      child: SingleChildScrollView(
+        controller: _scrollController,
+        scrollDirection: Axis.horizontal,
+        physics: const NeverScrollableScrollPhysics(),
+        child: Text(
+          widget.text,
+          style: widget.style,
+          maxLines: 1,
+          overflow: TextOverflow.visible,
+        ),
+      ),
+    );
+  }
 }
