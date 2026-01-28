@@ -46,7 +46,9 @@ Widget build(BuildContext context) {
   
   return GestureDetector(
     onTap: onTap,
-    child: Container(
+    child: AnimatedContainer( // 🔧 変更：Container → AnimatedContainer
+      duration: const Duration(milliseconds: 800), // 🆕 追加
+      curve: Curves.easeInOut, // 🆕 追加
       width: width,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(

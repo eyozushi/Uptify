@@ -23,20 +23,23 @@ class AlbumDetailScreen extends StatefulWidget {
   final String? albumId;           // 🆕 追加
   final bool isSingleAlbum;        // 🆕 追加
 
-  const AlbumDetailScreen({
-    super.key,
-    required this.albumImagePath,
-    required this.idealSelf,
-    required this.artistName,
-    required this.tasks,
-    this.imageBytes,
-    this.onPlayPressed,
-    this.onPlayTaskPressed,
-    this.onClose,
-    this.onNavigateToSettings,
-    this.albumId,                  // 🆕 追加
-    this.isSingleAlbum = false,    // 🆕 追加
-  });
+  final Color? preExtractedColor; // 🆕 追加
+
+const AlbumDetailScreen({
+  super.key,
+  required this.albumImagePath,
+  required this.idealSelf,
+  required this.artistName,
+  required this.tasks,
+  this.imageBytes,
+  this.onPlayPressed,
+  this.onPlayTaskPressed,
+  this.onClose,
+  this.onNavigateToSettings,
+  this.albumId,
+  this.isSingleAlbum = false,
+  this.preExtractedColor, // 🆕 追加
+});
 
   @override
   State<AlbumDetailScreen> createState() => _AlbumDetailScreenState();
@@ -46,9 +49,9 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
   File? _albumImage;
 
 
-  // 🆕 追加：背景色用のフィールド
-  Color _dominantColor = const Color(0xFF2D1B69);
-  Color _accentColor = const Color(0xFF1A1A2E);
+  // 🔧 修正：デフォルト色を黒に変更
+Color _dominantColor = Colors.black; // 変更前: const Color(0xFF2D1B69)
+Color _accentColor = Colors.black;   // 変更前: const Color(0xFF1A1A2E)
   bool _isExtractingColors = false;
 
   // 🆕 追加：今日の完了タスク判定用
@@ -63,9 +66,17 @@ void initState() {
     _albumImage = File(widget.albumImagePath);
   }
   
+  // 🔧 修正：事前抽出色があれば使用
+  if (widget.preExtractedColor != null) {
+    _dominantColor = widget.preExtractedColor!;
+    _isExtractingColors = false;
+  }
+  
   WidgetsBinding.instance.addPostFrameCallback((_) {
-    _extractColorsFromImage();
-    _loadTodayCompletions(); // 🆕 追加
+    if (widget.preExtractedColor == null) { // 🔧 修正：事前抽出がない場合のみ実行
+      _extractColorsFromImage();
+    }
+    _loadTodayCompletions();
   });
 }
 
@@ -328,7 +339,9 @@ Future<void> _extractColorsFromImage() async {
 Widget build(BuildContext context) {
   return Container(
     color: Colors.black,
-    child: Container(
+    child: AnimatedContainer( // 🔧 変更：Container → AnimatedContainer
+      duration: const Duration(milliseconds: 800), // 🆕 追加
+      curve: Curves.easeInOut, // 🆕 追加
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
@@ -496,11 +509,13 @@ Widget build(BuildContext context) {
       child: Row(
         children: [
           Expanded(
+            flex: 1,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  task.title.isEmpty ? 'Task ${index + 1}' : task.title,
+                // 🔧 修正：Text → AutoScrollText
+                AutoScrollText(
+                  text: task.title.isEmpty ? 'Task ${index + 1}' : task.title,
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 14,
@@ -508,14 +523,14 @@ Widget build(BuildContext context) {
                     fontFamily: 'Hiragino Sans',
                     letterSpacing: -0.5
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
           ),
 
-          // 🔧 修正：チェックマークを左に移動、黒く太く
+          const SizedBox(width: 12),
+
+          // チェックマーク
           if (isCompletedToday) ...[
             Container(
               width: 20,
@@ -531,7 +546,7 @@ Widget build(BuildContext context) {
                 weight: 900,
               ),
             ),
-            const SizedBox(width: 20), // 🔧 修正：8 → 12
+            const SizedBox(width: 20),
           ],
 
           Text(
@@ -758,6 +773,170 @@ Future<void> _saveLyricNotes(String taskId, List<LyricNoteItem> notes) async {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// 🆕 新規追加：自動スクロールテキストウィジェット
+class AutoScrollText extends StatefulWidget {
+  final String text;
+  final TextStyle style;
+  final VoidCallback? onTap;
+  
+  const AutoScrollText({
+    super.key,
+    required this.text,
+    required this.style,
+    this.onTap,
+  });
+
+  @override
+  State<AutoScrollText> createState() => _AutoScrollTextState();
+}
+
+class _AutoScrollTextState extends State<AutoScrollText> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  bool _isOverflowing = false;
+  double _textWidth = 0;
+  double _containerWidth = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(seconds: 10),
+      vsync: this,
+    );
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _calculateTextWidth();
+    });
+  }
+
+  @override
+  void didUpdateWidget(AutoScrollText oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.text != widget.text) {
+      _controller.reset();
+      setState(() {
+        _isOverflowing = false;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _calculateTextWidth();
+      });
+    }
+  }
+
+  void _calculateTextWidth() {
+    final textPainter = TextPainter(
+      text: TextSpan(text: widget.text, style: widget.style),
+      maxLines: 1,
+      textDirection: TextDirection.ltr,
+    )..layout();
+
+    setState(() {
+      _textWidth = textPainter.width;
+    });
+  }
+
+  void _checkOverflow(double containerWidth) {
+    _containerWidth = containerWidth;
+    final shouldOverflow = _textWidth > containerWidth;
+
+    if (shouldOverflow != _isOverflowing) {
+      setState(() {
+        _isOverflowing = shouldOverflow;
+      });
+
+      if (_isOverflowing) {
+        Future.delayed(const Duration(seconds: 2), () {
+          if (mounted) {
+            _controller.repeat();
+          }
+        });
+      } else {
+        _controller.stop();
+        _controller.reset();
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: widget.onTap,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _checkOverflow(constraints.maxWidth);
+          });
+
+          return SizedBox(
+            width: constraints.maxWidth,
+            height: widget.style.fontSize != null 
+                ? widget.style.fontSize! * 1.5
+                : 21.0,
+            child: _isOverflowing
+                ? ClipRect(
+                    child: OverflowBox(
+                      alignment: Alignment.centerLeft,
+                      maxWidth: double.infinity,
+                      child: AnimatedBuilder(
+                        animation: _controller,
+                        builder: (context, child) {
+                          final offset = _controller.value * (_textWidth + 40);
+                          return Transform.translate(
+                            offset: Offset(-offset, 0),
+                            child: SizedBox(
+                              width: _textWidth * 2 + 40,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  SizedBox(
+                                    width: _textWidth,
+                                    child: Text(
+                                      widget.text,
+                                      style: widget.style,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.visible,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 40),
+                                  SizedBox(
+                                    width: _textWidth,
+                                    child: Text(
+                                      widget.text,
+                                      style: widget.style,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.visible,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  )
+                : Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      widget.text,
+                      style: widget.style,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+          );
+        },
       ),
     );
   }

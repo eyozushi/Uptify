@@ -393,9 +393,12 @@ Widget build(BuildContext context) {
           _buildHeader(),
           
           Expanded(
-            child: SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              child: Padding(
+  child: SingleChildScrollView(
+    physics: const BouncingScrollPhysics(),
+    padding: EdgeInsets.only(
+      bottom: MediaQuery.of(context).viewInsets.bottom, // 🆕 追加：キーボード高さ分の余白
+    ),
+    child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -847,6 +850,7 @@ Widget _buildSimpleTaskField({
       const SizedBox(height: 8),
       TextField(
         controller: controller,
+        scrollPadding: const EdgeInsets.only(bottom: 100),
         style: const TextStyle(
           color: Colors.white,
           fontSize: 14,
@@ -950,6 +954,7 @@ Widget _buildSimpleTaskUrlField({
       const SizedBox(height: 8),
       TextField(
         controller: controller,
+        scrollPadding: const EdgeInsets.only(bottom: 100),
         style: const TextStyle(
           color: Colors.white,
           fontSize: 14,
@@ -1085,6 +1090,7 @@ Widget _buildSimpleTimeSelection(int index) {
       const SizedBox(height: 8),
       TextField(
         controller: controller,
+        scrollPadding: const EdgeInsets.only(bottom: 100),
         maxLines: maxLines,
         style: const TextStyle(
           color: Colors.white,

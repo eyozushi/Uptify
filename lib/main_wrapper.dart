@@ -1039,21 +1039,144 @@ void _hideFullPlayer() {
   }
 }
 
-  void _showAlbumDetail() {
-    setState(() {
-      _currentSingleAlbum = null;
-      _isAlbumDetailVisible = true;
-    });
-  }
-
-  void _showSingleAlbumDetail(SingleAlbum album) {
-    setState(() {
-      _currentSingleAlbum = album;
-      _isAlbumDetailVisible = true;
-    });
+/// 🆕 新規追加：アルバム画像から色を事前抽出
+Future<Color> _extractColorFromAlbum({
+  Uint8List? imageBytes,
+  String? imagePath,
+}) async {
+  try {
+    ImageProvider? imageProvider;
     
-    print('🎵 アルバム詳細表示: ${album.albumName} (表示用), 再生中: ${_playingSingleAlbum?.albumName}');
+    if (imageBytes != null) {
+      imageProvider = MemoryImage(imageBytes);
+    } else if (imagePath != null && imagePath.isNotEmpty && File(imagePath).existsSync()) {
+      imageProvider = FileImage(File(imagePath));
+    }
+    
+    if (imageProvider == null) {
+      return Colors.black;
+    }
+    
+    final PaletteGenerator paletteGenerator = await PaletteGenerator.fromImageProvider(
+      imageProvider,
+      size: const Size(200, 200),
+      maximumColorCount: 16,
+    );
+    
+    double getSaturation(Color color) {
+      final r = color.red / 255.0;
+      final g = color.green / 255.0;
+      final b = color.blue / 255.0;
+      
+      final max = [r, g, b].reduce((a, b) => a > b ? a : b);
+      final min = [r, g, b].reduce((a, b) => a < b ? a : b);
+      
+      if (max == 0) return 0;
+      return (max - min) / max;
+    }
+    
+    double scoreColor(PaletteColor paletteColor) {
+      final color = paletteColor.color;
+      final population = paletteColor.population;
+      final saturation = getSaturation(color);
+      final luminance = color.computeLuminance();
+      
+      double score = 0;
+      
+      if (population < 100) {
+        score -= 500;
+      } else if (population < 500) {
+        score -= 100;
+      } else if (population > 2000) {
+        score += 150;
+      } else {
+        score += 50;
+      }
+      
+      if (saturation > 0.4) {
+        score += 300;
+      } else if (saturation > 0.25) {
+        score += 150;
+      } else if (saturation < 0.15) {
+        score -= 400;
+      }
+      
+      if (luminance < 0.1) {
+        score -= 200;
+      } else if (luminance > 0.85) {
+        score -= 300;
+      } else if (luminance >= 0.2 && luminance <= 0.6) {
+        score += 100;
+      }
+      
+      if (saturation > 0.3 && population > 1000) {
+        score += 200;
+      }
+      
+      final hue = HSLColor.fromColor(color).hue;
+      if ((hue >= 0 && hue <= 30) ||
+          (hue >= 180 && hue <= 240) ||
+          (hue >= 270 && hue <= 330)) {
+        score += 50;
+      }
+      
+      return score;
+    }
+    
+    final List<PaletteColor> allColors = [
+      if (paletteGenerator.vibrantColor != null) paletteGenerator.vibrantColor!,
+      if (paletteGenerator.lightVibrantColor != null) paletteGenerator.lightVibrantColor!,
+      if (paletteGenerator.darkVibrantColor != null) paletteGenerator.darkVibrantColor!,
+      if (paletteGenerator.mutedColor != null) paletteGenerator.mutedColor!,
+      if (paletteGenerator.lightMutedColor != null) paletteGenerator.lightMutedColor!,
+      if (paletteGenerator.darkMutedColor != null) paletteGenerator.darkMutedColor!,
+      if (paletteGenerator.dominantColor != null) paletteGenerator.dominantColor!,
+    ];
+    
+    if (allColors.isEmpty) {
+      return Colors.black;
+    }
+    
+    PaletteColor bestColor = allColors[0];
+    double bestScore = scoreColor(bestColor);
+    
+    for (final paletteColor in allColors) {
+      final score = scoreColor(paletteColor);
+      if (score > bestScore) {
+        bestScore = score;
+        bestColor = paletteColor;
+      }
+    }
+    
+    return bestColor.color;
+  } catch (e) {
+    print('❌ 色抽出エラー: $e');
+    return Colors.black;
   }
+}
+
+  void _showAlbumDetail() async { // async追加
+  // 🆕 追加：色抽出完了まで待機（HomeScreenで実行済み）
+  await Future.delayed(const Duration(milliseconds: 100));
+  
+  setState(() {
+    _currentSingleAlbum = null;
+    _isAlbumDetailVisible = true;
+  });
+}
+
+  // 🔧 修正：遷移前に少し待機
+void _showSingleAlbumDetail(SingleAlbum album) async { // async追加
+  // 🆕 追加：色抽出完了まで待機（HomeScreenで実行済み）
+  await Future.delayed(const Duration(milliseconds: 100));
+  
+  setState(() {
+    _currentSingleAlbum = album;
+    _isAlbumDetailVisible = true;
+  });
+  
+  print('🎵 アルバム詳細表示: ${album.albumName} (表示用), 再生中: ${_playingSingleAlbum?.albumName}');
+}
 
   void _hideAlbumDetail() {
     setState(() {
@@ -1963,44 +2086,50 @@ Widget _buildMainContent() {
       },
     );
   } else {
-    return AlbumDetailScreen(
-      albumImagePath: _currentAlbumImagePath,
-      idealSelf: _currentIdealSelf,
-      artistName: _currentArtistName,
-      tasks: _currentTasks,
+  // 🔧 修正：色を事前抽出して渡す
+  return FutureBuilder<Color>(
+    future: _extractColorFromAlbum(
       imageBytes: _imageBytes,
-      albumId: null,                  // 🔧 追加
-      isSingleAlbum: false,           // 🔧 追加
-      onPlayPressed: () {
-        // 🔧 修正：PlayerScreenを開く（アルバム詳細は非表示）
-        setState(() {
-          _isPlayerScreenVisible = true;
-          // _isAlbumDetailVisible はtrueのまま（背景に残す）
-        });
-        _showFullPlayer();
-      },
-      onPlayTaskPressed: (taskIndex) {
-        print('🎵 ライフドリームアルバム タスク$taskIndex をタップ（理想像考慮で${taskIndex + 1}に変換）');
-        
-        // 🔧 修正：PlayerScreenを開く（アルバム詳細は非表示）
-        setState(() {
-          _isPlayerScreenVisible = true;
-          // _isAlbumDetailVisible はtrueのまま（背景に残す）
-        });
-        _showFullPlayerWithTask(taskIndex);
-      },
-      onClose: _hideAlbumDetail,
-      onNavigateToSettings: () {
-        setState(() {
-          _isAlbumDetailVisible = false;
-          _currentSingleAlbum = null;
-          _isSettingsVisible = true;
-        });
-        
-        print('📝 ライフドリームアルバム設定画面を表示');
-      },
-    );
-  }
+      imagePath: _currentAlbumImagePath,
+    ),
+    builder: (context, colorSnapshot) {
+      return AlbumDetailScreen(
+        albumImagePath: _currentAlbumImagePath,
+        idealSelf: _currentIdealSelf,
+        artistName: _currentArtistName,
+        tasks: _currentTasks,
+        imageBytes: _imageBytes,
+        albumId: null,
+        isSingleAlbum: false,
+        preExtractedColor: colorSnapshot.data, // 🆕 追加
+        onPlayPressed: () {
+          setState(() {
+            _isPlayerScreenVisible = true;
+          });
+          _showFullPlayer();
+        },
+        onPlayTaskPressed: (taskIndex) {
+          print('🎵 ライフドリームアルバム タスク$taskIndex をタップ（理想像考慮で${taskIndex + 1}に変換）');
+          
+          setState(() {
+            _isPlayerScreenVisible = true;
+          });
+          _showFullPlayerWithTask(taskIndex);
+        },
+        onClose: _hideAlbumDetail,
+        onNavigateToSettings: () {
+          setState(() {
+            _isAlbumDetailVisible = false;
+            _currentSingleAlbum = null;
+            _isSettingsVisible = true;
+          });
+          
+          print('📝 ライフドリームアルバム設定画面を表示');
+        },
+      );
+    },
+  );
+}
 }
 
 // 【既存メソッドの修正】

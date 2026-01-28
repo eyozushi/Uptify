@@ -32,18 +32,29 @@ class LyricNotesWidget extends StatefulWidget {
 class _LyricNotesWidgetState extends State<LyricNotesWidget> {
   // 🆕 追加: 最新のノートを保持
   late List<LyricNoteItem> _currentNotes;
+
+  Color? _cachedBackgroundColor;
   
   @override
-  void initState() {
-    super.initState();
-    _currentNotes = widget.task.lyricNotes ?? [];
-  }
+void initState() {
+  super.initState();
+  _currentNotes = widget.task.lyricNotes ?? [];
+  
+  // 🆕 追加: 初期背景色を計算
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (mounted) {
+      setState(() {
+        _cachedBackgroundColor = _getBrighterColor(widget.albumColor);
+      });
+    }
+  });
+}
   
   @override
 void didUpdateWidget(LyricNotesWidget oldWidget) {
   super.didUpdateWidget(oldWidget);
   
-  // 🔧 修正: タスクIDが変わった場合も更新
+  // タスクIDが変わった場合も更新
   if (oldWidget.task.id != widget.task.id) {
     print('🔄 LyricNotesWidget: タスク変更検知');
     print('  旧タスク: ${oldWidget.task.title} (ID: ${oldWidget.task.id})');
@@ -52,9 +63,10 @@ void didUpdateWidget(LyricNotesWidget oldWidget) {
     
     setState(() {
       _currentNotes = widget.task.lyricNotes ?? [];
+      _cachedBackgroundColor = _getBrighterColor(widget.albumColor); // 🆕 追加
     });
   }
-  // 🔧 修正: 同じタスクでもメモが更新された場合
+  // 同じタスクでもメモが更新された場合
   else if (widget.task.lyricNotes != null && 
            widget.task.lyricNotes != oldWidget.task.lyricNotes) {
     print('🔄 LyricNotesWidget: 同じタスクのメモ更新検知');
@@ -63,6 +75,13 @@ void didUpdateWidget(LyricNotesWidget oldWidget) {
     
     setState(() {
       _currentNotes = widget.task.lyricNotes!;
+    });
+  }
+  
+  // 🆕 追加: アルバム色が変わった場合
+  if (oldWidget.albumColor != widget.albumColor) {
+    setState(() {
+      _cachedBackgroundColor = _getBrighterColor(widget.albumColor);
     });
   }
 }
@@ -179,15 +198,16 @@ void _openEditor() {
   }
   
   @override
-  Widget build(BuildContext context) {
-    final backgroundColor = _getBrighterColor(widget.albumColor);
+Widget build(BuildContext context) {
+  // 🔧 修正: キャッシュがあればそれを使用、なければ黒
+  final backgroundColor = _cachedBackgroundColor ?? Colors.black;
 
-    return LyricNotesPreview(
-      notes: _currentNotes,
-      width: widget.albumWidth,
-      backgroundColor: backgroundColor,
-      onTap: _toggleExpanded,
-      onEdit: _openEditor,
-    );
-  }
+  return LyricNotesPreview(
+    notes: _currentNotes,
+    width: widget.albumWidth,
+    backgroundColor: backgroundColor,
+    onTap: _toggleExpanded,
+    onEdit: _openEditor,
+  );
+}
 }

@@ -199,9 +199,9 @@ double _lastProgressValue = 0.0;
   return _isScrollAtTop;
 }
   
-  // 🆕 追加：グラデーション用の色
-  Color _dominantColor = const Color(0xFF2D1B69);
-  Color _accentColor = const Color(0xFF1A1A2E);
+  // 🔧 修正：デフォルト色を黒に変更
+Color _dominantColor = Colors.black;
+Color _accentColor = Colors.black;
   bool _isExtractingColors = false;
 
 
@@ -1371,25 +1371,27 @@ Widget build(BuildContext context) {
       }
       return false;
     },
-    child: Container(
-      height: MediaQuery.of(context).size.height,
-      width: MediaQuery.of(context).size.width,
-      decoration: BoxDecoration(
-  gradient: LinearGradient(
-    begin: Alignment.topCenter,
-    end: Alignment.bottomCenter,
-    colors: [
-      Color.lerp(_dominantColor, Colors.black, 0.4)!,  // 🔧 0.3 → 0.2 に変更
-      Color.lerp(_dominantColor, Colors.black, 0.5)!, // 🔧 0.5 → 0.35 に変更
-      Color.lerp(_dominantColor, Colors.black, 0.7)!,  // 🔧 Colors.black → 0.5 に変更
-    ],
-    stops: const [0.0, 0.5, 1.0],  // 🔧 [0.0, 0.6, 1.0] → [0.0, 0.5, 1.0] に変更
+    child: AnimatedContainer( // 🔧 変更：Container → AnimatedContainer
+  duration: const Duration(milliseconds: 800), // 🆕 追加
+  curve: Curves.easeInOut, // 🆕 追加
+  height: MediaQuery.of(context).size.height,
+  width: MediaQuery.of(context).size.width,
+  decoration: BoxDecoration(
+    gradient: LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [
+        Color.lerp(_dominantColor, Colors.black, 0.4)!,
+        Color.lerp(_dominantColor, Colors.black, 0.5)!,
+        Color.lerp(_dominantColor, Colors.black, 0.7)!,
+      ],
+      stops: const [0.0, 0.5, 1.0],
+    ),
+    borderRadius: const BorderRadius.only(
+      topLeft: Radius.circular(16),
+      topRight: Radius.circular(16),
+    ),
   ),
-  borderRadius: const BorderRadius.only(
-    topLeft: Radius.circular(16),
-    topRight: Radius.circular(16),
-  ),
-),
       child: Column(
         children: [
           SizedBox(height: MediaQuery.of(context).padding.top + 10),

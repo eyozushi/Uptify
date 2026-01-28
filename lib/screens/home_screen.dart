@@ -12,6 +12,7 @@ import '../services/data_service.dart';
 import '../services/habit_breaker_service.dart';
 import '../services/task_completion_service.dart';
 import 'package:auto_size_text/auto_size_text.dart';
+import 'package:palette_generator/palette_generator.dart'; // 🆕 追加
 
 class HomeScreen extends StatefulWidget {
   final VoidCallback? onDataUpdated;
@@ -389,17 +390,32 @@ void didUpdateWidget(covariant HomeScreen oldWidget) {
     }
   }
 
-  void _navigateToAlbumDetail() {
-    if (widget.onNavigateToAlbumDetail != null) {
-      widget.onNavigateToAlbumDetail!();
-    }
+  void _navigateToAlbumDetail() async { // async追加
+  if (widget.onNavigateToAlbumDetail != null) {
+    // 🆕 追加：色を事前抽出
+    final extractedColor = await _extractColorFromAlbum(
+      imageBytes: widget.imageBytes ?? _imageBytes,
+      imagePath: _albumImage,
+    );
+    
+    print('🎨 抽出完了: $extractedColor');
+    
+    widget.onNavigateToAlbumDetail!();
   }
+}
 
-  void _navigateToSingleAlbumDetail(SingleAlbum album) {
-    if (widget.onNavigateToSingleAlbumDetail != null) {
-      widget.onNavigateToSingleAlbumDetail!(album);
-    }
+  void _navigateToSingleAlbumDetail(SingleAlbum album) async { // async追加
+  if (widget.onNavigateToSingleAlbumDetail != null) {
+    // 🆕 追加：色を事前抽出
+    final extractedColor = await _extractColorFromAlbum(
+      imageBytes: album.albumCoverImage,
+    );
+    
+    print('🎨 抽出完了: $extractedColor');
+    
+    widget.onNavigateToSingleAlbumDetail!(album);
   }
+}
 
   void _navigateToAppSettings() async {  // 🔧 asyncを追加
   print('⚙️ 設定画面に移動します');
@@ -620,6 +636,122 @@ void didUpdateWidget(covariant HomeScreen oldWidget) {
       ),
     );
   }
+
+  /// 🆕 新規追加：アルバム画像から色を事前抽出
+Future<Color> _extractColorFromAlbum({
+  Uint8List? imageBytes,
+  String? imagePath,
+}) async {
+  try {
+    ImageProvider? imageProvider;
+    
+    if (imageBytes != null) {
+      imageProvider = MemoryImage(imageBytes);
+    } else if (imagePath != null && imagePath.isNotEmpty && File(imagePath).existsSync()) {
+      imageProvider = FileImage(File(imagePath));
+    }
+    
+    if (imageProvider == null) {
+      return Colors.black;
+    }
+    
+    final PaletteGenerator paletteGenerator = await PaletteGenerator.fromImageProvider(
+      imageProvider,
+      size: const Size(200, 200),
+      maximumColorCount: 16,
+    );
+    
+    double getSaturation(Color color) {
+      final r = color.red / 255.0;
+      final g = color.green / 255.0;
+      final b = color.blue / 255.0;
+      
+      final max = [r, g, b].reduce((a, b) => a > b ? a : b);
+      final min = [r, g, b].reduce((a, b) => a < b ? a : b);
+      
+      if (max == 0) return 0;
+      return (max - min) / max;
+    }
+    
+    double scoreColor(PaletteColor paletteColor) {
+      final color = paletteColor.color;
+      final population = paletteColor.population;
+      final saturation = getSaturation(color);
+      final luminance = color.computeLuminance();
+      
+      double score = 0;
+      
+      if (population < 100) {
+        score -= 500;
+      } else if (population < 500) {
+        score -= 100;
+      } else if (population > 2000) {
+        score += 150;
+      } else {
+        score += 50;
+      }
+      
+      if (saturation > 0.4) {
+        score += 300;
+      } else if (saturation > 0.25) {
+        score += 150;
+      } else if (saturation < 0.15) {
+        score -= 400;
+      }
+      
+      if (luminance < 0.1) {
+        score -= 200;
+      } else if (luminance > 0.85) {
+        score -= 300;
+      } else if (luminance >= 0.2 && luminance <= 0.6) {
+        score += 100;
+      }
+      
+      if (saturation > 0.3 && population > 1000) {
+        score += 200;
+      }
+      
+      final hue = HSLColor.fromColor(color).hue;
+      if ((hue >= 0 && hue <= 30) ||
+          (hue >= 180 && hue <= 240) ||
+          (hue >= 270 && hue <= 330)) {
+        score += 50;
+      }
+      
+      return score;
+    }
+    
+    final List<PaletteColor> allColors = [
+      if (paletteGenerator.vibrantColor != null) paletteGenerator.vibrantColor!,
+      if (paletteGenerator.lightVibrantColor != null) paletteGenerator.lightVibrantColor!,
+      if (paletteGenerator.darkVibrantColor != null) paletteGenerator.darkVibrantColor!,
+      if (paletteGenerator.mutedColor != null) paletteGenerator.mutedColor!,
+      if (paletteGenerator.lightMutedColor != null) paletteGenerator.lightMutedColor!,
+      if (paletteGenerator.darkMutedColor != null) paletteGenerator.darkMutedColor!,
+      if (paletteGenerator.dominantColor != null) paletteGenerator.dominantColor!,
+    ];
+    
+    if (allColors.isEmpty) {
+      return Colors.black;
+    }
+    
+    PaletteColor bestColor = allColors[0];
+    double bestScore = scoreColor(bestColor);
+    
+    for (final paletteColor in allColors) {
+      final score = scoreColor(paletteColor);
+      if (score > bestScore) {
+        bestScore = score;
+        bestColor = paletteColor;
+      }
+    }
+    
+    return bestColor.color;
+  } catch (e) {
+    print('❌ 色抽出エラー: $e');
+    return Colors.black;
+  }
+}
 
   @override
   Widget build(BuildContext context) {
