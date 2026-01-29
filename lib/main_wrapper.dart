@@ -298,6 +298,8 @@ _playerDragAnimation = Tween<double>(
 ).animate(_playerDragController);
 }
 
+
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
@@ -1241,68 +1243,76 @@ Widget _buildSingleAlbumSettingsScreen(SingleAlbum album) {
       });
     },
     onSave: (result) async {
-      try {
-        final updatedAlbum = SingleAlbum(
-          id: album.id,
-          albumName: result['idealSelf'] ?? album.albumName,
-          albumCoverImage: result['hasImageChanged'] == true 
-              ? result['imageBytes'] 
-              : album.albumCoverImage,
-          tasks: List<TaskItem>.from(result['tasks'] ?? album.tasks),
-          createdAt: album.createdAt,
-        );
-        
-        await _dataService.saveSingleAlbum(updatedAlbum);
-        
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Row(
-                children: [
-                  const Icon(Icons.check_circle, color: Colors.white),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      '\"${updatedAlbum.albumName}\"を更新しました！',
-                      style: const TextStyle(fontFamily: 'Hiragino Sans'),
-                    ),
-                  ),
-                ],
+  try {
+    final updatedAlbum = SingleAlbum(
+      id: album.id,
+      albumName: result['idealSelf'] ?? album.albumName,
+      albumCoverImage: result['hasImageChanged'] == true 
+          ? result['imageBytes'] 
+          : album.albumCoverImage,
+      tasks: List<TaskItem>.from(result['tasks'] ?? album.tasks),
+      createdAt: album.createdAt,
+    );
+    
+    await _dataService.saveSingleAlbum(updatedAlbum);
+    
+    // 🔧 修正：色を取得
+    final backgroundColor = result['backgroundColor'] as Color?;
+    if (backgroundColor != null) {
+      _currentAlbumColor = backgroundColor;
+    }
+    
+    // 🆕 追加：再生中のアルバムなら即座に反映
+    if (_isPlayingSingleAlbum && _playingSingleAlbum?.id == album.id) {
+      _playingSingleAlbum = updatedAlbum;
+      _playingTasks = List.from(updatedAlbum.tasks);
+      
+      // 🆕 追加：PlayerScreenに即座反映させるため強制再描画
+      setState(() {});
+      
+      // 🆕 追加：PlayerScreenのキーを使って強制リビルド
+      if (_playerScreenKey.currentState != null) {
+        (_playerScreenKey.currentState as dynamic).forceUpdate?.call();
+      }
+    }
+    
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle, color: Colors.white),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  '\"${updatedAlbum.albumName}\"を更新しました！',
+                  style: const TextStyle(fontFamily: 'Hiragino Sans'),
+                ),
               ),
-              backgroundColor: const Color(0xFF1DB954),
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              duration: const Duration(seconds: 3),
-            ),
-          );
-        }
-        
-        // 🔧 修正：保存後の遷移処理を改善
-        setState(() {
-          _isSettingsVisible = false;
-          
-          // 再生中のアルバムを更新していた場合
-          if (_isPlayingSingleAlbum && _playingSingleAlbum?.id == album.id) {
-            _playingSingleAlbum = updatedAlbum;
-            _playingTasks = List.from(updatedAlbum.tasks);
-            
-            // 🔧 修正：アルバム詳細が開かれていた場合の判定
-            if (!_isAlbumDetailVisible) {
-              _isPlayerScreenVisible = true;  // PlayerScreenに戻る
-            } else {
-              _currentSingleAlbum = updatedAlbum;  // アルバム情報を更新
-              _isAlbumDetailVisible = true;  // アルバム詳細に戻る
-            }
-          } else {
-            // 🔧 修正：アルバム詳細を更新して戻る
-            _currentSingleAlbum = updatedAlbum;
-            _isAlbumDetailVisible = true;
-          }
-        });
-        
-      } catch (e) {
+            ],
+          ),
+          backgroundColor: const Color(0xFF1DB954),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+    
+    setState(() {
+      _isSettingsVisible = false;
+      _currentSingleAlbum = updatedAlbum; // 🔧 修正：必ず更新
+      
+      if (!_isAlbumDetailVisible) {
+        _isPlayerScreenVisible = true;
+      } else {
+        _isAlbumDetailVisible = true;
+      }
+    });
+    
+  } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -1436,7 +1446,7 @@ Future<void> _deleteSingleAlbum(SingleAlbum album) async {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  '\"${album.albumName}\"をリリースしました！',
+                  '"${album.albumName}" is out now!',
                   style: const TextStyle(fontFamily: 'Hiragino Sans'),
                 ),
               ),
@@ -1816,21 +1826,25 @@ Future<void> _recordTaskCompletionInApp(
     );
 
     if (wasSuccessful) {
-      setState(() {
-        _todayTaskCompletions[task.id] = (_todayTaskCompletions[task.id] ?? 0) + 1;
-      });
-      
-      // SharedPreferences更新
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        final currentCount = prefs.getInt('new_task_completion_count') ?? 0;
-        await prefs.setInt('new_task_completion_count', currentCount + 1);
-        await prefs.setInt('last_task_completion_timestamp', DateTime.now().millisecondsSinceEpoch);
-        print('新規タスク完了を通知: ${currentCount + 1}個目');
-      } catch (e) {
-        print('新規タスク完了通知エラー: $e');
-      }
-    }
+  setState(() {
+    _todayTaskCompletions[task.id] = (_todayTaskCompletions[task.id] ?? 0) + 1;
+  });
+  
+  // SharedPreferences更新
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final currentCount = prefs.getInt('new_task_completion_count') ?? 0;
+    await prefs.setInt('new_task_completion_count', currentCount + 1);
+    await prefs.setInt('last_task_completion_timestamp', DateTime.now().millisecondsSinceEpoch);
+    
+    // 🆕 追加：HomeScreen更新トリガーを設定
+    await prefs.setInt('home_screen_refresh_trigger', DateTime.now().millisecondsSinceEpoch);
+    
+    print('新規タスク完了を通知: ${currentCount + 1}個目');
+  } catch (e) {
+    print('新規タスク完了通知エラー: $e');
+  }
+}
 
     await _loadUserData();
 
@@ -1958,18 +1972,18 @@ Widget _buildMainContent() {
     children: [
       // ホーム画面
       _buildBlackScreen(
-        child: HomeScreen(
-          onDataUpdated: _onDataUpdated,
-          imageBytes: _imageBytes,
-          albumImagePath: _currentAlbumImagePath,
-          onNavigateToAlbumDetail: _showAlbumDetail,
-          onNavigateToSettings: _showSettings,
-          onNavigateToPlayer: _showFullPlayer,
-          onNavigateToIdealPage: _showFullPlayerWithIdealPage,
-          onNavigateToSingleAlbumDetail: _showSingleAlbumDetail,
-          onNavigateToArtist: _showArtistScreen,
-        ),
-      ),
+  child: HomeScreen(
+    onDataUpdated: _onDataUpdated,
+    imageBytes: _imageBytes,
+    albumImagePath: _currentAlbumImagePath,
+    onNavigateToAlbumDetail: _showAlbumDetail,
+    onNavigateToSettings: _showSettings,
+    onNavigateToPlayer: _showFullPlayer,
+    onNavigateToIdealPage: _showFullPlayerWithIdealPage,
+    onNavigateToSingleAlbumDetail: _showSingleAlbumDetail,
+    onNavigateToArtist: _showArtistScreen,
+  ),
+),
       
       // チャート画面
       _buildBlackScreen(
@@ -2173,27 +2187,40 @@ Widget _buildPlayerScreen() {
       onClose: _hideFullPlayer,
       onTaskCompleted: _onTaskCompletedFromPlayer,
       onCompletionCountsChanged: _onCompletionCountsChanged,
-      onNavigateToSettings: () {
-        if (_isPlayingSingleAlbum && _playingSingleAlbum != null) {
-          final albumToEdit = _playingSingleAlbum!;
-          
-          setState(() {
-            _isPlayerScreenVisible = false;
-            _currentSingleAlbum = albumToEdit;
-            _isSettingsVisible = true;
-          });
-          
-          print('📝 シングルアルバム設定画面を表示: ${albumToEdit.albumName}');
-        } else {
-          setState(() {
-            _isPlayerScreenVisible = false;
-            _currentSingleAlbum = null;
-            _isSettingsVisible = true;
-          });
-          
-          print('📝 ライフドリームアルバム設定画面を表示');
-        }
-      },
+      onNavigateToSettings: () async { // 🔧 修正：asyncを追加
+  if (_isPlayingSingleAlbum && _playingSingleAlbum != null) {
+    final albumToEdit = _playingSingleAlbum!;
+    
+    // 🔧 修正：色を事前抽出
+    final extractedColor = await _extractColorFromAlbum(
+      imageBytes: albumToEdit.albumCoverImage,
+    );
+    
+    setState(() {
+      _isPlayerScreenVisible = false;
+      _currentSingleAlbum = albumToEdit;
+      _isSettingsVisible = true;
+      _currentAlbumColor = extractedColor; // 🆕 追加：色を設定
+    });
+    
+    print('📝 シングルアルバム設定画面を表示: ${albumToEdit.albumName}');
+  } else {
+    // 🔧 修正：色を事前抽出
+    final extractedColor = await _extractColorFromAlbum(
+      imageBytes: _imageBytes,
+      imagePath: _currentAlbumImagePath,
+    );
+    
+    setState(() {
+      _isPlayerScreenVisible = false;
+      _currentSingleAlbum = null;
+      _isSettingsVisible = true;
+      _currentAlbumColor = extractedColor; // 🆕 追加：色を設定
+    });
+    
+    print('📝 ライフドリームアルバム設定画面を表示');
+  }
+},
       onNavigateToAlbumDetail: () {
         _hideFullPlayer();
         Future.delayed(const Duration(milliseconds: 100), () {
@@ -2468,33 +2495,47 @@ void _showCompletionResultDialog(bool allCompleted) {
         }
       });
     },
-    onSave: (result) {
-      setState(() {
-        _currentIdealSelf = result['idealSelf'] ?? _currentIdealSelf;
-        _currentArtistName = result['artistName'] ?? _currentArtistName;
-        _currentTasks = List<TaskItem>.from(result['tasks'] ?? _currentTasks);
-        
-        if (result['hasImageChanged'] == true) {
-          _imageBytes = result['imageBytes'];
-        }
-      });
-      
-      _onDataUpdated();
-      
-      // 🔧 修正：保存後の遷移処理
-      setState(() {
-        _isSettingsVisible = false;
-        
-        // PlayerScreenから開いた場合
-        if (!_isPlayingSingleAlbum && _playingTasks.isNotEmpty) {
-          _playingTasks = List.from(_currentTasks);  // タスクを更新
-          _isPlayerScreenVisible = true;  // PlayerScreenに戻る
-        } else {
-          // アルバム詳細から開いた場合
-          _isAlbumDetailVisible = true;  // アルバム詳細に戻る
-        }
-      });
-    },
+    onSave: (result) async {
+  // 色を取得
+  final backgroundColor = result['backgroundColor'] as Color?;
+  if (backgroundColor != null) {
+    _currentAlbumColor = backgroundColor;
+  }
+  
+  // データを即座に更新
+  _currentIdealSelf = result['idealSelf'] ?? _currentIdealSelf;
+  _currentArtistName = result['artistName'] ?? _currentArtistName;
+  _currentTasks = List<TaskItem>.from(result['tasks'] ?? _currentTasks);
+  
+  if (result['hasImageChanged'] == true) {
+    _imageBytes = result['imageBytes'];
+  }
+  
+  // 再生中なら即座に反映
+  if (!_isPlayingSingleAlbum && _playingTasks.isNotEmpty) {
+    _playingTasks = List.from(_currentTasks);
+  }
+  
+  // PlayerScreenに即座反映させるため強制再描画
+  setState(() {});
+  
+  // PlayerScreenのキーを使って強制リビルド
+  if (_playerScreenKey.currentState != null) {
+    (_playerScreenKey.currentState as dynamic).forceUpdate?.call();
+  }
+  
+  _onDataUpdated(); // 🔧 修正：awaitを削除（voidなので）
+  
+  setState(() {
+    _isSettingsVisible = false;
+    
+    if (!_isPlayingSingleAlbum && _playingTasks.isNotEmpty) {
+      _isPlayerScreenVisible = true;
+    } else {
+      _isAlbumDetailVisible = true;
+    }
+  });
+},
   );
 }
 

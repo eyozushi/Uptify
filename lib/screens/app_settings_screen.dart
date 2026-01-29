@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'dart:typed_data';
 import 'package:image_picker/image_picker.dart';
+import 'package:url_launcher/url_launcher.dart'; 
 import '../services/data_service.dart';
 import '../services/habit_breaker_service.dart';
 import '../models/notification_config.dart';
@@ -60,7 +61,7 @@ String? _timeValidationError;
   // UI状態
   bool _isLoading = true;
   bool _isSaving = false;
-  String _appVersion = 'v1.0.0';
+  String _appVersion = 'v1.2.0';
 
   @override
   void initState() {
@@ -463,160 +464,196 @@ Widget build(BuildContext context) {
 }
 
   Widget _buildProfileSection() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: kSectionBackgroundColor,
-        borderRadius: BorderRadius.circular(kSectionBorderRadius),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      // 🆕 追加：セクションヘッダー（枠の外）
+      Row(
         children: [
+          Container(
+            width: 4,
+            height: 20,
+            decoration: BoxDecoration(
+              color: kAccentColor,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 12),
           const Text(
             'Profile Settings',
             style: TextStyle(
               color: Colors.white,
               fontSize: 18,
-            letterSpacing: -0.2,
+              letterSpacing: -0.2,
               fontWeight: FontWeight.w600,
               fontFamily: kFontFamily,
             ),
           ),
-          const SizedBox(height: 20),
-          
-          // アイコン画像
-          Center(
-  child: GestureDetector(
-    onTap: _selectImageFromGallery,
-    child: Container(
-      width: 100,
-      height: 100,
-      decoration: const BoxDecoration(  // 🔧 枠線削除、constに変更
-        shape: BoxShape.circle,
-      ),
-      child: ClipOval(
-                  child: _artistImageBytes != null
-                      ? Image.memory(
-                          _artistImageBytes!,
-                          width: 100,
-                          height: 100,
-                          fit: BoxFit.cover,
-                        )
-                      : Container(
-                          decoration: const BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [
-                                Color(0xFF8B5CF6),
-                                Color(0xFF06B6D4),
-                              ],
-                            ),
-                          ),
-                          child: const Center(
-                            child: Icon(
-                              Icons.person,
-                              color: Colors.white,
-                              size: 50,
-                            ),
-                          ),
-                        ),
-                ),
-              ),
-            ),
-          ),
-          
-          const SizedBox(height: 12),
-          
-          Center(
-            child: TextButton.icon(
-              onPressed: _selectImageFromGallery,
-              icon: const Icon(
-                Icons.photo_library,
-                color: kAccentColor,
-                size: 18,
-              ),
-              label: const Text(
-                'Change Photo',
-                style: TextStyle(
-                  color: kAccentColor,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  fontFamily: kFontFamily,
-                ),
-              ),
-            ),
-          ),
-          
-          const SizedBox(height: 20),
-          
-          // アーティスト名
-          const Text(
-            'Artist Name',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              fontFamily: kFontFamily,
-            ),
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _artistNameController,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 16,
-              fontFamily: kFontFamily,
-            ),
-            decoration: InputDecoration(
-              hintText: 'Enter your name',
-              hintStyle: TextStyle(
-                color: Colors.white.withOpacity(0.3),
-                fontFamily: kFontFamily,
-              ),
-              filled: true,
-              fillColor: Colors.black.withOpacity(0.3),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide.none,
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide.none,
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(
-                  color: kAccentColor,
-                  width: 2,
-                ),
-              ),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 12,
-              ),
-            ),
-          ),
         ],
       ),
-    );
-  }
+      
+      const SizedBox(height: 16),
+      
+      // コンテンツ（既存の枠）
+      Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: kSectionBackgroundColor,
+          borderRadius: BorderRadius.circular(kSectionBorderRadius),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 🗑️ 削除：セクションタイトルを削除（上に移動したため）
+            
+            // アイコン画像
+            Center(
+              child: GestureDetector(
+                onTap: _selectImageFromGallery,
+                child: Container(
+                  width: 100,
+                  height: 100,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                  ),
+                  child: ClipOval(
+                    child: _artistImageBytes != null
+                        ? Image.memory(
+                            _artistImageBytes!,
+                            width: 100,
+                            height: 100,
+                            fit: BoxFit.cover,
+                          )
+                        : Container(
+                            decoration: const BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  Color(0xFF8B5CF6),
+                                  Color(0xFF06B6D4),
+                                ],
+                              ),
+                            ),
+                            child: const Center(
+                              child: Icon(
+                                Icons.person,
+                                color: Colors.white,
+                                size: 50,
+                              ),
+                            ),
+                          ),
+                  ),
+                ),
+              ),
+            ),
+            
+            const SizedBox(height: 12),
+            
+            Center(
+              child: TextButton.icon(
+                onPressed: _selectImageFromGallery,
+                icon: const Icon(
+                  Icons.photo_library,
+                  color: kAccentColor,
+                  size: 18,
+                ),
+                label: const Text(
+                  'Change Photo',
+                  style: TextStyle(
+                    color: kAccentColor,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    fontFamily: kFontFamily,
+                  ),
+                ),
+              ),
+            ),
+            
+            const SizedBox(height: 20),
+            
+            // アーティスト名
+            const Text(
+              'Artist Name',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                fontFamily: kFontFamily,
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _artistNameController,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontFamily: kFontFamily,
+              ),
+              decoration: InputDecoration(
+                hintText: 'Enter your name',
+                hintStyle: TextStyle(
+                  color: Colors.white.withOpacity(0.3),
+                  fontFamily: kFontFamily,
+                ),
+                filled: true,
+                fillColor: Colors.black.withOpacity(0.3),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide.none,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide.none,
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(
+                    color: kAccentColor,
+                    width: 2,
+                  ),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ],
+  );
+}
 
   Widget _buildUnifiedNotificationSection() {
   return Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      // セクションタイトル
-      const Text(
-        'Notifications',
-        style: TextStyle(
-          color: Colors.white,
-          fontSize: 18,
-          letterSpacing: -0.2,
-          fontWeight: FontWeight.w600,
-          fontFamily: kFontFamily,
-        ),
+      // 🔧 修正：縦棒を追加
+      Row(
+        children: [
+          Container(
+            width: 4,
+            height: 20,
+            decoration: BoxDecoration(
+              color: kAccentColor,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 12),
+          const Text(
+            'Notifications',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              letterSpacing: -0.2,
+              fontWeight: FontWeight.w600,
+              fontFamily: kFontFamily,
+            ),
+          ),
+        ],
       ),
       
       const SizedBox(height: 16),
@@ -1319,43 +1356,113 @@ Widget _buildDayButton({required String label, required int dayIndex}) {
     );
   }
 
+  /// 🆕 新規追加：App Storeを開く
+Future<void> _openAppStore() async {
+  const appStoreUrl = 'https://apps.apple.com/us/app/uptify-be-your-fan/id6756293416';
+  
+  final uri = Uri.parse(appStoreUrl);
+  
+  try {
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      if (mounted) {
+        _showMessage('Failed to open App Store', isSuccess: false);
+      }
+    }
+  } catch (e) {
+    print('❌ App Store起動エラー: $e');
+    if (mounted) {
+      _showMessage('Failed to open App Store', isSuccess: false);
+    }
+  }
+}
+
+
   Widget _buildVersionSection() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: kSectionBackgroundColor,
-        borderRadius: BorderRadius.circular(kSectionBorderRadius),
-      ),
-      child: Row(
-        children: [
-          const Icon(
-            Icons.info_outline,
-            color: Colors.white,
-            size: 24,
-          ),
-          const SizedBox(width: 16),
-          const Expanded(
-            child: Text(
-              'Version',
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      // バージョン情報カード
+      Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: kSectionBackgroundColor,
+          borderRadius: BorderRadius.circular(kSectionBorderRadius),
+        ),
+        child: Row(
+          children: [
+            const Icon(
+              Icons.info_outline,
+              color: Colors.white,
+              size: 24,
+            ),
+            const SizedBox(width: 16),
+            const Expanded(
+              child: Text(
+                'Version',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                  fontFamily: kFontFamily,
+                ),
+              ),
+            ),
+            Text(
+              _appVersion,
               style: TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
+                color: Colors.white.withOpacity(0.7),
+                fontSize: 14,
                 fontFamily: kFontFamily,
               ),
             ),
-          ),
-          Text(
-            _appVersion,
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.7),
-              fontSize: 14,
-              fontFamily: kFontFamily,
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
-    );
-  }
+      
+      const SizedBox(height: 12),
+      
+      // App Storeリンクボタン
+      GestureDetector(
+        onTap: _openAppStore,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: kSectionBackgroundColor,
+            borderRadius: BorderRadius.circular(kSectionBorderRadius),
+          ),
+          child: Row(
+            children: [
+              const Icon(
+                Icons.store,
+                color: kAccentColor,
+                size: 24,
+              ),
+              const SizedBox(width: 16),
+              const Expanded(
+                child: Text(
+                  'View in App Store',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    fontFamily: kFontFamily,
+                  ),
+                ),
+              ),
+              Icon(
+                Icons.open_in_new,
+                color: Colors.white.withOpacity(0.5),
+                size: 20,
+              ),
+            ],
+          ),
+        ),
+      ),
+    ],
+  ); // 🔧 この閉じカッコと return の確認
+}
 }

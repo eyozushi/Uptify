@@ -1,7 +1,7 @@
 name: Uptify
 description: Spotify風のタスク管理アプリ - 人生は音楽
 publish_to: 'none'
-version: 1.1.5+7
+version: 1.2.0+8
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -12,6 +12,10 @@ dependencies:
 
   flutter:
     sdk: flutter
+
+  http: ^1.1.0  # 🆕 追加
+  package_info_plus: ^5.0.0  # 🆕 追加（バージョン取得用）
+
 
   fl_chart: ^0.69.0  # 🆕 追加
 

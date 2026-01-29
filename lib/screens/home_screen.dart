@@ -3,14 +3,16 @@ import 'package:flutter/material.dart';
 import 'dart:io';
 import 'dart:typed_data';
 import 'app_settings_screen.dart';
-import '../widgets/record_gauge_widget.dart';
-import '../services/record_gauge_service.dart';
 import '../models/record_gauge_state.dart';
 import '../models/task_item.dart';
 import '../models/single_album.dart';
 import '../services/data_service.dart';
 import '../services/habit_breaker_service.dart';
 import '../services/task_completion_service.dart';
+import '../services/update_notification_service.dart';
+import '../services/record_gauge_service.dart';
+import '../widgets/update_banner.dart';
+import '../widgets/record_gauge_widget.dart';
 import 'package:auto_size_text/auto_size_text.dart';
 import 'package:palette_generator/palette_generator.dart'; // 🆕 追加
 
@@ -64,6 +66,10 @@ class _HomeScreenState extends State<HomeScreen> {
   RecordGaugeState? _cachedRecordState;
   bool _isUpdating = false;
 
+  // 🆕 追加：アップデート通知用
+UpdateNotification? _updateNotification;
+final UpdateNotificationService _updateNotificationService = UpdateNotificationService();
+
   @override
   void initState() {
     super.initState();
@@ -78,15 +84,17 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     
     _loadRecordStateAndCheckCompletion();
-    _loadConsecutiveDays();  // 🆕 追加
+    _loadConsecutiveDays();
+    _checkForUpdateNotification();
   }
 
   @override
 void didUpdateWidget(covariant HomeScreen oldWidget) {
   super.didUpdateWidget(oldWidget);
-  // 🔧 追加：画面が再表示されたらデータをリロード
+  // 画面が再表示されたらデータをリロード
   _checkAndRefreshIfNeeded();
-  _loadData(); // シングルアルバムリストも再読み込み
+  _loadData();
+  _loadConsecutiveDays(); // 🆕 追加：Task Streakも再読み込み
 }
 
   Future<void> _checkAndRefreshIfNeeded() async {
@@ -198,6 +206,47 @@ void didUpdateWidget(covariant HomeScreen oldWidget) {
       print('❌ 連続日数読み込みエラー: $e');
     }
   }
+
+  /// 🆕 新規追加：アップデート通知をチェック
+Future<void> _checkForUpdateNotification() async {
+  try {
+    final notification = await _updateNotificationService.checkForUpdate();
+    if (mounted && notification != null) {
+      setState(() {
+        _updateNotification = notification;
+      });
+      print('🔔 アップデート通知を表示: ${notification.title}');
+    }
+  } catch (e) {
+    print('❌ アップデート通知チェックエラー: $e');
+  }
+}
+
+/// 🆕 新規追加：通知を非表示にする
+void _dismissUpdateNotification() {
+  if (_updateNotification != null) {
+    _updateNotificationService.dismissNotification(_updateNotification!.id);
+    setState(() {
+      _updateNotification = null;
+    });
+    print('✅ アップデート通知を非表示');
+  }
+}
+
+  /// 🆕 新規追加：Task Streakを強制再読み込み
+Future<void> _refreshConsecutiveDays() async {
+  try {
+    final days = await _taskCompletionService.getConsecutiveDays();
+    if (mounted) {
+      setState(() {
+        _consecutiveDays = days;
+      });
+      print('✅ Task Streak更新: ${days}日連続');
+    }
+  } catch (e) {
+    print('❌ Task Streak更新エラー: $e');
+  }
+}
 
 
   // 🌅 新機能: 時間帯に応じた挨拶を取得
@@ -538,57 +587,66 @@ void didUpdateWidget(covariant HomeScreen oldWidget) {
     );
   }
 
-  /// 🆕 連続タスク実行記録セクションを構築
-  Widget _buildConsecutiveDaysSection() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
+  /// 🔧 修正：連続タスク実行記録セクションを構築
+Widget _buildConsecutiveDaysSection() {
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      // 🆕 追加：セクションヘッダー（統一スタイル）
+      const Align(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          'Task Streak',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 22,
+            fontWeight: FontWeight.w900,
+            fontFamily: 'Hiragino Sans',
+            letterSpacing: -1.0,
+          ),
+        ),
       ),
-      child: Column(
-        children: [
-          const Text(
-            'Task Streak',
-            style: TextStyle(
-              color: Colors.white70,
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              fontFamily: 'Hiragino Sans',
+      
+      const SizedBox(height: 20),
+      
+      // 日数表示カード
+      Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic,
+          children: [
+            Text(
+              '$_consecutiveDays',
+              style: const TextStyle(
+                color: Color(0xFF1DB954),
+                fontSize: 48,
+                fontWeight: FontWeight.w900,
+                fontFamily: 'Hiragino Sans',
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Text(
-                '$_consecutiveDays',
-                style: const TextStyle(
-                  color: Color(0xFF1DB954),
-                  fontSize: 48,
-                  fontWeight: FontWeight.w900,
-                  fontFamily: 'Hiragino Sans',
-                ),
+            const SizedBox(width: 8),
+            const Text(
+              'days',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 24,
+                fontWeight: FontWeight.w600,
+                fontFamily: 'Hiragino Sans',
               ),
-              const SizedBox(width: 8),
-              const Text(
-                'days',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 24,
-                  fontWeight: FontWeight.w600,
-                  fontFamily: 'Hiragino Sans',
-                ),
-              ),
-            ],
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
-    );
-  }
+    ],
+  );
+}
 
 
   Widget _buildSingleAlbumCover(SingleAlbum album, {double size = 60}) {
@@ -754,53 +812,60 @@ Future<Color> _extractColorFromAlbum({
 }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            Container(
-  height: 60,
-  child: Row(
-    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-    crossAxisAlignment: CrossAxisAlignment.center,  // 🔧 追加: 縦方向を中央揃え
-    children: [
-      Text(
-        _getGreeting(),
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 32,
-          fontWeight: FontWeight.w900,
-          fontFamily: 'Hiragino Sans',
-          letterSpacing: -1.0,
-        ),
-      ),
-      GestureDetector(  // 🔧 修正: 不要なRowを削除
-        behavior: HitTestBehavior.opaque,
-        onTap: () {
-          print('⚙️ 設定画面に移動します！');
-          _navigateToAppSettings();
-        },
-        child: Container(
-          padding: const EdgeInsets.all(8),
-          child: const Icon(
-            Icons.settings,
-            color: Colors.white,
-            size: 28,
-          ),
-        ),
-      ),
-    ],
-  ),
-),
-
-            const SizedBox(height: 40),
-
-            // 🆕 顔写真アイコンとアーティスト名
-            Row(
+Widget build(BuildContext context) {
+  return Scaffold(
+    backgroundColor: Colors.transparent,
+    body: SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        children: [
+          Container(
+            height: 60,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
+                Text(
+                  _getGreeting(),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 32,
+                    fontWeight: FontWeight.w900,
+                    fontFamily: 'Hiragino Sans',
+                    letterSpacing: -1.0,
+                  ),
+                ),
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    print('⚙️ 設定画面に移動します！');
+                    _navigateToAppSettings();
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    child: const Icon(
+                      Icons.settings,
+                      color: Colors.white,
+                      size: 28,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 40),
+
+          // 🆕 追加：アップデート通知バナー
+          if (_updateNotification != null)
+            UpdateBanner(
+              notification: _updateNotification!,
+              onDismiss: _dismissUpdateNotification,
+            ),
+
+          // 既存のコンテンツ（そのまま）
+          Row(
+            children: [
                 GestureDetector( // 🆕 追加: 顔写真アイコンにタップイベント
                   onTap: () {
                     print('👤 アーティストアイコンがタップされました！');
@@ -975,16 +1040,17 @@ Future<Color> _extractColorFromAlbum({
 
             const SizedBox(height: 20),
 
-            // 🆕 Record Gauge セクション追加
-            _buildRecordGaugeSection(),
+// 🔧 修正：Task Streak と Record Gauge の順序を入れ替え
 
-            const SizedBox(height: 20),
+// 連続タスク実行記録セクション（上に移動）
+_buildConsecutiveDaysSection(),
 
-            // 🆕 連続タスク実行記録セクション
-            _buildConsecutiveDaysSection(),
+const SizedBox(height: 20),
 
-            const SizedBox(height: 20),
+// Record Gauge セクション（下に移動）
+_buildRecordGaugeSection(),
 
+const SizedBox(height: 20),
 
 Align(
   alignment: Alignment.centerLeft,

@@ -269,6 +269,15 @@ void initState() {
   }
 }
 
+/// 🆕 新規追加：外部から強制更新を受け取る
+void forceUpdate() {
+  print('🔄 PlayerScreen: 強制更新を受信');
+  setState(() {
+    // タスク情報を最新化
+    _tasks = List.from(widget.tasks);
+  });
+}
+
 /// タスクのLyric Notesを読み込み
 /// 🔧 修正: 階層構造対応
 Future<void> _loadTaskLyricNotes() async {
@@ -1271,34 +1280,37 @@ Future<void> _recordNewTaskCompletion() async {
   }
 
   String _getCurrentTitle() {
-    if (_currentIndex == 0) {
-      if (widget.isPlayingSingleAlbum) {
-        return _tasks.isNotEmpty ? _tasks[0].title : _idealSelf;
-      }
-      return _idealSelf;
-    } else {
-      final taskIndex = widget.isPlayingSingleAlbum ? _currentIndex : _currentIndex - 1;
-      if (taskIndex < _tasks.length) {
-        return _tasks[taskIndex].title;
-      }
-      return '';
+  if (_currentIndex == 0) {
+    if (widget.isPlayingSingleAlbum) {
+      // 🔧 修正：widget.tasksを直接参照
+      return widget.tasks.isNotEmpty ? widget.tasks[0].title : widget.idealSelf;
     }
+    return widget.idealSelf;
+  } else {
+    final taskIndex = widget.isPlayingSingleAlbum ? _currentIndex : _currentIndex - 1;
+    // 🔧 修正：widget.tasksを直接参照
+    if (taskIndex < widget.tasks.length) {
+      return widget.tasks[taskIndex].title;
+    }
+    return '';
   }
-
+}
   String _getCurrentDescription() {
-    if (_currentIndex == 0) {
-      if (widget.isPlayingSingleAlbum) {
-        return _tasks.isNotEmpty ? _tasks[0].description : '';
-      }
-      return _todayLyrics;
-    } else {
-      final taskIndex = widget.isPlayingSingleAlbum ? _currentIndex : _currentIndex - 1;
-      if (taskIndex < _tasks.length) {
-        return _tasks[taskIndex].description;
-      }
-      return '';
+  if (_currentIndex == 0) {
+    if (widget.isPlayingSingleAlbum) {
+      // 🔧 修正：widget.tasksを直接参照
+      return widget.tasks.isNotEmpty ? widget.tasks[0].description : '';
     }
+    return _todayLyrics;
+  } else {
+    final taskIndex = widget.isPlayingSingleAlbum ? _currentIndex : _currentIndex - 1;
+    // 🔧 修正：widget.tasksを直接参照
+    if (taskIndex < widget.tasks.length) {
+      return widget.tasks[taskIndex].description;
+    }
+    return '';
   }
+}
 
   double _getCurrentTimeProgress() {
   if (_currentIndex == 0 && !widget.isPlayingSingleAlbum) {
@@ -1327,27 +1339,29 @@ String _getCurrentTime() {
 }
 
   String _getTotalTime() {
-    if (_currentIndex == 0 && !widget.isPlayingSingleAlbum) {
-      return '24:00';
+  if (_currentIndex == 0 && !widget.isPlayingSingleAlbum) {
+    return '24:00';
+  } else {
+    TaskItem? currentTask;
+    
+    if (widget.isPlayingSingleAlbum) {
+      // 🔧 修正：widget.tasksを直接参照
+      if (_currentIndex >= 0 && _currentIndex < widget.tasks.length) {
+        currentTask = widget.tasks[_currentIndex];
+      }
     } else {
-      TaskItem? currentTask;
-      
-      if (widget.isPlayingSingleAlbum) {
-        if (_currentIndex >= 0 && _currentIndex < _tasks.length) {
-          currentTask = _tasks[_currentIndex];
-        }
-      } else {
-        if (_currentIndex > 0 && _currentIndex - 1 < _tasks.length) {
-          currentTask = _tasks[_currentIndex - 1];
-        }
+      // 🔧 修正：widget.tasksを直接参照
+      if (_currentIndex > 0 && _currentIndex - 1 < widget.tasks.length) {
+        currentTask = widget.tasks[_currentIndex - 1];
       }
-      
-      if (currentTask != null) {
-        return '${currentTask.duration.toString().padLeft(2, '0')}:00';
-      }
-      return '00:00';
     }
+    
+    if (currentTask != null) {
+      return '${currentTask.duration.toString().padLeft(2, '0')}:00';
+    }
+    return '00:00';
   }
+}
 
   @override
 Widget build(BuildContext context) {
@@ -1540,7 +1554,9 @@ Widget build(BuildContext context) {
   final coverSize = scrollHeight;
   final itemSpacing = 20.0;
   
-  final totalPages = widget.isPlayingSingleAlbum ? _tasks.length : _tasks.length + 1;
+  // 🔧 修正：widget.tasksを直接参照
+  final totalPages = widget.isPlayingSingleAlbum ? widget.tasks.length : widget.tasks.length + 1;
+  
   
   return Center(
     child: SizedBox(
@@ -1712,8 +1728,9 @@ Widget _buildDefaultAlbumCover(double size, {required bool isSingle}) {
 }
 
   Widget _buildPageIndicator() {
-    final totalPages = widget.isPlayingSingleAlbum ? _tasks.length : _tasks.length + 1;
-    return Row(
+  // 🔧 修正：widget.tasksを直接参照
+  final totalPages = widget.isPlayingSingleAlbum ? widget.tasks.length : widget.tasks.length + 1;
+  return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: List.generate(totalPages, (index) {
         return AnimatedContainer(
@@ -1740,8 +1757,9 @@ Widget _buildDefaultAlbumCover(double size, {required bool isSingle}) {
   
   if (showCompletionButton) {
     final actualTaskIndex = widget.isPlayingSingleAlbum ? _currentIndex : _currentIndex - 1;
-    if (actualTaskIndex >= 0 && actualTaskIndex < _tasks.length) {
-      currentTask = _tasks[actualTaskIndex];
+    // 🔧 修正：widget.tasksを直接参照
+    if (actualTaskIndex >= 0 && actualTaskIndex < widget.tasks.length) {
+      currentTask = widget.tasks[actualTaskIndex];
       completionCount = _todayTaskCompletions[currentTask.id] ?? 0;
     }
   }
@@ -1993,8 +2011,9 @@ Future<List<Map<String, dynamic>>> _getTodayTaskExecutions() async {
   TaskItem? currentTask;
   if (_currentIndex > 0 || widget.isPlayingSingleAlbum) {
     final actualTaskIndex = widget.isPlayingSingleAlbum ? _currentIndex : _currentIndex - 1;
-    if (actualTaskIndex >= 0 && actualTaskIndex < _tasks.length) {
-      currentTask = _tasks[actualTaskIndex];
+    // 🔧 修正：widget.tasksを直接参照
+    if (actualTaskIndex >= 0 && actualTaskIndex < widget.tasks.length) {
+      currentTask = widget.tasks[actualTaskIndex];
     }
   }
   
@@ -2265,25 +2284,27 @@ TaskItem? _getCurrentTask() {
   TaskItem? task;
   
   if (widget.isPlayingSingleAlbum) {
-    if (_currentIndex >= 0 && _currentIndex < _tasks.length) {
-      task = _tasks[_currentIndex];
+    // 🔧 修正：widget.tasksを直接参照
+    if (_currentIndex >= 0 && _currentIndex < widget.tasks.length) {
+      task = widget.tasks[_currentIndex];
     }
   } else {
-    if (_currentIndex > 0 && _currentIndex - 1 < _tasks.length) {
-      task = _tasks[_currentIndex - 1];
+    // 🔧 修正：widget.tasksを直接参照
+    if (_currentIndex > 0 && _currentIndex - 1 < widget.tasks.length) {
+      task = widget.tasks[_currentIndex - 1];
     }
   }
   
   if (task == null) return null;
   
-  // 🔧 修正: 保存されたLyric Notes（階層構造）を反映
+  // Lyric Notesを反映
   if (_taskLyricNotes.containsKey(task.id)) {
     final notesFromMap = _taskLyricNotes[task.id]!;
-    print('📝 タスク "${task.title}" のメモ取得: ${notesFromMap.length}行 (taskId: ${task.id})'); // 🔧 追加
+    print('📝 タスク "${task.title}" のメモ取得: ${notesFromMap.length}行 (taskId: ${task.id})');
     return task.copyWith(lyricNotes: notesFromMap);
   }
   
-  print('📝 タスク "${task.title}" のメモなし (taskId: ${task.id})'); // 🔧 追加
+  print('📝 タスク "${task.title}" のメモなし (taskId: ${task.id})');
   return task;
 }
 

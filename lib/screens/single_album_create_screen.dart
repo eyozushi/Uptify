@@ -26,7 +26,8 @@ class _SingleAlbumCreateScreenState extends State<SingleAlbumCreateScreen> {
   List<TextEditingController> _taskControllers = [];
   
   // 🆕 背景色用のフィールド
-  Color _dominantColor = const Color(0xFF2D1B69);
+  Color _dominantColor = Colors.black;
+Color _accentColor = Colors.black;
   bool _isExtractingColors = false;
   bool _isLoading = false;
 

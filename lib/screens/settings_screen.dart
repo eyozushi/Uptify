@@ -46,8 +46,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final DataService _dataService = DataService();
 
   // 🆕 新規追加：背景色用のフィールド
-  Color _dominantColor = const Color(0xFF2D1B69);
-  Color _accentColor = const Color(0xFF1A1A2E);
+  Color _dominantColor = Colors.black;
+Color _accentColor = Colors.black;
   bool _isExtractingColors = false;
   
   late TextEditingController _idealSelfController;
@@ -306,8 +306,11 @@ void dispose() {
       await _dataService.saveSingleAlbum(updatedAlbum);
       
       if (mounted) {
-        _showMessage('\"${updatedAlbum.albumName}\"を更新しました', isSuccess: true);
+        _showMessage('"${updatedAlbum.albumName}" has been updated', isSuccess: true);
         
+        // 🔧 修正：保存前に色を抽出
+  await _extractColorsFromImage();
+
         final result = {
           'idealSelf': _idealSelfController.text,
           'artistName': widget.artistName,
@@ -316,6 +319,7 @@ void dispose() {
           'albumImage': null,
           'imageBytes': _imageBytes,
           'hasImageChanged': _hasImageChanged,
+          'backgroundColor': _dominantColor,
         };
         
         if (widget.onSave != null) {
@@ -336,25 +340,30 @@ void dispose() {
 
       await _dataService.saveUserData(data);
       
-      if (mounted) {
-        _showMessage('Settings saved', isSuccess: true);
-        
-        final result = {
-          'idealSelf': _idealSelfController.text,
-          'artistName': widget.artistName,
-          'todayLyrics': widget.todayLyrics,
-          'tasks': _tasks,
-          'albumImage': _albumImage,
-          'imageBytes': _imageBytes,
-          'hasImageChanged': _hasImageChanged,
-        };
-        
-        if (widget.onSave != null) {
-          widget.onSave!(result);
-        } else {
-          Navigator.pop(context, result);
-        }
-      }
+      // ドリームアルバムの場合
+if (mounted) {
+  _showMessage('Settings saved', isSuccess: true);
+  
+  // 🔧 修正：保存前に色を抽出
+  await _extractColorsFromImage();
+  
+  final result = {
+    'idealSelf': _idealSelfController.text,
+    'artistName': widget.artistName,
+    'todayLyrics': widget.todayLyrics,
+    'tasks': _tasks,
+    'albumImage': _albumImage,
+    'imageBytes': _imageBytes,
+    'hasImageChanged': _hasImageChanged,
+    'backgroundColor': _dominantColor, // 🆕 追加：抽出色を渡す
+  };
+  
+  if (widget.onSave != null) {
+    widget.onSave!(result);
+  } else {
+    Navigator.pop(context, result);
+  }
+}
     }
   } catch (e) {
     if (mounted) {
@@ -372,60 +381,63 @@ void dispose() {
 
   @override
 Widget build(BuildContext context) {
-  return Container(
-    decoration: BoxDecoration(
-      gradient: LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [
-          Color.lerp(_dominantColor, Colors.black, 0.3)!,  // 🔧 修正：上部のまま
-          Color.lerp(_dominantColor, Colors.black, 0.3)!,  // 🔧 修正：全体に同じ色
-        ],
-        stops: const [0.0, 1.0],  // 🔧 修正：グラデーションなしで均一に
+  return Scaffold( // 🆕 追加
+    resizeToAvoidBottomInset: true, // 🆕 追加：キーボードに応じてリサイズ
+    body: Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color.lerp(_dominantColor, Colors.black, 0.3)!,
+            Color.lerp(_dominantColor, Colors.black, 0.3)!,
+          ],
+          stops: const [0.0, 1.0],
+        ),
       ),
-    ),
-    child: Padding(
-      padding: EdgeInsets.only(
-        top: MediaQuery.of(context).padding.top,
-      ),
-      child: Column(
-        children: [
-          _buildHeader(),
-          
-          Expanded(
-  child: SingleChildScrollView(
-    physics: const BouncingScrollPhysics(),
-    padding: EdgeInsets.only(
-      bottom: MediaQuery.of(context).viewInsets.bottom, // 🆕 追加：キーボード高さ分の余白
-    ),
-    child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: 10),
-                    
-                    _buildImageSection(),
-                    
-                    const SizedBox(height: 32),
-                    
-                    _buildAlbumInfoSection(),
-                    
-                    const SizedBox(height: 40),
-                    
-                    _buildTasksSection(),
-                    
-                    const SizedBox(height: 32),
-                    
-                    if (!widget.isEditingLifeDream) _buildDeleteSection(),
-                    
-                    const SizedBox(height: 20),
-                  ],
+      child: Padding(
+        padding: EdgeInsets.only(
+          top: MediaQuery.of(context).padding.top,
+        ),
+        child: Column(
+          children: [
+            _buildHeader(),
+            
+            Expanded(
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                padding: EdgeInsets.only(
+                  bottom: MediaQuery.of(context).viewInsets.bottom + 20, // 🔧 修正：+20を追加
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 10),
+                      
+                      _buildImageSection(),
+                      
+                      const SizedBox(height: 32),
+                      
+                      _buildAlbumInfoSection(),
+                      
+                      const SizedBox(height: 40),
+                      
+                      _buildTasksSection(),
+                      
+                      const SizedBox(height: 32),
+                      
+                      if (!widget.isEditingLifeDream) _buildDeleteSection(),
+                      
+                      const SizedBox(height: 20),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     ),
   );
@@ -574,8 +586,7 @@ Widget build(BuildContext context) {
         ),
       ),
       
-      // 🗑️ 削除：削除ボタン
-      // 🗑️ 削除：説明文
+
     ],
   );
 }
@@ -850,7 +861,7 @@ Widget _buildSimpleTaskField({
       const SizedBox(height: 8),
       TextField(
         controller: controller,
-        scrollPadding: const EdgeInsets.only(bottom: 100),
+        scrollPadding: const EdgeInsets.only(bottom: 200),
         style: const TextStyle(
           color: Colors.white,
           fontSize: 14,
@@ -954,7 +965,7 @@ Widget _buildSimpleTaskUrlField({
       const SizedBox(height: 8),
       TextField(
         controller: controller,
-        scrollPadding: const EdgeInsets.only(bottom: 100),
+        scrollPadding: const EdgeInsets.only(bottom: 200),
         style: const TextStyle(
           color: Colors.white,
           fontSize: 14,
@@ -1090,7 +1101,7 @@ Widget _buildSimpleTimeSelection(int index) {
       const SizedBox(height: 8),
       TextField(
         controller: controller,
-        scrollPadding: const EdgeInsets.only(bottom: 100),
+        scrollPadding: const EdgeInsets.only(bottom: 200),
         maxLines: maxLines,
         style: const TextStyle(
           color: Colors.white,
